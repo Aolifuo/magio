@@ -23,7 +23,16 @@ struct TcpStream::Impl {
         AnyExecutor exe;
     } hook;
 
-    plat::CompletionHandler completion_handler;
+    plat::CompletionHandler completion_handler{
+        (void*)&hook, 
+        [](void* hook, Error err, plat::SocketHelper sock) {
+            auto rwhook = (Impl::RWHook*)hook;
+            if (err) {
+                rwhook->err = err;
+            }
+            rwhook->exe.post([=] { rwhook->h.resume(); });
+        }
+    };
     
     ~Impl() {
         server_->repost_accept_task(sock_);
@@ -44,8 +53,8 @@ Coro<TcpServer> TcpServer::bind(const char* host, short port) {
         executor.waiting([impl]() ->bool {
             int status = impl->server.wait_completion_task();
             if (status == ERROR_ABANDONED_WAIT_0 
-                || status == ERROR_INVALID_HANDLE) 
-            {
+                || status == ERROR_INVALID_HANDLE
+            ) {
                 return true;
             }
 
@@ -103,16 +112,6 @@ Coro<size_t> TcpStream::read(char* buf, size_t len) {
     auto executor = co_await this_coro::executor;
     impl->hook.exe = executor;
     impl->hook.err = Error();
-    impl->completion_handler = plat::CompletionHandler{
-        (void*)&impl->hook, 
-        [](void* hook, Error err, plat::SocketHelper sock) {
-            auto rwhook = (Impl::RWHook*)hook;
-            if (err) {
-                rwhook->err = err;
-            }
-            rwhook->exe.post([=] { rwhook->h.resume(); });
-        }
-    };
 
     co_await Coro<void>{
         [impl = impl](std::coroutine_handle<> h) {
@@ -135,16 +134,6 @@ Coro<size_t> TcpStream::write(const char* buf, size_t len) {
     auto executor = co_await this_coro::executor;
     impl->hook.exe = executor;
     impl->hook.err = Error();
-    impl->completion_handler = plat::CompletionHandler{
-        (void*)&impl->hook, 
-        [](void* hook, Error err, plat::SocketHelper sock) {
-            auto whook = (Impl::RWHook*)hook;
-            if (err) {
-                whook->err = err;
-            }
-            whook->exe.post([=] { whook->h.resume(); });
-        }
-    };
     
     size_t cp_len = impl->sock_.send_io().capacity() > len ? len : impl->sock_.send_io().capacity();
     std::memcpy(impl->sock_.send_io().buf(), buf, cp_len);

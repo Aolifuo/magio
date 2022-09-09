@@ -121,7 +121,7 @@ void ThreadPoolv2::Impl::wait() {
     for (; ;) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         std::scoped_lock lk(idle_m, pending_m);
-        if (idle_tasks.empty() && pending_tasks.empty()) {
+        if (idle_tasks.empty() && pending_tasks.empty() && waiting_task.empty()) {
             return;
         }
     }

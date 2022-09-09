@@ -13,6 +13,7 @@ enum class IOOperation {
     Accept,
     Receive,
     Send,
+    Connect,
 };
 
 using socket_type = uint64_t;

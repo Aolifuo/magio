@@ -4,6 +4,7 @@
 #include <Ws2tcpip.h>
 
 #include "magio/Configs.h"
+#include "magio/plat/declare.h"
 
 namespace magio {
 
@@ -104,6 +105,10 @@ Excepted<> SocketHelper::bind(const char* host, short port) {
         return {Error(last_error(), "Socket binding error")};
     }
 
+    return {Unit()};
+}
+
+Excepted<> SocketHelper::listen() {
     if (0 != ::listen(sock_->handle, SOMAXCONN)) {
         return {Error(last_error(), "Socket listening error")};
     }
@@ -136,6 +141,10 @@ void SocketHelper::for_async_task(IOOperation op) {
             sock_->io_send->io_type = IOOperation::Send;
             ZeroMemory(&sock_->io_send->overlapped, sizeof(OVERLAPPED));
             sock_->io_send->wsa_buf.len = sock_->io_send->len;
+            break;
+        case IOOperation::Connect:
+            sock_->io_send->io_type = IOOperation::Connect;
+            ZeroMemory(&sock_->io_send->overlapped, sizeof(OVERLAPPED));
             break;
         default:
             break;

@@ -60,6 +60,7 @@ public:
     Socket* get() { return sock_; }
 
     Excepted<> bind(const char* host, short port);
+    Excepted<> listen();
 private:
     Socket* sock_ = nullptr;
 };

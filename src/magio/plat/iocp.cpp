@@ -3,10 +3,10 @@
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 #include <MSWSock.h>
-#include <functional>
 
 #include "magio/core/Log.h"
 #include "magio/plat/socket.h"
+#include "magio/plat/system_errors.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -38,6 +38,8 @@ struct std::formatter<magio::plat::IOOperation, CharT>
             case magio::plat::IOOperation::Noop:
                 op_str = "noop";
                 break;
+            case magio::plat::IOOperation::Connect:
+                op_str = "connect";
         }
         return std::format_to(fc.out(), "{}", op_str);
     }
@@ -74,6 +76,10 @@ Excepted<IocpServer> IocpServer::bind(const char* host, short port,
 
     if (auto bind_result = helper.bind(host, port); !bind_result) {
         return bind_result.unwrap_err();
+    }
+
+    if (auto listen_res = helper.listen(); !listen_res) {
+        return listen_res.unwrap_err();
     }
 
     HANDLE iocp_handle =
@@ -164,7 +170,6 @@ Excepted<> IocpServer::post_accept_task(SocketHelper sock) {
     return {Unit()};
 }
 
-// 顺序保证
 Excepted<> IocpServer::post_receive_task(SocketHelper sock_helper, CompletionHandler* handler) {
     // 
     associate_with(sock_helper, handler);
@@ -174,8 +179,9 @@ Excepted<> IocpServer::post_receive_task(SocketHelper sock_helper, CompletionHan
     DWORD flag = 0;
 
     int status =
-        ::WSARecv(sock_helper.handle(), (LPWSABUF)io_helper.wsa_buf(), 1, NULL,
-                  &flag, (LPOVERLAPPED)io_helper.overlapped(), NULL);
+        ::WSARecv(sock_helper.handle(), (LPWSABUF)io_helper.wsa_buf(),
+                    1, NULL,
+                    &flag, (LPOVERLAPPED)io_helper.overlapped(), NULL);
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != last_error()) {
         return Error(last_error(), "Failed to post receive task");
@@ -192,8 +198,9 @@ Excepted<> IocpServer::post_send_task(SocketHelper sock_helper) {
     DWORD flag = 0;
 
     int status =
-        ::WSASend(sock_helper.handle(), (LPWSABUF)io_helper.wsa_buf(), 1, NULL,
-                  flag, (LPOVERLAPPED)io_helper.overlapped(), NULL);
+        ::WSASend(sock_helper.handle(), (LPWSABUF)io_helper.wsa_buf(),
+                    1, NULL,
+                    flag, (LPOVERLAPPED)io_helper.overlapped(), NULL);
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != last_error()) {
         return Error(last_error(), "Failed to post send task");
@@ -216,42 +223,8 @@ int IocpServer::wait_completion_task() {
 
     Error error;
     if (!status) {
-        int err_no = last_error();
-
-        switch (err_no) {
-            case WAIT_TIMEOUT:
-                // 等待超时
-                error = {Error{err_no, "The wait operation timed out"}};
-                break;
-            case ERROR_NETNAME_DELETED:
-                // 对面连接异常关闭
-                error = {Error{
-                    err_no, "The specified network name is no longer available."}};
-                break;
-            case ERROR_CONNECTION_ABORTED:
-                // 服务器主动断开连接
-                error = {Error{err_no, "The operation could not be completed. A retry should be performed."}};
-                break;
-            case ERROR_OPERATION_ABORTED:
-                // 使用 shutdown 收尾
-                error = {
-                    Error{err_no,
-                            "The I/O operation has been aborted because of "
-                            "either a thread exit or an application request"}};
-                break;
-            case ERROR_ABANDONED_WAIT_0:
-                // 在等待I/O完成过程中iocp被关闭 (如 CloseHandle)
-                error = {Error{err_no, "Iocp service is interrupted"}};
-                break;
-            case ERROR_INVALID_HANDLE:
-                // 试图访问已被关闭的或不存在的iocp服务
-                error = {Error{err_no, "Iocp service does not exist"}};
-                break;
-            default:
-                // 其他未知情况
-                error = {Error{err_no, "Unknown iocp message"}};
-                break;
-        }
+        error.code = last_error();
+        error.msg = system_error_str(last_error());
     }
 
     if (io_context) {
@@ -293,6 +266,193 @@ void IocpServer::add_listener(CompletionHandler* h) {
 Excepted<> IocpServer::repost_accept_task(SocketHelper sock) {
     SocketServer::instance().replace_socket(sock.get());
     return post_accept_task(sock);
+}
+
+
+// IocpClient
+
+struct IocpClient::Impl {
+    HANDLE iocp_handle;
+    LPFN_CONNECTEX async_connect;
+
+    RingQueue<CompletionHandler*> connector_queue{};
+
+    ~Impl() {
+        ::CloseHandle(iocp_handle);
+    }
+};
+
+CLASS_PIMPL_IMPLEMENT(IocpClient)
+
+Excepted<IocpClient> IocpClient::create() {
+    auto may_sock = SocketServer::instance().make_socket();
+    if (!may_sock) {
+        return may_sock.unwrap_err();
+    }
+    auto sock = may_sock.unwrap();
+
+    HANDLE iocp_handle =
+        ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+
+    if (!iocp_handle) {
+        return {Error(last_error(), "Failed to create iocp")};
+    }
+    
+    GUID GUidConnectEx = WSAID_CONNECTEX;
+    void* async_connect = NULL;
+    DWORD ret_bytes;
+    int load_result =
+        ::WSAIoctl(unpack(sock).handle(), SIO_GET_EXTENSION_FUNCTION_POINTER,
+                   &GUidConnectEx, sizeof(GUidConnectEx), 
+                   &async_connect, sizeof(async_connect), 
+                   &ret_bytes, NULL, NULL);
+
+    if (0 != load_result) {
+        return {Error(last_error(), "Failed to get 'ConnectEx' pointer")};
+    }
+
+    return {new Impl{iocp_handle, (LPFN_CONNECTEX)async_connect}};
+}
+
+Excepted<> IocpClient::post_connect_task(const char* host, short port, CompletionHandler* handler) {
+    auto may_b = SocketServer::instance().make_socket();
+    if (!may_b) {
+        return may_b.unwrap_err();
+    }
+    auto sock = may_b.unwrap();
+
+    if (auto res = unpack(sock).bind(host, 8081); !res) {
+        return res.unwrap_err();
+    }
+
+    if (auto res = associate_with(sock.get(), handler); !res) {
+        return res.unwrap_err();
+    }
+    
+    unpack(sock).for_async_task(IOOperation::Connect);
+
+    SOCKADDR_IN sockaddr;
+    sockaddr.sin_family = AF_INET;
+    sockaddr.sin_port = ::htons(port);
+    ::inet_pton(AF_INET, host, &sockaddr.sin_addr.S_un.S_addr);
+
+    DWORD bytes_send;
+    auto result = impl->async_connect(
+        unpack(sock).handle(),
+        (SOCKADDR*)&sockaddr,
+        sizeof(sockaddr),
+        NULL,
+        0,
+        (LPDWORD)&bytes_send,
+        (LPOVERLAPPED)unpack(sock).send_io().overlapped()
+    );
+
+    if (!result && ERROR_IO_PENDING != last_error()) {
+        return {Error("Failed to connect to target")};
+    }
+
+    sock.unwrap();
+    return Unit();
+}
+
+Excepted<> IocpClient::post_send_task(SocketHelper sock) {
+    IOContextHelper io_helper = sock.send_io();
+    sock.for_async_task(IOOperation::Send);
+    DWORD flag = 0;
+
+    int status =
+        ::WSASend(sock.handle(), (LPWSABUF)io_helper.wsa_buf(),
+                    1, NULL,
+                    flag, (LPOVERLAPPED)io_helper.overlapped(), NULL);
+
+    if (SOCKET_ERROR == status && ERROR_IO_PENDING != last_error()) {
+        return Error(last_error(), "Failed to post send task");
+    }
+
+    
+    return Unit();
+}
+
+Excepted<> IocpClient::post_receive_task(SocketHelper sock) {
+    IOContextHelper io_helper = sock.recv_io();
+    sock.for_async_task(IOOperation::Receive);
+    DWORD flag = 0;
+
+    int status =
+        ::WSARecv(sock.handle(), (LPWSABUF)io_helper.wsa_buf(),
+                    1, NULL,
+                    &flag, (LPOVERLAPPED)io_helper.overlapped(), NULL);
+
+    if (SOCKET_ERROR == status && ERROR_IO_PENDING != last_error()) {
+        return Error(last_error(), "Failed to post receive task");
+    }
+
+    return {Unit()};
+}
+
+int IocpClient::wait_completion_task() {
+    DWORD bytes_nums;
+    CompletionHandler* handler;
+    IOContext* io_context = nullptr;
+
+    bool status = ::GetQueuedCompletionStatus(
+        impl->iocp_handle,
+        &bytes_nums,
+        (PULONG_PTR)&handler,
+        (LPOVERLAPPED*)&io_context,
+        0); // INFINITE
+
+    Error error;
+    if (!status) {
+        error.code = last_error();
+        error.msg = system_error_str(last_error());
+    }
+
+    if (io_context) {
+        auto io = unpack(io_context);
+        io.set_len(bytes_nums);
+
+        switch(io.io_operation()) {
+        case IOOperation::Connect:
+            if (!impl->connector_queue.empty()) {
+                auto handler = impl->connector_queue.front();
+                handler->cb(handler->hook, error, io.owner());
+                impl->connector_queue.pop();
+                break;
+            }
+            unchecked_return_to_pool(io.owner().get(), SocketServer::instance().pool());
+            break;
+        case IOOperation::Receive:
+            handler->cb(handler->hook, error, io.owner());
+            break;
+        case IOOperation::Send:
+            handler->cb(handler->hook, error, io.owner());
+            break;
+        default:
+            break;
+        }
+
+        if (error) {
+            unchecked_return_to_pool(io.owner().get(), SocketServer::instance().pool());
+        }
+    }
+
+    return error.code;
+}
+
+void IocpClient::add_connector(CompletionHandler * handler) {
+    impl->connector_queue.push(handler);
+}
+
+Excepted<> IocpClient::associate_with(SocketHelper sock, CompletionHandler* handler) {
+    HANDLE result = ::CreateIoCompletionPort(
+        (HANDLE)sock.handle(), impl->iocp_handle, (ULONG_PTR)handler, 0);
+
+    if (!result) {
+        return {Error(last_error(), "Failed to associate iocp with reomote socket")};
+    }
+
+    return {Unit()};
 }
 
 }  // namespace plat

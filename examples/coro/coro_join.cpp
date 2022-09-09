@@ -10,12 +10,12 @@ using namespace std;
 using namespace magio;
 
 Coro<int> get_num(int n) {
-    std::printf("get num\n");
+    std::printf("get num %d\n", n);
     co_return n;
 }
 
 Coro<void> may_throw() {
-    throw exception("error error");
+    throw exception("error");
     co_return;
 }
 
