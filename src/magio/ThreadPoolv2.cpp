@@ -13,6 +13,7 @@ struct ThreadPoolv2::Impl: public ExecutionContext {
     State state = Stop;
     RingQueue<CompletionHandler> idle_tasks;
     TimingTaskManager pending_tasks;
+    std::list<WaitingCompletionHandler> waiting_task;
 
     std::mutex idle_m;
     std::mutex pending_m;
@@ -22,6 +23,7 @@ struct ThreadPoolv2::Impl: public ExecutionContext {
     std::vector<std::jthread> threads;
 
     void post(CompletionHandler handler) override;
+    void waiting(WaitingCompletionHandler handler) override;
     TimerID set_timeout(size_t ms, CompletionHandler handler) override;
     void clear(TimerID id) override;
     bool poll() override;
@@ -49,6 +51,10 @@ ThreadPoolv2::ThreadPoolv2(size_t thread_num) {
 
 void ThreadPoolv2::post(CompletionHandler handler) {
     impl->post(std::move(handler));
+}
+
+void ThreadPoolv2::waiting(WaitingCompletionHandler handler) {
+    impl->waiting(std::move(handler));
 }
 
 TimerID ThreadPoolv2::set_timeout(size_t ms, CompletionHandler handler) {
@@ -91,6 +97,12 @@ void ThreadPoolv2::Impl::post(CompletionHandler handler) {
     std::lock_guard lk(idle_m);
     idle_tasks.push(std::move(handler));
     idle_condvar.notify_one();
+}
+
+void ThreadPoolv2::Impl::waiting(WaitingCompletionHandler handler) {
+    std::lock_guard lk(pending_m);
+    waiting_task.push_back(std::move(handler));
+    pending_condvar.notify_one();
 }
 
 TimerID ThreadPoolv2::Impl::set_timeout(size_t ms, CompletionHandler handler) {
@@ -157,7 +169,8 @@ void ThreadPoolv2::Impl::poller() {
     for (; ;) {
         std::unique_lock lk(pending_m);
         pending_condvar.wait(lk, [this] {
-            return (state == Running && !pending_tasks.empty()) || state == PendingDestroy;
+            return (state == Running && (!pending_tasks.empty() || !waiting_task.empty())) 
+                || state == PendingDestroy;
         });
 
         if (state == PendingDestroy) {
@@ -171,6 +184,12 @@ void ThreadPoolv2::Impl::poller() {
                 lk.lock();
             } else {
                 break;
+            }
+        }
+
+        for (auto it = waiting_task.begin(); it != waiting_task.end(); ++it) {
+            if ((*it)()) {
+                waiting_task.erase(it);
             }
         }
     }

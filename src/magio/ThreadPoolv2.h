@@ -11,6 +11,7 @@ public:
     explicit ThreadPoolv2(size_t thread_num);
 
     void post(CompletionHandler handler);
+    void waiting(WaitingCompletionHandler handler);
     TimerID set_timeout(size_t ms, CompletionHandler handler);
     void clear(TimerID id);
     void start();

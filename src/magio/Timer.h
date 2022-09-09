@@ -16,6 +16,10 @@ public:
     Timer(Timer&&) = default;
     Timer& operator=(Timer&&) = default;
 
+    ~Timer() {
+        cancel_all();
+    }
+
     void expire_after(size_t ms) {
         timeout_ = ms;
     }

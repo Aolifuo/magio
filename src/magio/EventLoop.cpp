@@ -8,9 +8,11 @@ namespace magio {
 struct EventLoop::Impl: public ExecutionContext {
     bool stop_flag = false;
     RingQueue<CompletionHandler> idle_tasks;
-    TimingTaskManager pending_tasks_;
+    TimingTaskManager pending_tasks;
+    std::list<WaitingCompletionHandler> waiting_tasks;
 
     void post(CompletionHandler handler) override;
+    void waiting(WaitingCompletionHandler handler) override;
     TimerID set_timeout(size_t ms, CompletionHandler handler) override;
     void clear(TimerID id) override;
     bool poll() override;
@@ -24,6 +26,10 @@ EventLoop::EventLoop() {
 
 void EventLoop::post(CompletionHandler handler) {
     impl->post(std::move(handler));
+}
+
+void EventLoop::waiting(WaitingCompletionHandler handler) {
+    impl->waiting(std::move(handler));
 }
 
 TimerID EventLoop::set_timeout(size_t ms, CompletionHandler handler) {
@@ -58,12 +64,16 @@ void EventLoop::Impl::post(CompletionHandler handler) {
     idle_tasks.push(std::move(handler));
 }
 
+void EventLoop::Impl::waiting(WaitingCompletionHandler handler) {
+    waiting_tasks.push_back(std::move(handler));
+}
+
 TimerID EventLoop::Impl::set_timeout(size_t ms, CompletionHandler handler) {
-    return pending_tasks_.set_timeout(ms, std::move(handler));
+    return pending_tasks.set_timeout(ms, std::move(handler));
 }
 
 void EventLoop::Impl::clear(TimerID id) {
-    pending_tasks_.cancel(id);
+    pending_tasks.cancel(id);
 }
 
 bool EventLoop::Impl::poll() {
@@ -77,14 +87,20 @@ bool EventLoop::Impl::poll() {
     }
 
     for (; ;) {
-        if (auto res = pending_tasks_.get_expired_task(); res) {
+        if (auto res = pending_tasks.get_expired_task(); res) {
             res.unwrap()();
         } else {
             break;
         }
     }
 
-    return !(idle_tasks.empty() && pending_tasks_.empty());
+    for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
+        if ((*it)()) {
+            waiting_tasks.erase(it);
+        }
+    }
+
+    return !(idle_tasks.empty() && pending_tasks.empty() && waiting_tasks.empty());
 }
 
 }
