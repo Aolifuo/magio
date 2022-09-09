@@ -9,7 +9,6 @@ using namespace magio;
 Coro<void> amain() {
     auto exe = co_await this_coro::executor;
     Timer timer(exe, 3000);
-
     co_await co_spawn(exe, timer.async_wait(use_coro), use_coro);
     std::printf("ok\n");
 }

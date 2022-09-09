@@ -19,6 +19,7 @@ int main() {
         pool.get_executor(),
         coro_join(func(), func(), func(), func()),
         detached);
+
     
     pool.join();
 }

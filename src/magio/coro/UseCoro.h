@@ -43,7 +43,7 @@ struct Coro {
     void wake(AnyExecutor executor, bool auto_destroy) {
         main_h_.promise().executor = executor;
         main_h_.promise().auto_destroy = auto_destroy;
-        executor.post([=] { main_h_.resume(); });
+        executor.post([main_h_ = main_h_] { main_h_.resume(); });
     }
 
     auto get_value() {
@@ -109,11 +109,11 @@ struct Coro<void> {
         if (main_h_) {
             main_h_.promise().executor = executor;
             main_h_.promise().auto_destroy = auto_destroy;
-            executor.post([=] { main_h_.resume(); });
+            executor.post([main_h_ = main_h_] { main_h_.resume(); });
         } else {
             executor.post(
-                [fn = std::move(resume_handler_), this] { 
-                    resume_handler_(main_h_); 
+                [fn = std::move(resume_handler_)] { 
+                    fn(nullptr); 
                 });
         }
     }
@@ -138,6 +138,10 @@ private:
 
 struct UseCoro { };
 
+struct UseFuture { };
+
 inline UseCoro use_coro;
+
+inline UseFuture use_future;
 
 }

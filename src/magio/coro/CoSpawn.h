@@ -1,5 +1,6 @@
 #pragma once
 
+#include <future>
 #include "magio/coro/Coro.h"
 
 namespace magio {
@@ -16,7 +17,7 @@ void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, Detached) {
 template<typename Ret>
 void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, CoroCompletionHandler handler) {
     if (!coro.has_coro_handle()) {
-        coro = std::move(detail::make_coro(std::move(coro)));
+        coro = detail::make_coro(std::move(coro));
     }
     coro.set_completion_handler(std::move(handler));
     coro.wake(executor, true);

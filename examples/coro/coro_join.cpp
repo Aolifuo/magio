@@ -9,9 +9,9 @@
 using namespace std;
 using namespace magio;
 
-Coro<int> get_num() {
+Coro<int> get_num(int n) {
     std::printf("get num\n");
-    co_return 9;
+    co_return n;
 }
 
 Coro<void> may_throw() {
@@ -24,11 +24,11 @@ Coro<void> amain() {
     Timer timer(executor, 1000);
 
     auto [a, b, c] = 
-        co_await coro_join(timer.async_wait(use_coro), get_num(), get_num());
+        co_await coro_join(timer.async_wait(use_coro), get_num(1), get_num(2));
 
     std::printf("%d + %d = %d\n", b, c, b + c);
 
-    auto [d, e] = co_await coro_join(may_throw(), get_num());
+    auto [d, e] = co_await coro_join(may_throw(), get_num(4));
     
     std::printf("final %d\n", e);
 }

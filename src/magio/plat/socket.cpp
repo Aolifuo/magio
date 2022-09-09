@@ -3,7 +3,7 @@
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 
-#include "magio/ServerConfig.h"
+#include "magio/Configs.h"
 
 namespace magio {
 

@@ -72,7 +72,7 @@ Excepted<IocpServer> IocpServer::bind(const char* host, short port,
     auto listener = maybe_listener.unwrap();
     auto helper = unpack(listener);
 
-    if (auto bind_result = helper.bind("127.0.0.1", 8080); !bind_result) {
+    if (auto bind_result = helper.bind(host, port); !bind_result) {
         return bind_result.unwrap_err();
     }
 
@@ -208,8 +208,11 @@ int IocpServer::wait_completion_task() {
     IOContext* io_context = nullptr;
 
     bool status = ::GetQueuedCompletionStatus(
-        impl->iocp_handle, &bytes_nums, (PULONG_PTR)&handler,
-        (LPOVERLAPPED*)&io_context, 0); // INFINITE
+        impl->iocp_handle,
+        &bytes_nums,
+        (PULONG_PTR)&handler,
+        (LPOVERLAPPED*)&io_context,
+        0); // INFINITE
 
     Error error;
     if (!status) {
