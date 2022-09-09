@@ -24,30 +24,26 @@ struct Coro {
 
     template<typename PT>
     void await_suspend(std::coroutine_handle<PT> prev_h) {
-        set_executor(prev_h.promise().executor);
+        main_h_.promise().executor = prev_h.promise().executor;
         main_h_.promise().previous = prev_h;
-        resume_handler_(main_h_);
+        main_h_.resume();
     }
 
     Ret await_resume() {
         if(main_h_.promise().eptr) {
             std::rethrow_exception(main_h_.promise().eptr);
         }
-        main_h_.promise().auto_destroy = true;
         return get_value();
-    }
-
-    void set_executor(AnyExecutor executor) {
-        main_h_.promise().executor = executor;
     }
 
     void set_completion_handler(CoroCompletionHandler handler) {
         main_h_.promise().completion_handler = std::move(handler);
     }
 
-    void wake(bool auto_destroy) {
+    void wake(AnyExecutor executor, bool auto_destroy) {
+        main_h_.promise().executor = executor;
         main_h_.promise().auto_destroy = auto_destroy;
-        resume_handler_(main_h_);
+        executor.post([=] { main_h_.resume(); });
     }
 
     auto get_value() {
@@ -87,9 +83,9 @@ struct Coro<void> {
     template<typename PT>
     void await_suspend(std::coroutine_handle<PT> prev_h) {
         if (main_h_) {
-            set_executor(prev_h.promise().executor);
+            main_h_.promise().executor = prev_h.promise().executor;
             main_h_.promise().previous = prev_h;
-            resume_handler_(main_h_);
+            main_h_.resume();
         } else {
             resume_handler_(prev_h);
         }
@@ -100,13 +96,6 @@ struct Coro<void> {
             if (main_h_.promise().eptr) {
                 std::rethrow_exception(main_h_.promise().eptr);
             }
-            main_h_.promise().auto_destroy = true;
-        }
-    }
-
-    void set_executor(AnyExecutor executor) {
-        if (main_h_) {
-            main_h_.promise().executor = executor;
         }
     }
 
@@ -116,11 +105,17 @@ struct Coro<void> {
         }
     }
 
-    void wake(bool auto_destroy) {
+    void wake(AnyExecutor executor, bool auto_destroy) {
         if (main_h_) {
+            main_h_.promise().executor = executor;
             main_h_.promise().auto_destroy = auto_destroy;
+            executor.post([=] { main_h_.resume(); });
+        } else {
+            executor.post(
+                [fn = std::move(resume_handler_), this] { 
+                    resume_handler_(main_h_); 
+                });
         }
-        resume_handler_(main_h_);
     }
 
     NoReturn get_value() {
@@ -128,7 +123,7 @@ struct Coro<void> {
     }
 
     void destroy() {
-        if (main_h_) {
+        if (main_h_ ) {
             main_h_.destroy();
         }
     }

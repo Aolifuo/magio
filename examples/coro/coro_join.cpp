@@ -15,7 +15,7 @@ Coro<int> get_num() {
 }
 
 Coro<void> may_throw() {
-    throw exception("error");
+    throw exception("error error");
     co_return;
 }
 
@@ -35,8 +35,8 @@ Coro<void> amain() {
 
 int main() {
     //EventLoop loop;
-    ThreadPoolv2 pool(10);
-    co_spawn(pool.get_executor(), amain(), [](std::exception_ptr e) {
+    ThreadPoolv2 loop(10);
+    co_spawn(loop.get_executor(), amain(), [](std::exception_ptr e) {
         try {
             if (e) {
                 rethrow_exception(e);
@@ -47,5 +47,5 @@ int main() {
         
     });
     //loop.run();
-    pool.join();
+    loop.join();
 }

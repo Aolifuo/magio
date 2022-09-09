@@ -10,8 +10,7 @@ inline Detached detached;
 
 template<typename Ret>
 void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, Detached) {
-    coro.set_executor(executor);
-    coro.wake(true);
+    coro.wake(executor, true);
 }
 
 template<typename Ret>
@@ -19,9 +18,8 @@ void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, CoroCompletionHandler hand
     if (!coro.has_coro_handle()) {
         coro = std::move(detail::make_coro(std::move(coro)));
     }
-    coro.set_executor(executor);
     coro.set_completion_handler(std::move(handler));
-    coro.wake(true);
+    coro.wake(executor, true);
 }
 
 template<typename Ret>

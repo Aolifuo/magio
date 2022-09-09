@@ -38,9 +38,7 @@ struct PromiseTypeBase {
     Awaitable get_return_object() {
             return {
                 std::coroutine_handle<PromiseTypeBase>::from_promise(*this),
-                [=](std::coroutine_handle<> h) {
-                    executor.post([=] { h.resume(); });
-                }
+                { }
             };
         }
 
@@ -54,7 +52,7 @@ struct PromiseTypeBase {
         }
 
         if (previous) {
-            executor.post([=] { previous.resume(); });
+            previous.resume();
         }
 
         return FinalSuspend(auto_destroy);
@@ -65,7 +63,6 @@ struct PromiseTypeBase {
     }
 
     void unhandled_exception() {
-        auto_destroy = true;
         eptr = std::current_exception(); 
     }
 
@@ -73,7 +70,7 @@ struct PromiseTypeBase {
         return std::move(storage.unwrap());
     }
 
-    bool auto_destroy = false;
+    bool auto_destroy = true;
     std::exception_ptr eptr;
     magio::AnyExecutor executor;
     std::coroutine_handle<> previous;
@@ -86,9 +83,7 @@ struct PromiseTypeBase<void, Awaitable> {
     Awaitable get_return_object() {
         return {
             std::coroutine_handle<PromiseTypeBase>::from_promise(*this),
-            [=](std::coroutine_handle<> h) {
-                executor.post([=] { h.resume(); });
-            }
+            { }
         };
     }
 
@@ -102,7 +97,7 @@ struct PromiseTypeBase<void, Awaitable> {
         }
 
         if (previous) {
-            executor.post([=] { previous.resume(); });
+            previous.resume();
         } 
         
         return FinalSuspend(auto_destroy);
@@ -111,11 +106,10 @@ struct PromiseTypeBase<void, Awaitable> {
     void return_void() { }
 
     void unhandled_exception() {
-        auto_destroy = true;
         eptr = std::current_exception(); 
     }
 
-    bool auto_destroy = false;
+    bool auto_destroy = true;
     std::exception_ptr eptr;
     magio::AnyExecutor executor;
     std::coroutine_handle<> previous;

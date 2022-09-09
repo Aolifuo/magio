@@ -78,7 +78,7 @@ bool EventLoop::Impl::poll() {
 
     for (; ;) {
         if (auto res = pending_tasks_.get_expired_task(); res) {
-            idle_tasks.push(res.unwrap());
+            res.unwrap()();
         } else {
             break;
         }

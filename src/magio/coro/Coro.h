@@ -41,31 +41,32 @@ Coro<
     co_await Coro<void>(
         [&](std::coroutine_handle<> h) mutable {
             std::apply([&](auto&&...coros) mutable {
-                (coros.set_executor(executor), ...);
-                (coros.set_completion_handler([&m, &num, &eptr, h](std::exception_ptr e) {
+                (coros.set_completion_handler([&m, &num, &eptr, h, executor](std::exception_ptr e) mutable {
                     std::lock_guard lk(m);
-                    if (num == -1) {
-                        return;
-                    }
 
-                    if (e) {
-                        num = -1;
-                        eptr = e;
-                        h.resume();
-                        return;
+                    try {
+                        if (e) {
+                            std::rethrow_exception(e);
+                        }
+                    } catch(...) {
+                        eptr = std::current_exception();
                     }
 
                     if (--num == 0) {
-                        h.resume();
+                        executor.post([h]{ h.resume(); });
                     }
                 }), ...);
-                (coros.wake(false), ...);
+
+                (coros.wake(executor, false), ...);
             }, coro_tup);
         }
     );
-
+    
     if (eptr) {
-        // destroy ?
+        std::apply([](auto&&...coros) {
+            (coros.destroy(), ...);
+        }, coro_tup);
+        
         std::rethrow_exception(eptr);
     }
 
