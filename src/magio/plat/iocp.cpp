@@ -56,7 +56,7 @@ struct IocpServer::Impl {
     LPFN_ACCEPTEX async_accept;
     LPFN_GETACCEPTEXSOCKADDRS parse_accept;
 
-    RingQueue<CompletionHandler*> listener_queue;
+    RingQueue<CompletionHandler*> listener_que{};
 
     ~Impl() {
         ::CloseHandle(iocp_handle);
@@ -80,21 +80,6 @@ Excepted<IocpServer> IocpServer::bind(const char* host, short port,
 
     if (auto listen_res = helper.listen(); !listen_res) {
         return listen_res.unwrap_err();
-    }
-
-    HANDLE iocp_handle =
-        ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-
-    if (!iocp_handle) {
-        return {Error(last_error(), "Failed to create iocp")};
-    }
-
-    HANDLE associate_result =
-        ::CreateIoCompletionPort((HANDLE)helper.handle(), 
-                                iocp_handle, 
-                                (ULONG_PTR)114514, 0);
-    if (!associate_result) {
-        return Error(last_error(), "Failed to associate iocp with listen socket");
     }
 
     // load AcceptEx
@@ -122,10 +107,24 @@ Excepted<IocpServer> IocpServer::bind(const char* host, short port,
                       "Failed to get 'GetAcceptExSockAddrs' pointer")};
     }
 
+    HANDLE iocp_handle =
+        ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+
+    if (!iocp_handle) {
+        return {Error(last_error(), "Failed to create iocp")};
+    }
+
+    HANDLE associate_result =
+        ::CreateIoCompletionPort((HANDLE)helper.handle(), 
+                                iocp_handle, 
+                                (ULONG_PTR)114514, 0);
+    if (!associate_result) {
+        return Error(last_error(), "Failed to associate iocp with listen socket");
+    }
+
     Impl* impl = new Impl{std::move(listener), HANDLE(iocp_handle),
                           (LPFN_ACCEPTEX)async_accept,
-                          (LPFN_GETACCEPTEXSOCKADDRS)parse_accept,
-                          RingQueue<CompletionHandler*>()};
+                          (LPFN_GETACCEPTEXSOCKADDRS)parse_accept};
 
     IocpServer server(impl);
 
@@ -138,13 +137,13 @@ Excepted<> IocpServer::associate_with(SocketHelper sock, CompletionHandler* hand
 
     if (!associate_result) {
         return {Error(last_error(),
-                      "Failed to associate iocp with reomote socket")};
+                      "Failed to associate iocp with remote socket")};
     }
 
     return {Unit()};
 }
 
-Excepted<> IocpServer::post_accept_task(SocketHelper sock) {
+Excepted<> IocpServer::post_accept_task(SocketHelper sock, CompletionHandler* handler) {
     if (!sock.get()) {
         if (auto res = SocketServer::instance().make_socket(); !res) {
             return res.unwrap_err();
@@ -152,8 +151,13 @@ Excepted<> IocpServer::post_accept_task(SocketHelper sock) {
             sock = res.unwrap().unwrap();
         }
     }
-
     sock.for_async_task(IOOperation::Accept);
+
+    if (auto res = associate_with(sock, handler); !res) {
+        return res.unwrap_err();
+    }
+
+    impl->listener_que.push(handler);
 
     // async_accept
     bool result =
@@ -170,9 +174,8 @@ Excepted<> IocpServer::post_accept_task(SocketHelper sock) {
     return {Unit()};
 }
 
-Excepted<> IocpServer::post_receive_task(SocketHelper sock_helper, CompletionHandler* handler) {
-    // 
-    associate_with(sock_helper, handler);
+Excepted<> IocpServer::post_receive_task(SocketHelper sock_helper) {
+    // associate_with(sock_helper, handler);
 
     IOContextHelper io_helper = sock_helper.recv_io();
     sock_helper.for_async_task(IOOperation::Receive);
@@ -233,15 +236,19 @@ int IocpServer::wait_completion_task() {
 
         switch(io.io_operation()) {
         case IOOperation::Accept:
-            if (!impl->listener_queue.empty()) {
-                auto listener = impl->listener_queue.front();
-                listener->cb(listener->hook, error, io.owner());
-                impl->listener_queue.pop();
-                break;
+            if (!impl->listener_que.empty()) {
+                auto handler = impl->listener_que.front();
+                impl->listener_que.pop();
+                handler->cb(handler->hook, error, io.owner());
+            } else {
+                recycle(io.owner());
             }
-            repost_accept_task(io.owner());
             break;
         case IOOperation::Receive:
+            if (io.len() == 0) {
+                error.code = -1;
+                error.msg = "Client disconnected";
+            }
             handler->cb(handler->hook, error, io.owner());
             break;
         case IOOperation::Send:
@@ -252,20 +259,18 @@ int IocpServer::wait_completion_task() {
         }
 
         if (error) {
-            repost_accept_task(io.owner());
+            recycle(io.owner());
         }
     }
 
     return error.code;
 }
 
-void IocpServer::add_listener(CompletionHandler* h) {
-    impl->listener_queue.push(h);
-}
 
-Excepted<> IocpServer::repost_accept_task(SocketHelper sock) {
-    SocketServer::instance().replace_socket(sock.get());
-    return post_accept_task(sock);
+
+Excepted<> IocpServer::recycle(SocketHelper sock) {
+    unchecked_return_to_pool(sock.get(), SocketServer::instance().pool());
+    return Unit();
 }
 
 
@@ -274,8 +279,6 @@ Excepted<> IocpServer::repost_accept_task(SocketHelper sock) {
 struct IocpClient::Impl {
     HANDLE iocp_handle;
     LPFN_CONNECTEX async_connect;
-
-    RingQueue<CompletionHandler*> connector_queue{};
 
     ~Impl() {
         ::CloseHandle(iocp_handle);
@@ -291,13 +294,6 @@ Excepted<IocpClient> IocpClient::create() {
     }
     auto sock = may_sock.unwrap();
 
-    HANDLE iocp_handle =
-        ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-
-    if (!iocp_handle) {
-        return {Error(last_error(), "Failed to create iocp")};
-    }
-    
     GUID GUidConnectEx = WSAID_CONNECTEX;
     void* async_connect = NULL;
     DWORD ret_bytes;
@@ -311,30 +307,39 @@ Excepted<IocpClient> IocpClient::create() {
         return {Error(last_error(), "Failed to get 'ConnectEx' pointer")};
     }
 
+    HANDLE iocp_handle =
+        ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+
+    if (!iocp_handle) {
+        return {Error(last_error(), "Failed to create iocp")};
+    }
+
     return {new Impl{iocp_handle, (LPFN_CONNECTEX)async_connect}};
 }
 
-Excepted<> IocpClient::post_connect_task(const char* host, short port, CompletionHandler* handler) {
-    auto may_b = SocketServer::instance().make_socket();
-    if (!may_b) {
-        return may_b.unwrap_err();
+Excepted<> IocpClient::post_connect_task(const char* host1, short port1, 
+                                        const char* host2, short port2, CompletionHandler* handler) 
+{
+    auto may_sock = SocketServer::instance().make_socket();
+    if (!may_sock) {
+        return may_sock.unwrap_err();
     }
-    auto sock = may_b.unwrap();
+    auto sock = may_sock.unwrap();
 
-    if (auto res = unpack(sock).bind(host, 8081); !res) {
+    if (auto res = unpack(sock).bind(host1, port1); !res) {
         return res.unwrap_err();
     }
 
     if (auto res = associate_with(sock.get(), handler); !res) {
         return res.unwrap_err();
     }
-    
+
     unpack(sock).for_async_task(IOOperation::Connect);
 
     SOCKADDR_IN sockaddr;
     sockaddr.sin_family = AF_INET;
-    sockaddr.sin_port = ::htons(port);
-    ::inet_pton(AF_INET, host, &sockaddr.sin_addr.S_un.S_addr);
+    sockaddr.sin_port = ::htons(port2);
+    ::inet_pton(AF_INET, host2, &sockaddr.sin_addr.S_un.S_addr);
 
     DWORD bytes_send;
     auto result = impl->async_connect(
@@ -346,7 +351,7 @@ Excepted<> IocpClient::post_connect_task(const char* host, short port, Completio
         (LPDWORD)&bytes_send,
         (LPOVERLAPPED)unpack(sock).send_io().overlapped()
     );
-
+    
     if (!result && ERROR_IO_PENDING != last_error()) {
         return {Error("Failed to connect to target")};
     }
@@ -369,7 +374,6 @@ Excepted<> IocpClient::post_send_task(SocketHelper sock) {
         return Error(last_error(), "Failed to post send task");
     }
 
-    
     return Unit();
 }
 
@@ -414,15 +418,17 @@ int IocpClient::wait_completion_task() {
 
         switch(io.io_operation()) {
         case IOOperation::Connect:
-            if (!impl->connector_queue.empty()) {
-                auto handler = impl->connector_queue.front();
+            if (handler) {
                 handler->cb(handler->hook, error, io.owner());
-                impl->connector_queue.pop();
-                break;
+            } else {
+                recycle(io.owner());
             }
-            unchecked_return_to_pool(io.owner().get(), SocketServer::instance().pool());
             break;
         case IOOperation::Receive:
+            if (io.len() == 0) {
+                error.code = -1;
+                error.msg = "Server disconnected";
+            }
             handler->cb(handler->hook, error, io.owner());
             break;
         case IOOperation::Send:
@@ -433,16 +439,13 @@ int IocpClient::wait_completion_task() {
         }
 
         if (error) {
-            unchecked_return_to_pool(io.owner().get(), SocketServer::instance().pool());
+            recycle(io.owner());
         }
     }
 
     return error.code;
 }
 
-void IocpClient::add_connector(CompletionHandler * handler) {
-    impl->connector_queue.push(handler);
-}
 
 Excepted<> IocpClient::associate_with(SocketHelper sock, CompletionHandler* handler) {
     HANDLE result = ::CreateIoCompletionPort(
@@ -453,6 +456,11 @@ Excepted<> IocpClient::associate_with(SocketHelper sock, CompletionHandler* hand
     }
 
     return {Unit()};
+}
+
+Excepted<> IocpClient::recycle(SocketHelper sock) {
+    unchecked_return_to_pool(sock.get(), SocketServer::instance().pool());
+    return Unit();
 }
 
 }  // namespace plat

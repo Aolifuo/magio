@@ -164,18 +164,7 @@ struct SocketServer::Data {
                   s->handle = INVALID_SOCKET;
               }
           }) 
-    {
-        /*
-        SYSTEM_INFO info;
-        GetSystemInfo(&info);
-
-        if (thread_num == 0) {
-            threads.reserve(info.dwNumberOfProcessors);
-        } else {
-            threads.reserve(thread_num);
-        }
-        */
-    }
+    { }
 };
 
 SocketServer::SocketServer() { 
@@ -251,11 +240,10 @@ Excepted<Borrowed<SocketServer::pool_type>> SocketServer::raw_socket() {
     return {std::move(socket)};
 }
 
-Excepted<> SocketServer::replace_socket(Socket* old,
-                                                 TransportProtocol protocol) {
+Excepted<> SocketServer::replace_socket(Socket* old, TransportProtocol protocol) {
+    std::printf("old socket: %lld\n", old->handle);
     closesocket(old->handle);
     return get_socket(old);
-    ;
 }
 
 SocketServer::pool_type* SocketServer::pool() { return &data->socket_pool; }
