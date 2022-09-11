@@ -5,6 +5,7 @@
 struct Foo {
     int& fun();
     void fun2(int[3], const char*) const noexcept;
+    double&& operator()() const noexcept;
 };
 
 TestResults test_return_type() {
@@ -14,7 +15,8 @@ TestResults test_return_type() {
         test(same_as<typename FunctorTraits<int(int, double)>::ReturnType, int>),
         test(same_as<typename FunctorTraits<void()>::ReturnType, void>),
         test(same_as<typename FunctorTraits<decltype(&Foo::fun)>::ReturnType, int&>),
-        test(same_as<typename FunctorTraits<decltype(g)>::ReturnType, string>)
+        test(same_as<typename FunctorTraits<decltype(g)>::ReturnType, string>),
+        test(same_as<typename FunctorTraits<Foo>::ReturnType, double&&>)
     );
 }
 
