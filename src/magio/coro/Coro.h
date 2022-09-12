@@ -32,7 +32,6 @@ Coro<
     >
 > coro_join(Coro<Rets>&&...coros) {
     // std::mutex m;
-    std::exception_ptr eptr;
     auto executor = co_await this_coro::executor;
     
     auto coro_tup =
@@ -44,24 +43,24 @@ Coro<
         }, *p);
     });
     
-    co_await Coro<void>([&coro_tup, executor](std::coroutine_handle<> h) mutable {
-
-        std::apply([executor](auto&&...coros) {
-            (coros.wake(executor, false), ...);
-        }, coro_tup);
-
-        executor.waiting([&coro_tup, h, executor]() mutable {
-            bool flag = std::apply([](auto&&...coros) {
-                return (coros.done() && ...);
+    co_await Coro<void>(
+        [&coro_tup, executor](std::coroutine_handle<> h) mutable {
+            std::apply([executor](auto&&...coros) {
+                (coros.wake(executor, false), ...);
             }, coro_tup);
 
-            if (flag) {
-                executor.post([h] { h.resume(); });
-            }
+            executor.waiting([&coro_tup, h, executor]() mutable {
+                bool flag = std::apply([](auto&&...coros) {
+                    return (coros.done() && ...);
+                }, coro_tup);
 
-            return flag;
+                if (flag) {
+                    executor.post([h] { h.resume(); });
+                }
+
+                return flag;
+            });
         });
-    });
 
     auto ret_tup = std::apply(
         [](auto&&...coros) {
