@@ -96,7 +96,7 @@ bool EventLoop::Impl::poll() {
 
     for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
         if ((*it)()) {
-            waiting_tasks.erase(it);
+            it = waiting_tasks.erase(it);
         }
     }
 
