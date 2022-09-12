@@ -39,6 +39,8 @@ int main() {
 }
 ```
 
+output
+
 ```shell
 Task A: Compute factorial 2, now i = 2
 Task B: Compute factorial 3, now i = 2
@@ -82,6 +84,8 @@ int main() {
     pool.join();
 }
 ```
+
+output
 
 ```shell
 func1 receive 0 from main
