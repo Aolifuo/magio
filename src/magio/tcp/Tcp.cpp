@@ -5,6 +5,7 @@
 #include "magio/plat/iocp.h"
 #include "magio/plat/socket.h"
 #include "magio/plat/system_errors.h"
+#include "magio/utils/ScopeGuard.h"
 
 namespace magio {
 
@@ -125,7 +126,7 @@ Coro<TcpStream> TcpServer::accept() {
 
     RWHook hook{.exe = executor};
 
-    auto handler = new plat::CompletionHandler{
+    auto handler = ScopeGuard(new plat::CompletionHandler{
         .hook = (void*)&hook, 
         .cb = [](void* hook, Error err, plat::SocketHelper sock) {
             auto rwhook = (RWHook*)hook;
@@ -133,12 +134,12 @@ Coro<TcpStream> TcpServer::accept() {
             rwhook->sock = sock;
             rwhook->exe.post([h = rwhook->h] { h.resume(); });
         }
-    };
+    });
 
     co_await Coro<void>{
-        [&hook, handler, impl = impl](std::coroutine_handle<> h) {
+        [&hook, ch = handler.get(), impl = impl](std::coroutine_handle<> h) {
             hook.h = h;
-            if (auto res = impl->server.post_accept_task(nullptr, handler); !res) {
+            if (auto res = impl->server.post_accept_task(nullptr, ch); !res) {
                 hook.err = res.unwrap_err();
                 hook.h.resume();
             }
@@ -146,12 +147,11 @@ Coro<TcpStream> TcpServer::accept() {
     };
 
     if (hook.err) {
-        delete handler;
         throw std::runtime_error(hook.err.msg);
     }
 
     auto stream_impl 
-        = new TcpStream::Impl{executor, &impl->server, hook, handler};
+        = new TcpStream::Impl{executor, &impl->server, hook, handler.release()};
     co_return TcpStream{stream_impl};
 }
 
@@ -190,7 +190,7 @@ Coro<TcpStream> TcpClient::connect(const char* host1, short port1, const char *h
     auto exe = co_await this_coro::executor;
     RWHook hook{.exe = exe};
 
-    auto handler = new plat::CompletionHandler{
+    auto handler = ScopeGuard(new plat::CompletionHandler{
         .hook = (void*)&hook,
         .cb = [](void* hook, Error err, plat::SocketHelper sock) {
             auto rwhook = (RWHook*)hook;
@@ -198,12 +198,12 @@ Coro<TcpStream> TcpClient::connect(const char* host1, short port1, const char *h
             rwhook->sock = sock;
             rwhook->exe.post([h = rwhook->h] { h.resume(); });
         }
-    };
+    });
 
     co_await Coro<void> {
-        [&hook, impl = impl, handler, host1, port1, host2, port2](std::coroutine_handle<> h) {
+        [&hook, impl = impl, ch = handler.get(), host1, port1, host2, port2](std::coroutine_handle<> h) {
             hook.h = h;
-            if (auto res = impl->iocp_client.post_connect_task(host1, port1, host2, port2, handler); !res) {
+            if (auto res = impl->iocp_client.post_connect_task(host1, port1, host2, port2, ch); !res) {
                 hook.err = res.unwrap_err();
                 return h.resume();
             }
@@ -211,12 +211,11 @@ Coro<TcpStream> TcpClient::connect(const char* host1, short port1, const char *h
     };
 
     if (hook.err) {
-        delete handler;
         throw std::runtime_error(hook.err.msg);
     }
 
     auto stream_impl
-         = new TcpStream::Impl{exe, &impl->iocp_client, hook, handler};
+         = new TcpStream::Impl{exe, &impl->iocp_client, hook, handler.release()};
     co_return {stream_impl};
 }
 

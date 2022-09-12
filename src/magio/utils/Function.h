@@ -26,6 +26,11 @@ struct AtImpl<0, Target, Rest...> {
     using type = Target;
 };
 
+template<size_t N>
+struct AtImpl<N> {
+    using type = void;
+};
+
 template<size_t N, typename First, typename...Rest>
 struct AtImpl<N, First, Rest...>: AtImpl<N - 1, Rest...> {};
 
@@ -47,24 +52,6 @@ public:
 
     MemFnBinder(T mem_fn_ptr, ClassType* obj_ptr)
         : mfp_(mem_fn_ptr), obj_(obj_ptr) {}
-
-    MemFnBinder(const MemFnBinder&) = default;
-    MemFnBinder(MemFnBinder&& other)
-        : mfp_(other.mfp_)
-        , obj_(other.obj_) {
-
-        other.mfp_ = nullptr;
-        other.obj_ = nullptr;
-    }
-
-    MemFnBinder& operator=(const MemFnBinder&) = default;
-    MemFnBinder& operator=(MemFnBinder&& other) {
-        mfp_ = other.mfp_;
-        obj_ = other.obj_;
-
-        other.mfp_ = nullptr;
-        other.obj_ = nullptr;
-    }
     
     template<typename ...Args>
     requires std::is_invocable_v<T, ClassType*, Args...>
@@ -100,6 +87,7 @@ template<typename Ret, typename...Args>
 struct FunctorTraits<Ret(Args...)> {
     using ReturnType = Ret;
     using Arguments = TypeList<Args...>;
+    using FunctionType = Ret(Args...);
 };
 
 template<typename Ret, typename...Args>
@@ -129,5 +117,11 @@ struct FunctorTraits<Ret (Class::*)(Args...) const>
 template<typename Ret, typename Class, typename...Args>
 struct FunctorTraits<Ret (Class::*)(Args...) const noexcept>
     : FunctorTraits<Ret(Args...)> {};
+
+template<typename Fn>
+concept IsFunctor = requires(Fn fn) {
+    typename FunctorTraits<Fn>::FunctionType;
+};
+
 
 }

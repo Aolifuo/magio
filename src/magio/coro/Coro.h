@@ -4,9 +4,9 @@
 #include "magio/coro/UseCoro.h"
 #include <mutex>
 
-template<typename Ret, typename...Ts>
-struct std::coroutine_traits<magio::Coro<Ret>, Ts...> {
-    using promise_type = magio::PromiseTypeBase<Ret, magio::Coro<Ret>>;
+template<typename Ret, typename Yield, typename...Ts>
+struct std::coroutine_traits<magio::Coro<Ret, Yield>, Ts...> {
+    using promise_type = magio::PromiseTypeBase<Ret, Yield, magio::Coro<Ret>>;
     using handle_type = std::coroutine_handle<promise_type>;
 };
 
@@ -26,7 +26,7 @@ Coro<
     std::tuple<
         std::conditional_t<
             std::is_void_v<Rets>,
-            NoReturn,
+            None,
             Rets
         >...
     >

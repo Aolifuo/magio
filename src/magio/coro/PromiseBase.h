@@ -1,14 +1,58 @@
 #pragma once
 
+#include <concepts>
 #include <coroutine>
-#include <cstdio>
 #include <exception>
 #include "magio/core/Execution.h"
 #include "magio/core/MaybeUninit.h"
+#include "magio/utils/Function.h"
 
 namespace magio {
 
-using CoroCompletionHandler = std::function<void(std::exception_ptr)>;
+struct None {};
+
+namespace detail {
+
+template<typename Yield>
+concept YieldType =
+    std::is_function_v<Yield> &&  
+    (
+        std::is_object_v<typename FunctorTraits<Yield>::ReturnType> ||
+        std::is_void_v<typename FunctorTraits<Yield>::ReturnType>
+    ) &&  
+    (
+        FunctorTraits<Yield>::Arguments::Length == 1 ||
+        FunctorTraits<Yield>::Arguments::Length == 0
+    );
+
+template<typename Yield>
+using YieldReturnType = std::conditional_t<
+    std::is_void_v<typename FunctorTraits<Yield>::ReturnType>,
+    None,
+    typename FunctorTraits<Yield>::ReturnType
+>;
+
+template<typename Yield>
+using YieldReceiveType = std::conditional_t<
+    FunctorTraits<Yield>::Arguments::Length == 0,
+    void,
+    typename FunctorTraits<Yield>::Arguments::template At<0>
+>;
+
+template<typename Ret>
+struct CoroCompletionHandler {
+    using type = std::function<void(std::exception_ptr, Ret)>;
+};
+
+template<>
+struct CoroCompletionHandler<void> {
+    using type = std::function<void(std::exception_ptr)>;
+};
+
+}
+
+template<typename Ret>
+using CoroCompletionHandler = typename detail::CoroCompletionHandler<Ret>::type;
 
 struct FinalSuspend {
     FinalSuspend(bool flag) {
@@ -30,10 +74,25 @@ struct FinalSuspend {
     bool auto_destroy;
 };
 
-template<typename Ret, typename Awaitable>
+template<typename Ret>
+struct YieldSuspend {
+    bool await_ready() noexcept {
+        return false;
+    }
+
+    void await_suspend(std::coroutine_handle<> prev_h) noexcept {
+        
+    }
+
+    Ret await_resume() noexcept {
+        
+    }
+};
+
+template<typename Ret, typename Yield, typename Awaitable>
 struct PromiseTypeBase;
 
-template<typename Ret, typename Awaitable>
+template<typename Ret, typename Yield, typename Awaitable>
 struct PromiseTypeBase {
     Awaitable get_return_object() {
             return {
@@ -48,7 +107,7 @@ struct PromiseTypeBase {
 
     auto final_suspend() noexcept {
         if (completion_handler) {
-            completion_handler(eptr);
+            completion_handler(eptr, storage.unwrap());
         }
 
         if (previous) {
@@ -62,24 +121,29 @@ struct PromiseTypeBase {
         storage = std::move(value);
     }
 
+    YieldSuspend<detail::YieldReceiveType<Yield>>
+    yield_value(detail::YieldReturnType<Yield> value) {
+        return {};
+    }
+
     void unhandled_exception() {
         eptr = std::current_exception(); 
     }
 
     Ret get_value() {
-        return std::move(storage.unwrap());
+        return storage.unwrap();
     }
 
     bool auto_destroy = true;
     std::exception_ptr eptr;
     magio::AnyExecutor executor;
     std::coroutine_handle<> previous;
-    CoroCompletionHandler completion_handler;
+    CoroCompletionHandler<Ret> completion_handler;
     MaybeUninit<Ret> storage;
 };
 
-template<typename Awaitable>
-struct PromiseTypeBase<void, Awaitable> {
+template<typename Yield, typename Awaitable>
+struct PromiseTypeBase<void, Yield, Awaitable> {
     Awaitable get_return_object() {
         return {
             std::coroutine_handle<PromiseTypeBase>::from_promise(*this),
@@ -105,6 +169,11 @@ struct PromiseTypeBase<void, Awaitable> {
 
     void return_void() { }
 
+    YieldSuspend<detail::YieldReceiveType<Yield>>
+    yield_value(detail::YieldReturnType<Yield> value) {
+        return {};
+    }
+
     void unhandled_exception() {
         eptr = std::current_exception(); 
     }
@@ -113,7 +182,7 @@ struct PromiseTypeBase<void, Awaitable> {
     std::exception_ptr eptr;
     magio::AnyExecutor executor;
     std::coroutine_handle<> previous;
-    CoroCompletionHandler completion_handler;
+    CoroCompletionHandler<void> completion_handler;
 };
 
 }
