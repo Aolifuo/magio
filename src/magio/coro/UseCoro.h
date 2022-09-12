@@ -36,20 +36,11 @@ struct Coro {
     }
 
     Ret await_resume() {
-        if (main_h_) {
-            if(main_h_.promise().eptr) {
-                std::rethrow_exception(main_h_.promise().eptr);
-            }
-        }
-
         if constexpr(!std::is_void_v<Ret>) {
             return get_value();
+        } else {
+            get_value();
         }
-    }
-
-
-    auto async_resume() {
-
     }
 
     void set_completion_handler(CoroCompletionHandler<Ret> handler) {
@@ -68,12 +59,23 @@ struct Coro {
         }
     }
 
+    // has promise
     auto get_value() {
-        if constexpr (std::is_void_v<Ret>) {
-            return None{};
-        } else {
-            return main_h_.promise().get_value();
+        if (main_h_) {
+            if (main_h_.promise().eptr) {
+                std::rethrow_exception(main_h_.promise().eptr);
+            }
         }
+
+        if constexpr (!std::is_void_v<Ret>) {
+            return main_h_.promise().get_value();
+        } else {
+            return None{};
+        }
+    }
+
+    bool done() {
+        return main_h_.done();
     }
 
     void destroy() {

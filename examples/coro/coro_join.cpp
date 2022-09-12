@@ -28,7 +28,7 @@ Coro<void> amain() {
 
     std::printf("%d + %d = %d\n", b, c, b + c);
 
-    auto [d, e] = co_await coro_join(may_throw(), get_num(4));
+    auto [d, e, _] = co_await coro_join(may_throw(), get_num(4), get_num(114514));
     
     std::printf("final %d\n", e);
 }
@@ -36,16 +36,17 @@ Coro<void> amain() {
 int main() {
     //EventLoop loop;
     ThreadPoolv2 loop(10);
-    co_spawn(loop.get_executor(), amain(), [](std::exception_ptr e) {
-        try {
-            if (e) {
-                rethrow_exception(e);
+    co_spawn(loop.get_executor(), amain(), 
+        [](std::exception_ptr e) {
+            try {
+                if (e) {
+                    rethrow_exception(e);
+                }
+            } catch(const exception& e) {
+                printf("%s\n", e.what());
             }
-        } catch(const exception& e) {
-            printf("%s\n", e.what());
-        }
-        
-    });
+            
+        });
     //loop.run();
     loop.join();
 }

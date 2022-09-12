@@ -2,7 +2,7 @@
 
 #include "magio/coro/ThisCoro.h"
 #include "magio/coro/UseCoro.h"
-#include <mutex>
+#include "magio/utils/ScopeGuard.h"
 
 template<typename Ret, typename Yield, typename...Ts>
 struct std::coroutine_traits<magio::Coro<Ret, Yield>, Ts...> {
@@ -31,53 +31,42 @@ Coro<
         >...
     >
 > coro_join(Coro<Rets>&&...coros) {
-    std::mutex m;
-    int num = sizeof...(Rets);
+    // std::mutex m;
     std::exception_ptr eptr;
     auto executor = co_await this_coro::executor;
     
-    auto coro_tup = std::make_tuple((coros.has_coro_handle() ? std::move(coros) : detail::make_coro(std::move(coros)))...);
-
-    co_await Coro<void>(
-        [&](std::coroutine_handle<> h) mutable {
-            std::apply([&](auto&&...coros) mutable {
-                (coros.set_completion_handler([&m, &num, &eptr, h, executor](std::exception_ptr e) mutable {
-                    std::lock_guard lk(m);
-
-                    try {
-                        if (e) {
-                            std::rethrow_exception(e);
-                        }
-                    } catch(...) {
-                        eptr = std::current_exception();
-                    }
-
-                    if (--num == 0) {
-                        executor.post([h]{ h.resume(); });
-                    }
-                }), ...);
-
-                (coros.wake(executor, false), ...);
-            }, coro_tup);
-        }
-    );
+    auto coro_tup =
+        std::make_tuple((coros.has_coro_handle() ? std::move(coros) : detail::make_coro(std::move(coros)))...);
     
-    if (eptr) {
+    auto guard = ScopeGuard(&coro_tup, [](auto* p){
         std::apply([](auto&&...coros) {
             (coros.destroy(), ...);
+        }, *p);
+    });
+    
+    co_await Coro<void>([&coro_tup, executor](std::coroutine_handle<> h) mutable {
+
+        std::apply([executor](auto&&...coros) {
+            (coros.wake(executor, false), ...);
         }, coro_tup);
-        
-        std::rethrow_exception(eptr);
-    }
+
+        executor.waiting([&coro_tup, h, executor]() mutable {
+            bool flag = std::apply([](auto&&...coros) {
+                return (coros.done() && ...);
+            }, coro_tup);
+
+            if (flag) {
+                executor.post([h] { h.resume(); });
+            }
+
+            return flag;
+        });
+    });
 
     auto ret_tup = std::apply(
         [](auto&&...coros) {
             return std::make_tuple((coros.get_value())...);
         }, coro_tup);
-    
-    std::apply([](auto&&...coros) {
-        (coros.destroy(), ...);
-    }, coro_tup);
 
     co_return ret_tup;
 }
