@@ -28,7 +28,7 @@ Coro<void> func2(std::shared_ptr<Channel<NoCopy, string>> ch) {
 int main() {
     ThreadPoolv2 pool(10);
     
-    auto channel = std::make_shared<Channel<NoCopy, string>>(pool.get_executor());
+    auto channel = std::make_shared<Channel<NoCopy, string>>();
     channel->async_send(NoCopy{}, "hi");
     channel->async_send(NoCopy{}, "hello");
     co_spawn(
