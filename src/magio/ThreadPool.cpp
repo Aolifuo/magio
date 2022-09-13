@@ -1,4 +1,4 @@
-#include "magio/ThreadPoolv2.h"
+#include "magio/ThreadPool.h"
 
 #include <cstdio>
 #include "magio/core/Queue.h"
@@ -6,14 +6,15 @@
 
 namespace magio {
 
-struct ThreadPoolv2::Impl: public ExecutionContext {
+struct ThreadPool::Impl: public ExecutionContext {
     enum State {
         Stop, Running, PendingDestroy
     };
+
     State state = Stop;
     RingQueue<CompletionHandler> idle_tasks;
     TimingTaskManager pending_tasks;
-    std::list<WaitingCompletionHandler> waiting_task;
+    std::list<WaitingCompletionHandler> waiting_tasks;
 
     std::mutex idle_m;
     std::mutex pending_m;
@@ -36,9 +37,9 @@ struct ThreadPoolv2::Impl: public ExecutionContext {
     void poller();
 };
 
-CLASS_PIMPL_IMPLEMENT(ThreadPoolv2)
+CLASS_PIMPL_IMPLEMENT(ThreadPool)
 
-ThreadPoolv2::ThreadPoolv2(size_t thread_num) {
+ThreadPool::ThreadPool(size_t thread_num) {
     impl = new Impl;
 
     for (size_t i = 0; i < thread_num; ++i) {
@@ -49,85 +50,85 @@ ThreadPoolv2::ThreadPoolv2(size_t thread_num) {
     start();
 }
 
-void ThreadPoolv2::post(CompletionHandler handler) {
+void ThreadPool::post(CompletionHandler handler) {
     impl->post(std::move(handler));
 }
 
-void ThreadPoolv2::waiting(WaitingCompletionHandler handler) {
+void ThreadPool::waiting(WaitingCompletionHandler handler) {
     impl->waiting(std::move(handler));
 }
 
-TimerID ThreadPoolv2::set_timeout(size_t ms, CompletionHandler handler) {
+TimerID ThreadPool::set_timeout(size_t ms, CompletionHandler handler) {
     return impl->set_timeout(ms, std::move(handler));
 }
 
-void ThreadPoolv2::clear(TimerID id) {
+void ThreadPool::clear(TimerID id) {
     impl->clear(id);
 }
 
-void ThreadPoolv2::start() {
+void ThreadPool::start() {
     std::scoped_lock lk(impl->idle_m, impl->pending_m);
     impl->state = Impl::Running;
     impl->idle_condvar.notify_all();
     impl->pending_condvar.notify_all();
 }
 
-void ThreadPoolv2::stop() {
+void ThreadPool::stop() {
     std::scoped_lock lk(impl->idle_m, impl->pending_m);
     impl->state = Impl::Stop;
 }
 
-void ThreadPoolv2::wait() {
+void ThreadPool::wait() {
     impl->wait();
 }
 
-void ThreadPoolv2::join() {
+void ThreadPool::join() {
     impl->join();
 }
 
-void ThreadPoolv2::detach() {
+void ThreadPool::detach() {
     impl->detach();
 }
 
-AnyExecutor ThreadPoolv2::get_executor() {
+AnyExecutor ThreadPool::get_executor() {
     return AnyExecutor(impl);
 }
 
-void ThreadPoolv2::Impl::post(CompletionHandler handler) {
+void ThreadPool::Impl::post(CompletionHandler handler) {
     std::lock_guard lk(idle_m);
     idle_tasks.push(std::move(handler));
     idle_condvar.notify_one();
 }
 
-void ThreadPoolv2::Impl::waiting(WaitingCompletionHandler handler) {
+void ThreadPool::Impl::waiting(WaitingCompletionHandler handler) {
     std::lock_guard lk(pending_m);
-    waiting_task.push_back(std::move(handler));
+    waiting_tasks.push_back(std::move(handler));
     pending_condvar.notify_one();
 }
 
-TimerID ThreadPoolv2::Impl::set_timeout(size_t ms, CompletionHandler handler) {
+TimerID ThreadPool::Impl::set_timeout(size_t ms, CompletionHandler handler) {
     std::lock_guard lk(pending_m);
     TimerID id = pending_tasks.set_timeout(ms, std::move(handler));
     pending_condvar.notify_one();
     return id;
 }
 
-void ThreadPoolv2::Impl::clear(TimerID id) {
+void ThreadPool::Impl::clear(TimerID id) {
     std::lock_guard lk(pending_m);
     pending_tasks.cancel(id);
 }
 
-void ThreadPoolv2::Impl::wait() {
+void ThreadPool::Impl::wait() {
     for (; ;) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         std::scoped_lock lk(idle_m, pending_m);
-        if (idle_tasks.empty() && pending_tasks.empty() && waiting_task.empty()) {
+        if (idle_tasks.empty() && pending_tasks.empty() && waiting_tasks.empty()) {
             return;
         }
     }
 }
 
-void ThreadPoolv2::Impl::join() {
+void ThreadPool::Impl::join() {
     wait();
     destroy();
     for (auto& th : threads) {
@@ -135,18 +136,18 @@ void ThreadPoolv2::Impl::join() {
     }
 }
 
-void ThreadPoolv2::Impl::detach() {
+void ThreadPool::Impl::detach() {
     
 }
 
-void ThreadPoolv2::Impl::destroy() {
+void ThreadPool::Impl::destroy() {
     std::scoped_lock lk(idle_m, pending_m);
     state = PendingDestroy;
     idle_condvar.notify_all();
     pending_condvar.notify_all();
 }   
 
-void ThreadPoolv2::Impl::worker() {
+void ThreadPool::Impl::worker() {
     for (; ;) {
         std::unique_lock lk(idle_m);
         idle_condvar.wait(lk, [this] {
@@ -165,11 +166,11 @@ void ThreadPoolv2::Impl::worker() {
     }
 }
 
-void ThreadPoolv2::Impl::poller() {
+void ThreadPool::Impl::poller() {
     for (; ;) {
         std::unique_lock lk(pending_m);
         pending_condvar.wait(lk, [this] {
-            return (state == Running && (!pending_tasks.empty() || !waiting_task.empty())) 
+            return (state == Running && (!pending_tasks.empty() || !waiting_tasks.empty())) 
                 || state == PendingDestroy;
         });
 
@@ -187,15 +188,15 @@ void ThreadPoolv2::Impl::poller() {
             }
         }
 
-        for (auto it = waiting_task.begin(); it != waiting_task.end(); ++it) {
+        for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
             if ((*it)()) {
-                waiting_task.erase(it);
+                waiting_tasks.erase(it);
             }
         }
     }
 }
 
-bool ThreadPoolv2::Impl::poll() {
+bool ThreadPool::Impl::poll() {
     return true;
 }
 

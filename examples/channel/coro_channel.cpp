@@ -1,5 +1,5 @@
 #include "magio/channel/Channel.h"
-#include "magio/ThreadPoolv2.h"
+#include "magio/ThreadPool.h"
 #include "magio/coro/CoSpawn.h"
 #include <iostream>
 
@@ -26,7 +26,7 @@ Coro<void> func2(std::shared_ptr<Channel<NoCopy, string>> ch) {
 }
 
 int main() {
-    ThreadPoolv2 pool(10);
+    ThreadPool pool(10);
     
     auto channel = std::make_shared<Channel<NoCopy, string>>();
     channel->async_send(NoCopy{}, "hi");

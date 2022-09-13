@@ -1,5 +1,5 @@
 #include <iostream>
-#include "magio/ThreadPoolv2.h"
+#include "magio/ThreadPool.h"
 
 using namespace std;
 
@@ -15,7 +15,7 @@ void func(magio::AnyExecutor executor, size_t times) {
 
 
 int main() {
-    magio::ThreadPoolv2 pool(10);
+    magio::ThreadPool pool(10);
 
     pool.set_timeout(1000, [&pool]{
         func(pool.get_executor(), 1); 
