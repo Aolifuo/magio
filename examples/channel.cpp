@@ -24,7 +24,7 @@ Coro<void> func2(shared_ptr<Channel<int, string>> chan) {
 int main() {
     ThreadPoolv2 pool(10);
 
-    auto channel = make_shared<Channel<int, string>>();
+    auto channel = make_shared<Channel<int, string>>(pool.get_executor());
     for (size_t i = 0; i < 10; ++i) {
         channel->async_send(i, "from main");
     }

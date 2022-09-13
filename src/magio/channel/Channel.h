@@ -1,5 +1,6 @@
 #pragma once
 
+#include "magio/core/Execution.h"
 #include "magio/core/MaybeUninit.h"
 #include "magio/core/Queue.h"
 #include "magio/coro/Coro.h"
@@ -15,10 +16,11 @@ public:
     };
 
     Channel() = default;
+    Channel(AnyExecutor executor): executor_(executor) {}
 
     void async_send(Ts...args) {
         std::unique_lock lk(m_);
-        if (state == Stop) {
+        if (state_ == Stop) {
             return;
         }
 
@@ -36,7 +38,7 @@ public:
     requires std::is_invocable_v<Fn, Ts...>
     void async_receive(Fn fn) {
         std::unique_lock lk(m_);
-        if (state == Stop) {
+        if (state_ == Stop) {
             return;
         }
 
@@ -47,14 +49,23 @@ public:
             std::apply([&fn](auto&&...args) {
                 fn(std::move(args)...);
             }, tup);
-        } else {
-            consumer_.push(std::move(fn));
+            return;
+        }
+
+        consumer_.push(std::move(fn));
+        lk.unlock();
+
+        if (executor_) {
+            executor_.waiting([p = this->shared_from_this()] {
+                std::lock_guard lk(p->m_);
+                return p->consumer_.empty();
+            });
         }
     }
 
     Coro<std::tuple<Ts...>> async_receive(UseCoro) {
         std::unique_lock lk(m_);
-        if (state == Stop) {
+        if (state_ == Stop) {
             throw std::runtime_error("The channel is in a stopped state");
         }
 
@@ -66,12 +77,20 @@ public:
 
         MaybeUninit<std::tuple<Ts...>> ret;
         co_await Coro<void>{
-            [&lk, &ret, p = this->shared_from_this()](std::coroutine_handle<> h) {
+            [&lk, &ret, exe = executor_, p = this->shared_from_this()](std::coroutine_handle<> h) mutable {
                 p->consumer_.push([&ret, h](Ts...args) {
                     ret = std::make_tuple(std::move(args)...);
                     h.resume();
                 });
                 lk.unlock();
+
+                if (exe) {
+                    exe.waiting([p] {
+                        std::lock_guard lk(p->m_);
+                        return p->consumer_.empty();
+                    });
+                }
+                
             }
         };
 
@@ -80,17 +99,18 @@ public:
 
     void stop() {
         std::unique_lock lk(m_);
-        state = Stop;
+        state_ = Stop;
         producer_.clear();
         consumer_.clear();
     }
 
     void start() {
         std::unique_lock lk(m_);
-        state = Running;
+        state_ = Running;
     }
 private:
-    State state = Running;
+    State state_ = Running;
+    AnyExecutor executor_;
     RingQueue<std::tuple<Ts...>> producer_;
     RingQueue<std::function<void(Ts...)>> consumer_;
     std::mutex m_;

@@ -44,6 +44,10 @@ public:
     bool poll() {
         return context_->poll();
     }
+
+    operator bool() const {
+        return context_ != nullptr;
+    }
 private:
     ExecutionContext* context_ = nullptr;
 };
