@@ -30,7 +30,7 @@ public:
 
         post(
             [task_ptr = std::make_shared<decltype(task)>(std::move(task)), 
-                    arg_tup = std::make_tuple(args...)] () mutable
+            arg_tup = std::make_tuple(args...)] () mutable
             {
                 std::apply([task_ptr]<typename...Ts>(Ts&&...args) {
                     (*task_ptr)(std::forward<Ts>(args)...);
