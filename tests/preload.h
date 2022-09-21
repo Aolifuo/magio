@@ -4,7 +4,6 @@
 #include <chrono>
 #include <condition_variable>
 #include <exception>
-#include <initializer_list>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -13,6 +12,7 @@
 #include <vector>
 #include <concepts>
 #include <ranges>
+#include <variant>
 
 #include "magio/core/Log.h"
 #include "magio/core/Error.h"
