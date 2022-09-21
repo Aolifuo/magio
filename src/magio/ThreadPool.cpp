@@ -11,17 +11,17 @@ struct ThreadPool::Impl: public ExecutionContext {
         Stop, Running, PendingDestroy
     };
 
-    State state = Stop;
-    RingQueue<CompletionHandler> idle_tasks;
-    TimingTaskManager pending_tasks;
-    std::list<WaitingCompletionHandler> waiting_tasks;
+    State                                   state = Stop;
+    RingQueue<CompletionHandler>            idle_tasks;
+    TimingTaskManager                       pending_tasks;
+    std::list<WaitingCompletionHandler>     waiting_tasks;
 
-    std::mutex idle_m;
-    std::mutex pending_m;
-    std::condition_variable idle_condvar;
-    std::condition_variable pending_condvar;
+    std::mutex                              idle_m;
+    std::mutex                              pending_m;
+    std::condition_variable                 idle_condvar;
+    std::condition_variable                 pending_condvar;
 
-    std::vector<std::jthread> threads;
+    std::vector<std::jthread>               threads;
 
     void post(CompletionHandler handler) override;
     void waiting(WaitingCompletionHandler handler) override;

@@ -6,10 +6,10 @@
 namespace magio {
 
 struct EventLoop::Impl: public ExecutionContext {
-    bool stop_flag = false;
-    RingQueue<CompletionHandler> idle_tasks;
-    TimingTaskManager pending_tasks;
-    std::list<WaitingCompletionHandler> waiting_tasks;
+    bool                                    stop_flag = false;
+    RingQueue<CompletionHandler>            idle_tasks;
+    TimingTaskManager                       pending_tasks;
+    std::list<WaitingCompletionHandler>     waiting_tasks;
 
     void post(CompletionHandler handler) override;
     void waiting(WaitingCompletionHandler handler) override;
