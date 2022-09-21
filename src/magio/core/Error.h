@@ -1,6 +1,7 @@
 #pragma once
 
 #include <format>
+// #include "magio/utils/Function.h"
 
 namespace magio {
 
@@ -42,9 +43,9 @@ public:
 
     Expected(const Expected& other): flag_(other.flag_) {
         if (flag_) {
-            new (buf_) Ok(const_cast<Expected&>(other).template get<Ok>());
+            new (buf_) Ok(other.template get<Ok>());
         } else {
-            new (buf_) Err(const_cast<Expected&>(other).template get<Err>());
+            new (buf_) Err(other.template get<Err>());
         }
     }
 
@@ -82,15 +83,15 @@ public:
 
     Expected& operator=(const Expected& other) {
         if (!flag_ && !other.flag_) {
-            get<Err>() = const_cast<Expected&>(other).template get<Err>();
+            get<Err>() = other.template get<Err>();
         } else if (flag_ && other.flag_) {
-            get<Ok>() = const_cast<Expected&>(other).template get<Ok>();
+            get<Ok>() = other.template get<Ok>();
         } else if (flag_ && !other.flag_) {
             get<Ok>().~Ok();
-            new (buf_) Err(const_cast<Expected&>(other).template get<Err>());
+            new (buf_) Err(other.template get<Err>());
         } else if (!flag_ && other.flag_) {
             get<Err>().~Err();
-            new (buf_) Ok(const_cast<Expected&>(other).template get<Ok>());
+            new (buf_) Ok(other.template get<Ok>());
         }
 
         flag_ = other.flag_;
@@ -137,11 +138,36 @@ public:
         return std::move(get<Err>());
     }
 
+    Ok unwrap_or(Ok ok) {
+        if (flag_) {
+            return std::move(get<Ok>());
+        }
+        return ok;
+    }
+
     Ok except() {
         if (flag_) {
             return std::move(get<Ok>());
         }
         throw std::runtime_error(std::move(get<Err>().msg));
+    }
+
+    template<typename Fn>
+    std::invoke_result_t<Fn, Ok> and_then(Fn fn) {
+        if (!flag_) {
+            return std::move(get<Err>());
+        }
+        
+        return fn(std::move(get<Ok>()));
+    }
+
+    template<typename Fn>
+    std::invoke_result_t<Fn, Err> or_else(Fn fn) {
+        if (flag_) {
+            return std::move(get<Ok>());
+        }
+
+        return fn(std::move(get<Err>()));
     }
 
     operator bool() {
@@ -150,7 +176,7 @@ public:
 private:
 
     template<typename T>
-    T& get() {
+    T& get() const {
         return *reinterpret_cast<T*>(buf_);
     }
 
@@ -158,7 +184,7 @@ private:
     using LargerAlign = std::conditional_t<(alignof(Ok) >= alignof(Err)), Ok, Err>;
 
     bool flag_;
-    alignas(LargerAlign) unsigned char buf_[sizeof(LargerSize)];
+    alignas(LargerAlign) mutable unsigned char buf_[sizeof(LargerSize)];
 };
 
 }
