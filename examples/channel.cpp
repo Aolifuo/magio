@@ -1,5 +1,5 @@
 #include <iostream>
-#include "magio/channel/Channel.h"
+#include "magio/sync/Channel.h"
 #include "magio/ThreadPool.h"
 #include "magio/coro/CoSpawn.h"
 
