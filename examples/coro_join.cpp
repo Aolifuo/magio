@@ -9,8 +9,7 @@ using namespace magio;
 
 Coro<int> factorial(std::string_view name, int num) {
     int res = 1;
-    auto executor = co_await this_coro::executor;
-    Timer timer(executor, 1000);
+    Timer timer(co_await this_coro::executor, 1000);
 
     for (int i = 2; i <= num; ++i) {
         printf("Task %s: Compute factorial %d, now i = %d\n", name.data(), num, i);

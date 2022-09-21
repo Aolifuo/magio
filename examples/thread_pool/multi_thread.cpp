@@ -1,4 +1,4 @@
-#include "magio/ThreadPoolv2.h"
+#include "magio/ThreadPool.h"
 #include "magio/coro/CoSpawn.h"
 #include "magio/coro/Coro.h"
 #include <thread>
@@ -13,7 +13,7 @@ Coro<void> func() {
 }
 
 int main() {
-    ThreadPoolv2 pool(10);
+    ThreadPool pool(10);
 
     co_spawn(
         pool.get_executor(),

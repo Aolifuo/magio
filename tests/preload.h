@@ -49,20 +49,20 @@ struct TestError {
 
 struct TestResults {
     std::string test_name;
-    std::vector<Excepted<Unit, TestError>> results;
+    std::vector<Expected<Unit, TestError>> results;
 };
 
 
 template<typename L, typename R>
 requires std::equality_comparable_with<L, R>
-inline Excepted<Unit, TestError> test(L left, R right, std::string err = "") {
+inline Expected<Unit, TestError> test(L left, R right, std::string err = "") {
     if (left != right) {
         return {TestError{std::format("{}\nleft:\n{}\nright:\n{}\n", err, left, right)}};
     }
     return {Unit()};
 }
 
-inline Excepted<Unit, TestError> test(bool flag, std::string err = "") {
+inline Expected<Unit, TestError> test(bool flag, std::string err = "") {
     if (!flag) {
         return {TestError{std::format("{}\n", err)}};
     }
@@ -70,11 +70,11 @@ inline Excepted<Unit, TestError> test(bool flag, std::string err = "") {
 }
 
 
-inline TestResults collect(std::string_view name, std::initializer_list<Excepted<Unit, TestError>> li) {
+inline TestResults collect(std::string_view name, std::initializer_list<Expected<Unit, TestError>> li) {
     TestResults res;
     res.test_name = name;
     for (auto&& elem: li) {
-        res.results.emplace_back(const_cast<Excepted<Unit, TestError>&&>(elem));
+        res.results.emplace_back(const_cast<Expected<Unit, TestError>&&>(elem));
     }
     return res;
 }
