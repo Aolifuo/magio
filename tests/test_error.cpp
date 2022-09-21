@@ -62,7 +62,7 @@ TestResults test_maybe_uninit() {
     );
 }
 
-TestResults test_Expected() {
+TestResults test_expected() {
     Foo::COUNT = 0;
     {
         Expected<Foo> f1{Foo{}};
@@ -87,9 +87,44 @@ TestResults test_Expected() {
     );
 }
 
+TestResults test_error_chain() {
+    auto f1 = [] {
+        return Expected<NoCopy>(NoCopy());
+    };
+
+    auto f2 = [](NoCopy nc) {
+        return Expected<string>("hello");
+    };
+
+    auto f3 = [](string s) {
+        return Expected<NoCopy>(Error("failed"));
+    };
+
+    auto f4 = [](Error err) {
+        return Expected<NoCopy>(NoCopy());
+    };
+
+    auto res = f1()
+        .and_then(f2)
+        .and_then(f3);
+
+    res.unwrap_err();
+
+    auto res3 = f1()
+        .and_then(f2)
+        .and_then(f3)
+        .or_else(f4);
+
+    res3.unwrap();
+
+    return {};
+}
+
 int main() {
+    
     TESTALL(
         test_maybe_uninit(),
-        test_Expected()
+        test_expected(),
+        test_error_chain()
     );
 }
