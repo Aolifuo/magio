@@ -120,11 +120,42 @@ TestResults test_error_chain() {
     return {};
 }
 
+TestResults test_map() {
+
+    auto f1 = [] {
+        return Expected<int>(1);
+    };
+
+    auto f2 = [] {
+        return Expected<>(Error("ss"));
+    };
+
+    auto res = f1()
+        .map([](int a) {
+            return NoCopy();
+        })
+        .map([](NoCopy c) {
+            return string("hh");
+        });
+
+    res.unwrap();
+
+    auto res2 = f2()
+        .map([](Unit u) {
+            return 1;
+        });
+    
+    res2.unwrap_err();
+
+    return {};
+}
+
 int main() {
     
     TESTALL(
         test_maybe_uninit(),
         test_expected(),
-        test_error_chain()
+        test_error_chain(),
+        test_map()
     );
 }
