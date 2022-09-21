@@ -16,7 +16,7 @@ public:
 
     MaybeUninit(const MaybeUninit& other): flag(other.flag) {
         if (flag) {
-            new (buf_) T{const_cast<MaybeUninit&>(other).get()};
+            new (buf_) T{other.get()};
         }
     }
 
@@ -41,11 +41,11 @@ public:
         if (!flag && !other.flag) {
 
         } else if (flag && other.flag) {
-            get() = const_cast<MaybeUninit&>(other).get();
+            get() = other.get();
         } else if (flag && !other.flag) {
             get().~T();
         } else if (!flag && other.flag) {
-            new (buf_) T{const_cast<MaybeUninit&>(other).get()};
+            new (buf_) T{other.get()};
         }
 
         flag = other.flag;
@@ -89,12 +89,12 @@ public:
     }
 private:
 
-    T& get() {
+    T& get() const {
         return *reinterpret_cast<T*>(buf_);
     }
 
     bool flag;
-    alignas(T) unsigned char buf_[sizeof(T)];
+    alignas(T) mutable unsigned char buf_[sizeof(T)];
 };
 
 }
