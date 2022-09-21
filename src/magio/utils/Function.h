@@ -123,5 +123,9 @@ concept IsFunctor = requires(Fn fn) {
     typename FunctorTraits<Fn>::FunctionType;
 };
 
+template<typename Fn, typename Ret, typename...Args>
+concept CheckFunction = 
+    std::is_invocable_r_v<Ret, Fn, Args...> &&
+    std::is_invocable_v<Fn, Args...>;
 
 }
