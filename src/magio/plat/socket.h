@@ -59,8 +59,8 @@ public:
 
     Socket* get() { return sock_; }
 
-    Excepted<> bind(const char* host, short port);
-    Excepted<> listen();
+    Expected<> bind(const char* host, short port);
+    Expected<> listen();
 private:
     Socket* sock_ = nullptr;
 };
@@ -75,13 +75,13 @@ public:
     SocketServer(SocketServer&&) = delete;
     ~SocketServer();
 
-    static Excepted<> initialize();
+    static Expected<> initialize();
     static SocketServer& instance();
     static void close();
 
-    Excepted<Borrowed<pool_type>> make_socket(TransportProtocol protocol = TransportProtocol::TCP);
-    Excepted<Borrowed<pool_type>> raw_socket();
-    Excepted<> replace_socket(
+    Expected<Borrowed<pool_type>> make_socket(TransportProtocol protocol = TransportProtocol::TCP);
+    Expected<Borrowed<pool_type>> raw_socket();
+    Expected<> replace_socket(
         Socket* old, TransportProtocol protocol = TransportProtocol::TCP);
     pool_type* pool();
 

@@ -62,23 +62,23 @@ TestResults test_maybe_uninit() {
     );
 }
 
-TestResults test_excepted() {
+TestResults test_Expected() {
     Foo::COUNT = 0;
     {
-        Excepted<Foo> f1{Foo{}};
-        Excepted<Foo> f2{std::move(f1)};
-        Excepted<Foo> f3{f2};
-        Excepted<Foo> f4{Error{"fuckfuck"}};
+        Expected<Foo> f1{Foo{}};
+        Expected<Foo> f2{std::move(f1)};
+        Expected<Foo> f3{f2};
+        Expected<Foo> f4{Error{"fuckfuck"}};
         f4 = f3;
         f4 = std::move(f2);
-        Excepted<Foo> f5{f4};
+        Expected<Foo> f5{f4};
         f5 = Error{"ass"};
     }
 
     {
-        Excepted<NoCopy> n1{NoCopy{}};
-        Excepted<NoCopy> n2{std::move(n1)};
-        Excepted<NoCopy> n3{Error{""}};
+        Expected<NoCopy> n1{NoCopy{}};
+        Expected<NoCopy> n2{std::move(n1)};
+        Expected<NoCopy> n3{Error{""}};
         n3 = std::move(n2);
     }
 
@@ -90,6 +90,6 @@ TestResults test_excepted() {
 int main() {
     TESTALL(
         test_maybe_uninit(),
-        test_excepted()
+        test_Expected()
     );
 }

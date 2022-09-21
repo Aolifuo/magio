@@ -65,7 +65,7 @@ struct IocpServer::Impl {
 
 CLASS_PIMPL_IMPLEMENT(IocpServer)
 
-Excepted<IocpServer> IocpServer::bind(const char* host, short port,
+Expected<IocpServer> IocpServer::bind(const char* host, short port,
                                        TransportProtocol protocol) {
     auto maybe_listener = SocketServer::instance().make_socket(protocol);
     if (!maybe_listener) {
@@ -131,7 +131,7 @@ Excepted<IocpServer> IocpServer::bind(const char* host, short port,
     return {std::move(server)};
 }
 
-Excepted<> IocpServer::associate_with(SocketHelper sock, CompletionHandler* handler) {
+Expected<> IocpServer::associate_with(SocketHelper sock, CompletionHandler* handler) {
     HANDLE associate_result = ::CreateIoCompletionPort(
         (HANDLE)sock.handle(), impl->iocp_handle, (ULONG_PTR)handler, 0);
 
@@ -143,7 +143,7 @@ Excepted<> IocpServer::associate_with(SocketHelper sock, CompletionHandler* hand
     return {Unit()};
 }
 
-Excepted<> IocpServer::post_accept_task(SocketHelper sock, CompletionHandler* handler) {
+Expected<> IocpServer::post_accept_task(SocketHelper sock, CompletionHandler* handler) {
     if (!sock.get()) {
         if (auto res = SocketServer::instance().make_socket(); !res) {
             return res.unwrap_err();
@@ -174,7 +174,7 @@ Excepted<> IocpServer::post_accept_task(SocketHelper sock, CompletionHandler* ha
     return {Unit()};
 }
 
-Excepted<> IocpServer::post_receive_task(SocketHelper sock_helper) {
+Expected<> IocpServer::post_receive_task(SocketHelper sock_helper) {
     // associate_with(sock_helper, handler);
 
     IOContextHelper io_helper = sock_helper.recv_io();
@@ -194,7 +194,7 @@ Excepted<> IocpServer::post_receive_task(SocketHelper sock_helper) {
 }
 
 // 
-Excepted<> IocpServer::post_send_task(SocketHelper sock_helper) {
+Expected<> IocpServer::post_send_task(SocketHelper sock_helper) {
 
     IOContextHelper io_helper = sock_helper.send_io();
     sock_helper.for_async_task(IOOperation::Send);
@@ -268,7 +268,7 @@ int IocpServer::wait_completion_task() {
 
 
 
-Excepted<> IocpServer::recycle(SocketHelper sock) {
+Expected<> IocpServer::recycle(SocketHelper sock) {
     unchecked_return_to_pool(sock.get(), SocketServer::instance().pool());
     return Unit();
 }
@@ -287,7 +287,7 @@ struct IocpClient::Impl {
 
 CLASS_PIMPL_IMPLEMENT(IocpClient)
 
-Excepted<IocpClient> IocpClient::create() {
+Expected<IocpClient> IocpClient::create() {
     auto may_sock = SocketServer::instance().make_socket();
     if (!may_sock) {
         return may_sock.unwrap_err();
@@ -317,7 +317,7 @@ Excepted<IocpClient> IocpClient::create() {
     return {new Impl{iocp_handle, (LPFN_CONNECTEX)async_connect}};
 }
 
-Excepted<> IocpClient::post_connect_task(const char* host1, short port1, 
+Expected<> IocpClient::post_connect_task(const char* host1, short port1, 
                                         const char* host2, short port2, CompletionHandler* handler) 
 {
     auto may_sock = SocketServer::instance().make_socket();
@@ -360,7 +360,7 @@ Excepted<> IocpClient::post_connect_task(const char* host1, short port1,
     return Unit();
 }
 
-Excepted<> IocpClient::post_send_task(SocketHelper sock) {
+Expected<> IocpClient::post_send_task(SocketHelper sock) {
     IOContextHelper io_helper = sock.send_io();
     sock.for_async_task(IOOperation::Send);
     DWORD flag = 0;
@@ -377,7 +377,7 @@ Excepted<> IocpClient::post_send_task(SocketHelper sock) {
     return Unit();
 }
 
-Excepted<> IocpClient::post_receive_task(SocketHelper sock) {
+Expected<> IocpClient::post_receive_task(SocketHelper sock) {
     IOContextHelper io_helper = sock.recv_io();
     sock.for_async_task(IOOperation::Receive);
     DWORD flag = 0;
@@ -447,7 +447,7 @@ int IocpClient::wait_completion_task() {
 }
 
 
-Excepted<> IocpClient::associate_with(SocketHelper sock, CompletionHandler* handler) {
+Expected<> IocpClient::associate_with(SocketHelper sock, CompletionHandler* handler) {
     HANDLE result = ::CreateIoCompletionPort(
         (HANDLE)sock.handle(), impl->iocp_handle, (ULONG_PTR)handler, 0);
 
@@ -458,7 +458,7 @@ Excepted<> IocpClient::associate_with(SocketHelper sock, CompletionHandler* hand
     return {Unit()};
 }
 
-Excepted<> IocpClient::recycle(SocketHelper sock) {
+Expected<> IocpClient::recycle(SocketHelper sock) {
     unchecked_return_to_pool(sock.get(), SocketServer::instance().pool());
     return Unit();
 }

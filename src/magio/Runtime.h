@@ -6,7 +6,7 @@ namespace magio {
 
 class Runtime {
 public:
-    static Excepted<> run() {
+    static Expected<> run() {
         return plat::SocketServer::instance().initialize();
     }
 

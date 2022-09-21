@@ -95,7 +95,7 @@ IOContextHelper SocketHelper::recv_io() { return {sock_->io_recv}; }
 
 IOContextHelper SocketHelper::send_io() { return {sock_->io_send}; }
 
-Excepted<> SocketHelper::bind(const char* host, short port) {
+Expected<> SocketHelper::bind(const char* host, short port) {
     sock_->address.sin_family = AF_INET;
     sock_->address.sin_port = ::htons(port);
     ::inet_pton(AF_INET, host, &sock_->address.sin_addr.S_un.S_addr);
@@ -108,7 +108,7 @@ Excepted<> SocketHelper::bind(const char* host, short port) {
     return {Unit()};
 }
 
-Excepted<> SocketHelper::listen() {
+Expected<> SocketHelper::listen() {
     if (0 != ::listen(sock_->handle, SOMAXCONN)) {
         return {Error(last_error(), "Socket listening error")};
     }
@@ -178,7 +178,7 @@ SocketServer::~SocketServer() {
     }
 }
 
-Excepted<> SocketServer::initialize() {
+Expected<> SocketServer::initialize() {
     if (0 != ::WSAStartup(MAKEWORD(2, 2), &WSA_DATA)) {
         return {Error("Failed to start socket server")};
     }
@@ -195,7 +195,7 @@ void SocketServer::close() {
     ::WSACleanup(); 
 }
 
-Excepted<> get_socket(
+Expected<> get_socket(
     Socket* sock, TransportProtocol protocol = TransportProtocol::TCP) {
     switch (protocol) {
         case TransportProtocol::TCP:
@@ -215,7 +215,7 @@ Excepted<> get_socket(
     return {Unit()};
 }
 
-Excepted<Borrowed<SocketServer::pool_type>> SocketServer::make_socket(
+Expected<Borrowed<SocketServer::pool_type>> SocketServer::make_socket(
     TransportProtocol protocol) {
     auto maybe_raw = raw_socket();
     if (!maybe_raw) {
@@ -230,7 +230,7 @@ Excepted<Borrowed<SocketServer::pool_type>> SocketServer::make_socket(
     return {std::move(raw)};
 }
 
-Excepted<Borrowed<SocketServer::pool_type>> SocketServer::raw_socket() {
+Expected<Borrowed<SocketServer::pool_type>> SocketServer::raw_socket() {
     auto maybe_borrowed = data->socket_pool.try_borrow();
     if (!maybe_borrowed) {
         return {Error("No free socket")};
@@ -240,7 +240,7 @@ Excepted<Borrowed<SocketServer::pool_type>> SocketServer::raw_socket() {
     return {std::move(socket)};
 }
 
-Excepted<> SocketServer::replace_socket(Socket* old, TransportProtocol protocol) {
+Expected<> SocketServer::replace_socket(Socket* old, TransportProtocol protocol) {
     std::printf("old socket: %lld\n", old->handle);
     closesocket(old->handle);
     return get_socket(old);

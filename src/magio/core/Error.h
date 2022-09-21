@@ -29,26 +29,26 @@ struct Error {
 struct Unit {};
 
 template<typename Ok = Unit, typename Err = Error>
-class Excepted {
+class Expected {
 public:
 
-    Excepted(Ok elem): flag_(true) {
+    Expected(Ok elem): flag_(true) {
         new (buf_) Ok(std::move(elem));
     }
 
-    Excepted(Err elem): flag_(false) {
+    Expected(Err elem): flag_(false) {
         new (buf_) Err(std::move(elem));
     }
 
-    Excepted(const Excepted& other): flag_(other.flag_) {
+    Expected(const Expected& other): flag_(other.flag_) {
         if (flag_) {
-            new (buf_) Ok(const_cast<Excepted&>(other).template get<Ok>());
+            new (buf_) Ok(const_cast<Expected&>(other).template get<Ok>());
         } else {
-            new (buf_) Err(const_cast<Excepted&>(other).template get<Err>());
+            new (buf_) Err(const_cast<Expected&>(other).template get<Err>());
         }
     }
 
-    Excepted(Excepted&& other): flag_(other.flag_) {
+    Expected(Expected&& other): flag_(other.flag_) {
         if (flag_) {
             new (buf_) Ok(std::move(other.template get<Ok>()));
         } else {
@@ -56,7 +56,7 @@ public:
         }
     }
 
-    Excepted& operator=(Ok elem) {
+    Expected& operator=(Ok elem) {
         if (flag_) {
             get<Ok>() = std::move(elem);
         } else {
@@ -68,7 +68,7 @@ public:
         return *this;
     }
 
-    Excepted& operator=(Err elem) {
+    Expected& operator=(Err elem) {
         if (flag_) {
             get<Ok>().~Ok();
             new (buf_) Err(std::move(elem));
@@ -80,24 +80,24 @@ public:
         return *this;
     }
 
-    Excepted& operator=(const Excepted& other) {
+    Expected& operator=(const Expected& other) {
         if (!flag_ && !other.flag_) {
-            get<Err>() = const_cast<Excepted&>(other).template get<Err>();
+            get<Err>() = const_cast<Expected&>(other).template get<Err>();
         } else if (flag_ && other.flag_) {
-            get<Ok>() = const_cast<Excepted&>(other).template get<Ok>();
+            get<Ok>() = const_cast<Expected&>(other).template get<Ok>();
         } else if (flag_ && !other.flag_) {
             get<Ok>().~Ok();
-            new (buf_) Err(const_cast<Excepted&>(other).template get<Err>());
+            new (buf_) Err(const_cast<Expected&>(other).template get<Err>());
         } else if (!flag_ && other.flag_) {
             get<Err>().~Err();
-            new (buf_) Ok(const_cast<Excepted&>(other).template get<Ok>());
+            new (buf_) Ok(const_cast<Expected&>(other).template get<Ok>());
         }
 
         flag_ = other.flag_;
         return *this;
     }
 
-    Excepted& operator=(Excepted&& other) {
+    Expected& operator=(Expected&& other) {
         if (!flag_ && !other.flag_) {
             get<Err>() = std::move(other.template get<Err>());
         } else if (flag_ && other.flag_) {
@@ -114,7 +114,7 @@ public:
         return *this;
     }
 
-    ~Excepted() {
+    ~Expected() {
         if (flag_) {
             get<Ok>().~Ok();
         } else {
