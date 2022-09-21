@@ -1,9 +1,31 @@
 #pragma once
 
 #include <format>
-// #include "magio/utils/Function.h"
+#include <type_traits>
 
 namespace magio {
+
+template<typename Ok, typename Err>
+class Expected;
+
+namespace detail {
+
+template<typename>
+struct IsExpected: std::false_type {};
+
+template<typename Ok, typename Err>
+struct IsExpected<Expected<Ok, Err>>: std::true_type { };
+
+template<typename>
+struct ExpectedTraits;
+
+template<typename Ok, typename Err>
+struct ExpectedTraits<Expected<Ok, Err>> {
+    using OkType = Ok;
+    using ErrType = Err;
+};
+
+}
 
 // 24 bytes
 struct Error {
@@ -152,7 +174,11 @@ public:
         throw std::runtime_error(std::move(get<Err>().msg));
     }
 
+    // Error type must be the same
     template<typename Fn>
+    requires detail::IsExpected<std::invoke_result_t<Fn, Ok>>::value
+        &&   std::is_invocable_v<Fn, Ok>
+        &&   std::is_same_v<Err, typename detail::ExpectedTraits<std::invoke_result_t<Fn, Ok>>::ErrType>
     std::invoke_result_t<Fn, Ok> and_then(Fn fn) {
         if (!flag_) {
             return std::move(get<Err>());
@@ -161,13 +187,27 @@ public:
         return fn(std::move(get<Ok>()));
     }
 
+    // Ok type must be the same
     template<typename Fn>
+    requires detail::IsExpected<std::invoke_result_t<Fn, Err>>::value
+        &&   std::is_invocable_v<Fn, Err>
+        &&   std::is_same_v<Ok, typename detail::ExpectedTraits<std::invoke_result_t<Fn, Err>>::OkType>
     std::invoke_result_t<Fn, Err> or_else(Fn fn) {
         if (flag_) {
             return std::move(get<Ok>());
         }
 
         return fn(std::move(get<Err>()));
+    }
+
+    template<typename Fn>
+    requires std::is_invocable_v<Fn, Ok>
+    Expected<std::invoke_result_t<Fn, Ok>, Err> map(Fn fn) {
+        if (!flag_) {
+            return std::move(get<Err>());
+        } 
+
+        return fn(std::move(get<Ok>()));
     }
 
     operator bool() {
