@@ -1,5 +1,5 @@
 #include <cassert>
-#include "magio/Timer.h"
+#include "magio/timer/Timer.h"
 #include "magio/EventLoop.h"
 #include "magio/coro/CoSpawn.h"
 #include "magio/coro/ThisCoro.h"

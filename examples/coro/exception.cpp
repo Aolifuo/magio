@@ -1,29 +1,30 @@
 #include <cstdio>
 #include <exception>
 #include "magio/EventLoop.h"
+#include "magio/core/Error.h"
 #include "magio/coro/Coro.h"
 #include "magio/coro/CoSpawn.h"
 
 using namespace std;
 using namespace magio;
 
-Coro<void> amain() {
+Coro<string> amain() {
     try {
         throw exception("Error");
     } catch(const exception& e) {
         printf("Amain: %s\n", e.what());
         throw e;
     }
-    co_return;
+    co_return "a";
 }
 
 int main() {
     EventLoop loop;
 
-    magio::co_spawn(loop.get_executor(), amain(), [](exception_ptr ep) {
+    magio::co_spawn(loop.get_executor(), amain(), [](Expected<string, exception_ptr> exp) {
         try {
-            if (ep) {
-                rethrow_exception(ep);
+            if (!exp) {
+                rethrow_exception(exp.unwrap_err());
             }
         } catch(const exception& e) {
             printf("Main: %s\n", e.what());

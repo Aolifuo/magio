@@ -8,6 +8,7 @@ void func(magio::AnyExecutor executor, size_t times) {
     if (times == 5) {
         return;
     }
+    
     executor.set_timeout(1000, [=] {
         func(executor, times + 1);
     });
