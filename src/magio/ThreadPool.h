@@ -11,15 +11,14 @@ class ThreadPool {
 public:
     explicit ThreadPool(size_t thread_num);
 
-    void post(CompletionHandler handler);
-    void waiting(WaitingCompletionHandler handler);
-    TimerID set_timeout(size_t ms, CompletionHandler handler);
+    void post(CompletionHandler&& handler);
+    void waiting(WaitingCompletionHandler&& handler);
+    TimerID set_timeout(size_t ms, CompletionHandler&& handler);
     void clear(TimerID id);
     void start();
     void stop();
     void wait();
     void join();
-    void detach();
 
     AnyExecutor get_executor();
 
