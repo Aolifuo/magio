@@ -4,6 +4,7 @@
 #include <coroutine>
 #include <exception>
 #include "magio/core/Execution.h"
+#include "magio/core/Error.h"
 #include "magio/core/MaybeUninit.h"
 #include "magio/utils/Function.h"
 
@@ -41,12 +42,12 @@ using YieldReceiveType = std::conditional_t<
 
 template<typename Ret>
 struct CoroCompletionHandler {
-    using type = std::function<void(std::exception_ptr, Ret)>;
+    using type = std::function<void(Expected<Ret, std::exception_ptr>)>;
 };
 
 template<>
 struct CoroCompletionHandler<void> {
-    using type = std::function<void(std::exception_ptr)>;
+    using type = std::function<void(Expected<Unit, std::exception_ptr>)>;
 };
 
 }
@@ -107,7 +108,11 @@ struct PromiseTypeBase {
 
     auto final_suspend() noexcept {
         if (completion_handler) {
-            completion_handler(eptr, storage.unwrap());
+            if (eptr) {
+                completion_handler(eptr);
+            } else {
+                completion_handler(storage.unwrap());
+            }
         }
 
         if (previous) {
