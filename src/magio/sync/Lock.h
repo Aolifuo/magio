@@ -6,6 +6,7 @@ namespace magio {
 
 class SpinLock {
 public:
+    SpinLock() = default;
     SpinLock(const SpinLock&) = delete;
     SpinLock& operator=(const SpinLock&) = delete;
 
