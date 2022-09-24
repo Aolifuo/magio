@@ -137,7 +137,9 @@ void ThreadPool::Impl::join() {
     wait();
     destroy();
     for (auto& th : threads) {
-        th.join();
+        if (th.joinable()) {
+            th.join();
+        }
     }
 }
 
