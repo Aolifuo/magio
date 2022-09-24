@@ -30,12 +30,6 @@ struct Foo {
     inline static int COUNT = 0;
 };
 
-struct NoCopy {
-    NoCopy() = default;
-    NoCopy(NoCopy &&) = default;
-    NoCopy& operator=(NoCopy &&) = default;
-};
-
 TestResults test_maybe_uninit() {
     Foo::COUNT = 0;
     {

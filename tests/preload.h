@@ -2,17 +2,15 @@
 
 #include <cassert>
 #include <chrono>
-#include <condition_variable>
 #include <exception>
 #include <mutex>
 #include <string>
-#include <string_view>
-#include <thread>
-#include <utility>
 #include <vector>
 #include <concepts>
 #include <ranges>
 #include <variant>
+#include <random>
+#include <functional>
 
 #include "magio/core/Log.h"
 #include "magio/core/Error.h"
@@ -42,6 +40,18 @@
 
 using namespace std;
 using namespace magio;
+
+struct NoCopy {
+    NoCopy() = default;
+    NoCopy(const NoCopy&) = delete;
+    NoCopy(NoCopy &&) = default;
+
+    NoCopy& operator=(NoCopy&&) = default;
+
+    void operator()() const {
+
+    }
+};
 
 struct TestError {
     std::string msg;

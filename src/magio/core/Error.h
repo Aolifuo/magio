@@ -27,7 +27,6 @@ struct ExpectedTraits<Expected<Ok, Err>> {
 
 }
 
-// 24 bytes
 struct Error {
     // 0 => no error
     int code = 0;

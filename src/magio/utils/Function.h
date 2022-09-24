@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstring>
 #include <type_traits>
 
 namespace magio {
@@ -41,31 +42,20 @@ template<typename ...Left, typename ...Right>
 struct EqImpl<TypeList<Left...>, TypeList<Right...>>
     : std::conjunction<std::is_same<Left, Right>...> {};
 
+template<typename>
+struct IsFunctionWithoutModifier: std::false_type {};
+
+template<typename Ret, typename...Args>
+struct IsFunctionWithoutModifier<Ret(Args...)>: std::true_type {};
+
+template<typename>
+struct IsFunctionPointer: std::false_type {};
+
+template<typename F>
+requires std::is_function_v<F>
+struct IsFunctionPointer<F *>: std::true_type {};
+
 }
-
-template<typename T>
-requires std::is_member_function_pointer_v<T>
-class MemFnBinder {
-public:
-    using ClassType = typename utils::MemFnTraits<T>::ClassType;
-    using FunctionType = typename utils::MemFnTraits<T>::FunctionType;
-
-    MemFnBinder(T mem_fn_ptr, ClassType* obj_ptr)
-        : mfp_(mem_fn_ptr), obj_(obj_ptr) {}
-    
-    template<typename ...Args>
-    requires std::is_invocable_v<T, ClassType*, Args...>
-    auto operator()(Args&& ...args) {
-        return (obj_->*mfp_)(std::forward<Args>(args)...);
-    }
-
-    operator bool() {
-        return mfp_ != nullptr;
-    }
-private:
-    T mfp_ = nullptr;
-    ClassType* obj_ = nullptr;
-};
 
 template<typename...Ts>
 struct TypeList {
@@ -125,7 +115,31 @@ concept IsFunctor = requires(Fn fn) {
 
 template<typename Fn, typename Ret, typename...Args>
 concept CheckFunction = 
-    std::is_invocable_r_v<Ret, Fn, Args...> &&
-    std::is_invocable_v<Fn, Args...>;
+    std::is_invocable_v<Fn, Args...> &&
+    std::is_invocable_r_v<Ret, Fn, Args...>;
+
+template<typename T>
+requires std::is_member_function_pointer_v<T>
+class MemFnBinder {
+public:
+    using ClassType = typename utils::MemFnTraits<T>::ClassType;
+    using FunctionType = typename utils::MemFnTraits<T>::FunctionType;
+
+    MemFnBinder(T mem_fn_ptr, ClassType* obj_ptr)
+        : mfp_(mem_fn_ptr), obj_(obj_ptr) {}
+    
+    template<typename ...Args>
+    requires std::is_invocable_v<T, ClassType*, Args...>
+    auto operator()(Args&& ...args) {
+        return (obj_->*mfp_)(std::forward<Args>(args)...);
+    }
+
+    operator bool() {
+        return mfp_ != nullptr;
+    }
+private:
+    T mfp_ = nullptr;
+    ClassType* obj_ = nullptr;
+};
 
 }
