@@ -9,12 +9,12 @@ using ResumeHandler = std::function<void(std::coroutine_handle<>)>;
 template<typename Ret, typename Yield = void()>
 requires detail::YieldType<Yield>
 struct Coro {
-    Coro(ResumeHandler resume_h)
+    Coro(ResumeHandler&& resume_h)
         : main_h_(nullptr)
         , resume_handler_(std::move(resume_h))
     { }
 
-    Coro(std::coroutine_handle<PromiseTypeBase<Ret, Yield, Coro>> h, ResumeHandler resume_h)
+    Coro(std::coroutine_handle<PromiseTypeBase<Ret, Yield, Coro>> h, ResumeHandler&& resume_h)
         : main_h_(h)
         , resume_handler_(std::move(resume_h)) 
     { }
@@ -43,7 +43,7 @@ struct Coro {
         }
     }
 
-    void set_completion_handler(CoroCompletionHandler<Ret> handler) {
+    void set_completion_handler(CoroCompletionHandler<Ret>&& handler) {
         if (main_h_) {
             main_h_.promise().completion_handler = std::move(handler);
         }

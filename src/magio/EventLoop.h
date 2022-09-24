@@ -12,9 +12,9 @@ class EventLoop {
 public:
     EventLoop();
 
-    void post(CompletionHandler handler);
-    void waiting(WaitingCompletionHandler handler);
-    TimerID set_timeout(size_t ms, CompletionHandler handler);
+    void post(CompletionHandler&& handler);
+    void waiting(WaitingCompletionHandler&& handler);
+    TimerID set_timeout(size_t ms, CompletionHandler&& handler);
     void clear(TimerID id);
     bool poll();
     void run();
