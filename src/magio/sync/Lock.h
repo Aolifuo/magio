@@ -6,6 +6,9 @@ namespace magio {
 
 class SpinLock {
 public:
+    SpinLock(const SpinLock&) = delete;
+    SpinLock& operator=(const SpinLock&) = delete;
+
     void lock() {
         while (flag_.test_and_set(std::memory_order_acquire));
     }
