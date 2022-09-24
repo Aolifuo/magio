@@ -99,6 +99,64 @@ func2 receive 8 from main
 func2 receive 9 from main
 ```
 
+## Workflow
+
+```mermaid
+graph LR;
+     a-->b
+     a-->c
+     b-->d
+     b-->f
+     c-->d
+     c-->f
+     d-->e
+     f-->e
+```
+
+```cpp
+int main() {
+    ThreadPool pool(1);
+    
+    auto a = Workflow::create_task([] {
+        printf("task a start!\n");
+    });
+    auto b = Workflow::create_timed_task(5000, []{
+        printf("task b timeout!\n");
+    });
+    auto c = Workflow::create_timed_task(1000, [] {
+        printf("task c timeout!\n");
+    });
+    auto d = Workflow::create_task([] {
+        printf("task d start!\n");
+    });
+    auto e = Workflow::create_timed_task(2000, [] {
+        printf("task e timeout!\n");
+    });
+    auto f = Workflow::create_task([] {
+        cout << "task f start!\n";
+    });
+
+    a->successor(b, c);
+    b->successor(d, e);
+    c->successor(d, e);
+    d->successor(f);
+    e->successor(f);
+
+    Workflow::run(pool.get_executor(), a);
+}
+```
+
+output
+
+```shell
+task a start!
+task c timeout!
+task b timeout!
+task d start!
+task e timeout!
+task f start!
+```
+
 ## Tcp echo
 
 ### Client
