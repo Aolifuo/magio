@@ -4,9 +4,16 @@
 
 namespace magio {
 
+namespace detail {
+
+template<typename T>
+using ResumeHandler = std::function<T(std::coroutine_handle<>)>;
+
+}
+
 using ResumeHandler = std::function<void(std::coroutine_handle<>)>;
 
-template<typename Ret, typename Yield = void()>
+template<typename Ret, typename Yield = None(None)>
 requires detail::YieldType<Yield>
 struct Coro {
     Coro(ResumeHandler&& resume_h)
@@ -19,8 +26,12 @@ struct Coro {
         , resume_handler_(std::move(resume_h)) 
     { }
 
-    Coro(Coro &&) = default;
-    Coro& operator=(Coro &&) = default;
+    Coro(Coro &&other)
+        : main_h_(other.main_h_)
+        , resume_handler_(std::move(other.resume_handler_)) 
+    {
+        other.main_h_ = {};
+    };
 
     bool await_ready() { return false; }
 
@@ -40,6 +51,17 @@ struct Coro {
             return get_value();
         } else {
             get_value();
+        }
+    }
+
+    detail::YieldReturnType<Yield>
+    operator()(detail::YieldReceiveType<Yield> value) {
+        if constexpr(std::is_same_v<Yield, None(None)>) {
+            std::terminate();
+        } else {
+            main_h_.promise().yield_recv = std::move(value);
+            main_h_.resume();
+            return main_h_.promise().yield_ret.unwrap();
         }
     }
 
