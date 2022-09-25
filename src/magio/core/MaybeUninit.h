@@ -77,6 +77,13 @@ public:
         return std::move(get());
     }
 
+    T unwrap_or_default() {
+        if (flag) {
+            return std::move(get());
+        }
+        return {};
+    }
+
     void reset() {
         if (flag) {
             flag = false;
