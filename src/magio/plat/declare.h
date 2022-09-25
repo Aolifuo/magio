@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <string>
 
 namespace magio {
 
@@ -26,8 +27,15 @@ class IOContextHelper;
 
 class SocketHelper;
 
-
 }
 
+struct Address {
+    unsigned host;
+    std::string ip;
+
+    std::string to_string() {
+        return ip + ":" + std::to_string(host);
+    }
+};
 
 }
