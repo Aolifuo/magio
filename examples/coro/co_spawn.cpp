@@ -37,7 +37,7 @@ int main() {
     co_spawn(loop.get_executor(), amain(), detached);
 
     co_spawn(loop.get_executor(), foo(), 
-        [](std::exception_ptr eptr, NoCopy n) {
+        [](Expected<NoCopy, exception_ptr> res) {
             printf("nocopy\n");
         });
         
