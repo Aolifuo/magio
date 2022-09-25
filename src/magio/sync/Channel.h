@@ -78,20 +78,19 @@ public:
 
         MaybeUninit<std::tuple<Ts...>> ret;
         co_await Coro<void>{
-            [&lk, &ret, exe = executor_, p = this->shared_from_this()](std::coroutine_handle<> h) mutable {
+            [&lk, &ret, p = this->shared_from_this()](std::coroutine_handle<> h) mutable {
                 p->consumer_.push([&ret, h](Ts...args) {
                     ret = std::make_tuple(std::move(args)...);
                     h.resume();
                 });
                 lk.unlock();
 
-                if (exe) {
-                    exe.waiting([p] {
-                        std::lock_guard lk(p->m_);
-                        return p->consumer_.empty();
-                    });
-                }
-                
+                // if (exe) {
+                //     exe.waiting([p] {
+                //         std::lock_guard lk(p->m_);
+                //         return p->consumer_.empty();
+                //     });
+                // }
             }
         };
 
