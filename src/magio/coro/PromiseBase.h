@@ -14,16 +14,17 @@ struct None {};
 
 namespace detail {
 
+// yield func not void(type)
 template<typename Yield>
 concept YieldType =
     std::is_function_v<Yield> &&  
     (
-        std::is_object_v<typename FunctorTraits<Yield>::ReturnType> ||
-        std::is_void_v<typename FunctorTraits<Yield>::ReturnType>
+        std::is_object_v<typename FunctorTraits<Yield>::ReturnType> // ||
+        // std::is_void_v<typename FunctorTraits<Yield>::ReturnType>
     ) &&  
     (
-        FunctorTraits<Yield>::Arguments::Length == 1 ||
-        FunctorTraits<Yield>::Arguments::Length == 0
+        FunctorTraits<Yield>::Arguments::Length == 1 // ||
+        // FunctorTraits<Yield>::Arguments::Length == 0
     );
 
 template<typename Yield>
@@ -75,8 +76,12 @@ struct FinalSuspend {
     bool auto_destroy;
 };
 
-template<typename Ret>
+template<typename Recv>
 struct YieldSuspend {
+    YieldSuspend(MaybeUninit<Recv>& r)
+        : recv(r)
+    { }
+
     bool await_ready() noexcept {
         return false;
     }
@@ -85,9 +90,11 @@ struct YieldSuspend {
         
     }
 
-    Ret await_resume() noexcept {
-        
+    Recv await_resume() noexcept {
+        return recv.unwrap();
     }
+
+    MaybeUninit<Recv>& recv;
 };
 
 template<typename Ret, typename Yield, typename Awaitable>
@@ -128,7 +135,8 @@ struct PromiseTypeBase {
 
     YieldSuspend<detail::YieldReceiveType<Yield>>
     yield_value(detail::YieldReturnType<Yield> value) {
-        return {};
+        yield_ret = std::move(value);
+        return {yield_recv};
     }
 
     void unhandled_exception() {
@@ -144,7 +152,10 @@ struct PromiseTypeBase {
     magio::AnyExecutor executor;
     std::coroutine_handle<> previous;
     CoroCompletionHandler<Ret> completion_handler;
+
     MaybeUninit<Ret> storage;
+    MaybeUninit<detail::YieldReceiveType<Yield>> yield_recv;
+    MaybeUninit<detail::YieldReturnType<Yield>> yield_ret;
 };
 
 template<typename Yield, typename Awaitable>
@@ -176,7 +187,8 @@ struct PromiseTypeBase<void, Yield, Awaitable> {
 
     YieldSuspend<detail::YieldReceiveType<Yield>>
     yield_value(detail::YieldReturnType<Yield> value) {
-        return {};
+        yield_ret = std::move(value);
+        return {yield_recv};
     }
 
     void unhandled_exception() {
@@ -188,6 +200,9 @@ struct PromiseTypeBase<void, Yield, Awaitable> {
     magio::AnyExecutor executor;
     std::coroutine_handle<> previous;
     CoroCompletionHandler<void> completion_handler;
+
+    MaybeUninit<detail::YieldReceiveType<Yield>> yield_recv;
+    MaybeUninit<detail::YieldReturnType<Yield>> yield_ret;
 };
 
 }
