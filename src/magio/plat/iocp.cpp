@@ -1,49 +1,49 @@
 #include "magio/plat/iocp.h"
 
+#include <iostream>
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 #include <MSWSock.h>
 
-#include "magio/core/Log.h"
 #include "magio/plat/socket.h"
-#include "magio/plat/system_errors.h"
+#include "magio/plat/errors.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
-template <typename CharT>
-struct std::formatter<magio::plat::Message, CharT>
-    : std::formatter<int, CharT> {
-    template <typename FormatContext>
-    auto format(const magio::plat::Message& msg, FormatContext& fc) {
-        return std::format_to(fc.out(), "code:{}. {}", msg.code, msg.msg);
-    }
-};
+// template <typename CharT>
+// struct std::formatter<magio::plat::Message, CharT>
+//     : std::formatter<int, CharT> {
+//     template <typename FormatContext>
+//     auto format(const magio::plat::Message& msg, FormatContext& fc) {
+//         return std::format_to(fc.out(), "code:{}. {}", msg.code, msg.msg);
+//     }
+// };
 
-template <typename CharT>
-struct std::formatter<magio::plat::IOOperation, CharT>
-    : std::formatter<int, CharT> {
-    template <typename FormatContext>
-    auto format(magio::plat::IOOperation ioop, FormatContext& fc) {
-        string_view op_str;
-        switch (ioop) {
-            case magio::plat::IOOperation::Accept:
-                op_str = "accept";
-                break;
-            case magio::plat::IOOperation::Receive:
-                op_str = "receive";
-                break;
-            case magio::plat::IOOperation::Send:
-                op_str = "send";
-                break;
-            case magio::plat::IOOperation::Noop:
-                op_str = "noop";
-                break;
-            case magio::plat::IOOperation::Connect:
-                op_str = "connect";
-        }
-        return std::format_to(fc.out(), "{}", op_str);
-    }
-};
+// template <typename CharT>
+// struct std::formatter<magio::plat::IOOperation, CharT>
+//     : std::formatter<int, CharT> {
+//     template <typename FormatContext>
+//     auto format(magio::plat::IOOperation ioop, FormatContext& fc) {
+//         string_view op_str;
+//         switch (ioop) {
+//             case magio::plat::IOOperation::Accept:
+//                 op_str = "accept";
+//                 break;
+//             case magio::plat::IOOperation::Receive:
+//                 op_str = "receive";
+//                 break;
+//             case magio::plat::IOOperation::Send:
+//                 op_str = "send";
+//                 break;
+//             case magio::plat::IOOperation::Noop:
+//                 op_str = "noop";
+//                 break;
+//             case magio::plat::IOOperation::Connect:
+//                 op_str = "connect";
+//         }
+//         return std::format_to(fc.out(), "{}", op_str);
+//     }
+// };
 
 namespace magio {
 
@@ -160,11 +160,16 @@ Expected<> IocpServer::post_accept_task(SocketHelper sock, CompletionHandler* ha
     impl->listener_que.push(handler);
 
     // async_accept
-    bool result =
-        impl->async_accept(unpack(impl->listen_socket).handle(), sock.handle(),
-                           sock.recv_io().buf(), 0, sizeof(SOCKADDR_IN) + 16,
-                           sizeof(SOCKADDR_IN) + 16, NULL,
-                           (LPOVERLAPPED)sock.recv_io().overlapped());
+    bool result = impl->async_accept(
+        unpack(impl->listen_socket).handle(), 
+        sock.handle(),
+        sock.recv_io().buf(),
+        0,
+        sizeof(SOCKADDR_IN) + 16, // local
+        sizeof(SOCKADDR_IN) + 16, // remote
+        NULL,
+        (LPOVERLAPPED)sock.recv_io().overlapped()
+    );
 
     if (!result && ERROR_IO_PENDING != last_error()) {
         unchecked_return_to_pool(sock.get(), SocketServer::instance().pool());
@@ -237,6 +242,34 @@ int IocpServer::wait_completion_task() {
         switch(io.io_operation()) {
         case IOOperation::Accept:
             if (!impl->listener_que.empty()) {
+                LPSOCKADDR local_addr_ptr;
+                LPSOCKADDR remote_addr_ptr;
+                int local_addr_len = 0;
+                int remote_addr_len = 0;
+
+                impl->parse_accept(
+                    io.buf(),
+                    0,
+                    sizeof(SOCKADDR_IN) + 16,
+                    sizeof(SOCKADDR_IN) + 16,
+                    &local_addr_ptr,
+                    &local_addr_len,
+                    &remote_addr_ptr,
+                    &remote_addr_len
+                );
+
+                char buff[40]{};
+                auto local = (SOCKADDR_IN*)local_addr_ptr;
+                auto remote = (SOCKADDR_IN*)remote_addr_ptr;
+
+                ::inet_ntop(local->sin_family, &local->sin_addr, buff, 40);
+                io.owner().local_addr() = {::ntohs(local->sin_port), buff};
+
+                ZeroMemory(buff, sizeof(buff));
+
+                ::inet_ntop(remote->sin_family, &remote->sin_addr, buff, 40);
+                io.owner().remote_addr() = {::ntohs(remote->sin_port), buff};
+
                 auto handler = impl->listener_que.front();
                 impl->listener_que.pop();
                 handler->cb(handler->hook, error, io.owner());
@@ -255,11 +288,12 @@ int IocpServer::wait_completion_task() {
             handler->cb(handler->hook, error, io.owner());
             break;
         default:
+            recycle(io.owner());
             break;
         }
 
         if (error) {
-            recycle(io.owner());
+            // recycle(io.owner());
         }
     }
 
@@ -419,6 +453,23 @@ int IocpClient::wait_completion_task() {
         switch(io.io_operation()) {
         case IOOperation::Connect:
             if (handler) {
+                // char buff[40]{};
+                // SOCKADDR_IN local_addr;
+                // SOCKADDR_IN remote_addr;
+                // int local_addr_len = 0;
+                // int remote_addr_len = 0;
+
+                // ::getsockname(io.owner().handle(), (SOCKADDR*)&local_addr, &local_addr_len);
+                // ::getpeername(io.owner().handle(), (SOCKADDR*)&remote_addr, &remote_addr_len);
+
+                // ::inet_ntop(local_addr.sin_family, &local_addr.sin_addr, buff, 40);
+                // io.owner().local_addr() = {::ntohs(local_addr.sin_port), buff};
+
+                // ZeroMemory(buff, sizeof(buff));
+
+                // ::inet_ntop(remote_addr.sin_family, &remote_addr.sin_addr, buff, 40);
+                // io.owner().remote_addr() = {::ntohs(remote_addr.sin_port), buff};
+
                 handler->cb(handler->hook, error, io.owner());
             } else {
                 recycle(io.owner());
@@ -435,11 +486,12 @@ int IocpClient::wait_completion_task() {
             handler->cb(handler->hook, error, io.owner());
             break;
         default:
+            recycle(io.owner());
             break;
         }
 
         if (error) {
-            recycle(io.owner());
+            // recycle(io.owner());
         }
     }
 

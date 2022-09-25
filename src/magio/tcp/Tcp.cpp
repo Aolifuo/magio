@@ -2,9 +2,10 @@
 
 #include "magio/Configs.h"
 #include "magio/coro/Coro.h"
+#include "magio/plat/declare.h"
 #include "magio/plat/iocp.h"
 #include "magio/plat/socket.h"
-#include "magio/plat/system_errors.h"
+#include "magio/plat/errors.h"
 #include "magio/utils/ScopeGuard.h"
 
 namespace magio {
@@ -43,6 +44,14 @@ struct TcpStream::Impl {
 };
 
 CLASS_PIMPL_IMPLEMENT(TcpStream)
+
+Address TcpStream::local_address() {
+    return impl->hook_.sock.local_addr();
+}
+
+Address TcpStream::remote_address() {
+    return impl->hook_.sock.remote_addr();
+}
 
 Coro<size_t> TcpStream::read(char *buf, size_t len) {
     impl->hook_.err = Error();
@@ -213,6 +222,9 @@ Coro<TcpStream> TcpClient::connect(const char* host1, short port1, const char *h
     if (hook.err) {
         throw std::runtime_error(hook.err.msg);
     }
+
+    hook.sock.local_addr() = {(unsigned)port1, host1};
+    hook.sock.remote_addr() = {(unsigned)port2, host2};
 
     auto stream_impl
          = new TcpStream::Impl{exe, &impl->iocp_client, hook, handler.release()};

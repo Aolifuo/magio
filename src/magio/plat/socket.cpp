@@ -24,76 +24,103 @@ struct IOContext {
 struct Socket {
     SOCKET handle = INVALID_SOCKET;
     SOCKADDR_IN address;
-    IOContext* io_recv;
-    IOContext* io_send;
+    Address local_addr;
+    Address remote_addr;
+    IOContext io_recv;
+    IOContext io_send;
 
-    IOContext* init_io() {
-        IOContext* ioc = new IOContext;
-        ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
-        ioc->wsa_buf.buf = ioc->buf;
-        ioc->wsa_buf.len = server_config.buffer_size;
-        ioc->socket = this;
-        return ioc;
+    void init_io(IOContext& ioc) {
+        ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
+        ioc.wsa_buf.buf = ioc.buf;
+        ioc.wsa_buf.len = server_config.buffer_size;
+        ioc.socket = this;
     }
 
     Socket() {
-        io_recv = init_io();
-        io_send = init_io();
+        init_io(io_recv);
+        init_io(io_send);
     }
 
     ~Socket() {
         if (handle != INVALID_SOCKET) {
             ::closesocket(handle);
         }
-
-        if (io_recv) {
-            delete io_recv;
-        }
-
-        if (io_send) {
-            delete io_send;
-        }
     }
 };
 
 // IOContextHelper
 
-IOContextHelper::IOContextHelper(IOContext* ioc) : ioc_(ioc) {}
+IOContextHelper::IOContextHelper(IOContext* ioc) 
+    : ioc_(ioc) 
+{}
 
-void* IOContextHelper::overlapped() { return &ioc_->overlapped; }
+void* IOContextHelper::overlapped() { 
+    return &ioc_->overlapped; 
+}
 
-SocketHelper IOContextHelper::owner() { return {ioc_->socket}; }
+SocketHelper IOContextHelper::owner() { 
+    return {ioc_->socket}; 
+}
 
-void* IOContextHelper::wsa_buf() { return &ioc_->wsa_buf; }
+void* IOContextHelper::wsa_buf() { 
+    return &ioc_->wsa_buf; 
+}
 
-char* IOContextHelper::buf() { return ioc_->buf; }
+char* IOContextHelper::buf() { 
+    return ioc_->buf; 
+}
 
-unsigned IOContextHelper::capacity() { return ioc_->wsa_buf.len; }
+unsigned IOContextHelper::capacity() { 
+    return ioc_->wsa_buf.len; 
+}
 
-unsigned IOContextHelper::len() { return ioc_->len; }
+unsigned IOContextHelper::len() { 
+    return ioc_->len; 
+}
 
-IOOperation IOContextHelper::io_operation() { return ioc_->io_type; }
+IOOperation IOContextHelper::io_operation() { 
+    return ioc_->io_type; 
+}
 
 void IOContextHelper::set_io_operation(IOOperation io_type) {
     ioc_->io_type = io_type;
 }
 
-void IOContextHelper::set_len(unsigned len) { ioc_->len = len; }
+void IOContextHelper::set_len(unsigned len) { 
+    ioc_->len = len; 
+}
 
 void IOContextHelper::reset_overlapped() {
     ZeroMemory(&ioc_->overlapped, sizeof(OVERLAPPED));
 }
 
 // SocketHelper
-SocketHelper::SocketHelper(Socket* sock) : sock_(sock) {}
+SocketHelper::SocketHelper(Socket* sock) 
+    : sock_(sock) {}
 
-SOCKET SocketHelper::handle() { return sock_->handle; }
+SOCKET SocketHelper::handle() { 
+    return sock_->handle; 
+}
 
-void* SocketHelper::address() { return (void*)&sock_->address; }
+void* SocketHelper::address() { 
+    return (void*)&sock_->address; 
+}
 
-IOContextHelper SocketHelper::recv_io() { return {sock_->io_recv}; }
+Address& SocketHelper::local_addr() {
+    return sock_->local_addr;
+}
 
-IOContextHelper SocketHelper::send_io() { return {sock_->io_send}; }
+Address& SocketHelper::remote_addr() {
+    return sock_->remote_addr;
+}
+
+IOContextHelper SocketHelper::recv_io() { 
+    return {&sock_->io_recv}; 
+}
+
+IOContextHelper SocketHelper::send_io() { 
+    return {&sock_->io_send}; 
+}
 
 Expected<> SocketHelper::bind(const char* host, short port) {
     sock_->address.sin_family = AF_INET;
@@ -116,35 +143,41 @@ Expected<> SocketHelper::listen() {
     return {Unit()};
 }
 
-void SocketHelper::set_handle(SOCKET h) { sock_->handle = h; }
+void SocketHelper::set_handle(SOCKET h) { 
+    sock_->handle = h; 
+}
 
 void SocketHelper::set_address(void* addr) {
     sock_->address = *(LPSOCKADDR_IN)(addr);
 }
 
-void SocketHelper::set_recv_len(unsigned len) { sock_->io_recv->len = len; }
+void SocketHelper::set_recv_len(unsigned len) { 
+    sock_->io_recv.len = len; 
+}
 
-void SocketHelper::set_send_len(unsigned len) { sock_->io_send->len = len; }
+void SocketHelper::set_send_len(unsigned len) { 
+    sock_->io_send.len = len; 
+}
 
 void SocketHelper::for_async_task(IOOperation op) {
     switch (op) {
         case IOOperation::Accept:
-            sock_->io_recv->io_type = IOOperation::Accept;
-            ZeroMemory(&sock_->io_recv->overlapped, sizeof(OVERLAPPED));
+            sock_->io_recv.io_type = IOOperation::Accept;
+            ZeroMemory(&sock_->io_recv.overlapped, sizeof(OVERLAPPED));
             break;
         case IOOperation::Receive:
-            sock_->io_recv->io_type = IOOperation::Receive;
-            ZeroMemory(&sock_->io_recv->overlapped, sizeof(OVERLAPPED));
-            sock_->io_recv->wsa_buf.len = server_config.buffer_size;
+            sock_->io_recv.io_type = IOOperation::Receive;
+            ZeroMemory(&sock_->io_recv.overlapped, sizeof(OVERLAPPED));
+            sock_->io_recv.wsa_buf.len = server_config.buffer_size;
             break;
         case IOOperation::Send:
-            sock_->io_send->io_type = IOOperation::Send;
-            ZeroMemory(&sock_->io_send->overlapped, sizeof(OVERLAPPED));
-            sock_->io_send->wsa_buf.len = sock_->io_send->len;
+            sock_->io_send.io_type = IOOperation::Send;
+            ZeroMemory(&sock_->io_send.overlapped, sizeof(OVERLAPPED));
+            sock_->io_send.wsa_buf.len = sock_->io_send.len;
             break;
         case IOOperation::Connect:
-            sock_->io_send->io_type = IOOperation::Connect;
-            ZeroMemory(&sock_->io_send->overlapped, sizeof(OVERLAPPED));
+            sock_->io_send.io_type = IOOperation::Connect;
+            ZeroMemory(&sock_->io_send.overlapped, sizeof(OVERLAPPED));
             break;
         default:
             break;

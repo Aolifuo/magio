@@ -3,6 +3,7 @@
 #include "magio/core/Pool.h"
 #include "magio/core/Error.h"
 #include "magio/plat/declare.h"
+#include "magio/tcp/Tcp.h"
 
 namespace magio {
 
@@ -49,6 +50,8 @@ public:
 
     socket_type handle();
     void* address();
+    Address& local_addr();
+    Address& remote_addr();
     IOContextHelper recv_io();
     IOContextHelper send_io();
     void set_handle(socket_type);
