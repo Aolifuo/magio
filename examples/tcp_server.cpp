@@ -28,6 +28,12 @@ Coro<void> amain(const char* host, short port) {
         auto server = co_await TcpServer::bind(host, port);
         for (; ;) {
             auto stream = co_await server.accept();
+
+            cout << stream.remote_address().to_string() 
+                 << " connect "
+                 << stream.local_address().to_string()
+                 << '\n';
+        
             co_spawn(executor, process(std::move(stream)), detached);
         }
     } catch(const std::runtime_error& err) {
