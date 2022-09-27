@@ -9,13 +9,13 @@ struct Detached { };
 
 inline Detached detached;
 
-template<typename Ret, typename Yield>
-void co_spawn(AnyExecutor executor, Coro<Ret, Yield>&& coro, Detached) {
+template<typename Ret>
+void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, Detached) {
     coro.wake(executor, true);
 }
 
-template<typename Ret, typename Yield>
-void co_spawn(AnyExecutor executor, Coro<Ret, Yield>&& coro, CoroCompletionHandler<Ret>&& handler) {
+template<typename Ret>
+void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, CoroCompletionHandler<Ret>&& handler) {
     if (!coro.has_coro_handle()) {
         coro = detail::make_coro(std::move(coro));
     }
@@ -23,8 +23,8 @@ void co_spawn(AnyExecutor executor, Coro<Ret, Yield>&& coro, CoroCompletionHandl
     coro.wake(executor, true);
 }
 
-template<typename Ret, typename Yield>
-Coro<Ret> co_spawn(AnyExecutor executor, Coro<Ret, Yield>&& coro, UseCoro) {
+template<typename Ret>
+Coro<Ret> co_spawn(AnyExecutor executor, Coro<Ret>&& coro, UseCoro) {
     co_return co_await coro;
 }
 

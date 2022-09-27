@@ -13,25 +13,17 @@ using ResumeHandler = std::function<T(std::coroutine_handle<>)>;
 
 using ResumeHandler = std::function<void(std::coroutine_handle<>)>;
 
-template<typename Ret, typename Yield = None(None)>
-requires detail::YieldType<Yield>
+template<typename Ret>
 struct Coro {
     Coro(ResumeHandler&& resume_h)
         : main_h_(nullptr)
         , resume_handler_(std::move(resume_h))
     { }
 
-    Coro(std::coroutine_handle<PromiseTypeBase<Ret, Yield, Coro>> h, ResumeHandler&& resume_h)
+    Coro(std::coroutine_handle<PromiseTypeBase<Ret, Coro>> h, ResumeHandler&& resume_h)
         : main_h_(h)
         , resume_handler_(std::move(resume_h)) 
     { }
-
-    Coro(Coro &&other)
-        : main_h_(other.main_h_)
-        , resume_handler_(std::move(other.resume_handler_)) 
-    {
-        other.main_h_ = {};
-    };
 
     bool await_ready() { return false; }
 
@@ -51,17 +43,6 @@ struct Coro {
             return get_value();
         } else {
             get_value();
-        }
-    }
-
-    detail::YieldReturnType<Yield>
-    operator()(detail::YieldReceiveType<Yield> value) {
-        if constexpr(std::is_same_v<Yield, None(None)>) {
-            std::terminate();
-        } else {
-            main_h_.promise().yield_recv = std::move(value);
-            main_h_.resume();
-            return main_h_.promise().yield_ret.unwrap();
         }
     }
 
@@ -108,7 +89,7 @@ struct Coro {
         return main_h_ != nullptr;
     }
 private:
-    std::coroutine_handle<PromiseTypeBase<Ret, Yield, Coro>> main_h_;
+    std::coroutine_handle<PromiseTypeBase<Ret, Coro>> main_h_;
     ResumeHandler resume_handler_;
 };
 

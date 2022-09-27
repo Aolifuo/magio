@@ -2,10 +2,11 @@
 
 #include "magio/coro/ThisCoro.h"
 #include "magio/coro/UseCoro.h"
+#include "magio/utils/ScopeGuard.h"
 
-template<typename Ret, typename Yield, typename...Ts>
-struct std::coroutine_traits<magio::Coro<Ret, Yield>, Ts...> {
-    using promise_type = magio::PromiseTypeBase<Ret, Yield, magio::Coro<Ret, Yield>>;
+template<typename Ret, typename...Ts>
+struct std::coroutine_traits<magio::Coro<Ret>, Ts...> {
+    using promise_type = magio::PromiseTypeBase<Ret, magio::Coro<Ret>>;
     using handle_type = std::coroutine_handle<promise_type>;
 };
 
@@ -30,7 +31,7 @@ Coro<
         >...
     >
 > coro_join(Coro<Rets>&&...coros) {
-    auto executor = co_await this_coro::executor;
+    AnyExecutor executor = co_await this_coro::executor;
     
     auto coro_tup =
         std::make_tuple((coros.has_coro_handle() ? std::move(coros) : detail::make_coro(std::move(coros)))...);

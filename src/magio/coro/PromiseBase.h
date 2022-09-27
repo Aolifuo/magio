@@ -3,7 +3,7 @@
 #include <concepts>
 #include <coroutine>
 #include <exception>
-#include "magio/core/Execution.h"
+#include "magio/execution/Execution.h"
 #include "magio/core/Error.h"
 #include "magio/core/MaybeUninit.h"
 #include "magio/utils/Function.h"
@@ -14,7 +14,6 @@ struct None {};
 
 namespace detail {
 
-// yield func not void(type)
 template<typename Yield>
 concept YieldType =
     std::is_function_v<Yield> &&  
@@ -97,10 +96,10 @@ struct YieldSuspend {
     MaybeUninit<Recv>& recv;
 };
 
-template<typename Ret, typename Yield, typename Awaitable>
+template<typename Ret, typename Awaitable>
 struct PromiseTypeBase;
 
-template<typename Ret, typename Yield, typename Awaitable>
+template<typename Ret, typename Awaitable>
 struct PromiseTypeBase {
     Awaitable get_return_object() {
             return {
@@ -133,12 +132,6 @@ struct PromiseTypeBase {
         storage = std::move(value);
     }
 
-    YieldSuspend<detail::YieldReceiveType<Yield>>
-    yield_value(detail::YieldReturnType<Yield> value) {
-        yield_ret = std::move(value);
-        return {yield_recv};
-    }
-
     void unhandled_exception() {
         eptr = std::current_exception(); 
     }
@@ -154,12 +147,10 @@ struct PromiseTypeBase {
     CoroCompletionHandler<Ret> completion_handler;
 
     MaybeUninit<Ret> storage;
-    MaybeUninit<detail::YieldReceiveType<Yield>> yield_recv;
-    MaybeUninit<detail::YieldReturnType<Yield>> yield_ret;
 };
 
-template<typename Yield, typename Awaitable>
-struct PromiseTypeBase<void, Yield, Awaitable> {
+template<typename Awaitable>
+struct PromiseTypeBase<void, Awaitable> {
     Awaitable get_return_object() {
         return {
             std::coroutine_handle<PromiseTypeBase>::from_promise(*this),
@@ -185,12 +176,6 @@ struct PromiseTypeBase<void, Yield, Awaitable> {
 
     void return_void() { }
 
-    YieldSuspend<detail::YieldReceiveType<Yield>>
-    yield_value(detail::YieldReturnType<Yield> value) {
-        yield_ret = std::move(value);
-        return {yield_recv};
-    }
-
     void unhandled_exception() {
         eptr = std::current_exception(); 
     }
@@ -200,9 +185,6 @@ struct PromiseTypeBase<void, Yield, Awaitable> {
     magio::AnyExecutor executor;
     std::coroutine_handle<> previous;
     CoroCompletionHandler<void> completion_handler;
-
-    MaybeUninit<detail::YieldReceiveType<Yield>> yield_recv;
-    MaybeUninit<detail::YieldReturnType<Yield>> yield_ret;
 };
 
 }
