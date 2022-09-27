@@ -1,5 +1,5 @@
 set_project("magio")
-set_version("0.0.2")
+set_version("0.0.3")
 
 add_rules("mode.debug", "mode.release")
 add_cxxflags("/EHa")
