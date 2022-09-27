@@ -10,41 +10,6 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-// template <typename CharT>
-// struct std::formatter<magio::plat::Message, CharT>
-//     : std::formatter<int, CharT> {
-//     template <typename FormatContext>
-//     auto format(const magio::plat::Message& msg, FormatContext& fc) {
-//         return std::format_to(fc.out(), "code:{}. {}", msg.code, msg.msg);
-//     }
-// };
-
-// template <typename CharT>
-// struct std::formatter<magio::plat::IOOperation, CharT>
-//     : std::formatter<int, CharT> {
-//     template <typename FormatContext>
-//     auto format(magio::plat::IOOperation ioop, FormatContext& fc) {
-//         string_view op_str;
-//         switch (ioop) {
-//             case magio::plat::IOOperation::Accept:
-//                 op_str = "accept";
-//                 break;
-//             case magio::plat::IOOperation::Receive:
-//                 op_str = "receive";
-//                 break;
-//             case magio::plat::IOOperation::Send:
-//                 op_str = "send";
-//                 break;
-//             case magio::plat::IOOperation::Noop:
-//                 op_str = "noop";
-//                 break;
-//             case magio::plat::IOOperation::Connect:
-//                 op_str = "connect";
-//         }
-//         return std::format_to(fc.out(), "{}", op_str);
-//     }
-// };
-
 namespace magio {
 
 namespace plat {
@@ -154,6 +119,7 @@ Expected<> IocpServer::post_accept_task(SocketHelper sock, CompletionHandler* ha
     sock.for_async_task(IOOperation::Accept);
 
     if (auto res = associate_with(sock, handler); !res) {
+        unchecked_return_to_pool(sock.get(), SocketServer::instance().pool());
         return res.unwrap_err();
     }
 
@@ -278,13 +244,11 @@ int IocpServer::wait_completion_task() {
             }
             break;
         case IOOperation::Receive:
+        case IOOperation::Send:
             if (io.len() == 0) {
                 error.code = -1;
                 error.msg = "Client disconnected";
             }
-            handler->cb(handler->hook, error, io.owner());
-            break;
-        case IOOperation::Send:
             handler->cb(handler->hook, error, io.owner());
             break;
         default:
@@ -476,13 +440,11 @@ int IocpClient::wait_completion_task() {
             }
             break;
         case IOOperation::Receive:
+        case IOOperation::Send:
             if (io.len() == 0) {
                 error.code = -1;
                 error.msg = "Server disconnected";
             }
-            handler->cb(handler->hook, error, io.owner());
-            break;
-        case IOOperation::Send:
             handler->cb(handler->hook, error, io.owner());
             break;
         default:
