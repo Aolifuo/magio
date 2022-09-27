@@ -2,7 +2,7 @@ set_project("magio")
 set_version("0.0.2")
 
 add_rules("mode.debug", "mode.release")
-add_cxxflags("/EHa", "/EHs")
+add_cxxflags("/EHa")
 set_languages("cxx20")
 set_warnings("all")
 
@@ -12,8 +12,9 @@ end
 
 target("magio")
     set_kind("static")
-    add_rules("c++.unity_build", {batchsize = 0})
-    add_files("src/magio/**.cpp", {unity_group = "magio"})
+    --add_rules("c++.unity_build", {batchsize = 0})
+    --add_files("src/magio/**.cpp", {unity_group = "magio"})
+    add_files("src/magio/**.cpp")
     add_includedirs("src", {public = true})
 
 --tests
