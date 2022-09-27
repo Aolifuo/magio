@@ -12,10 +12,11 @@ struct EventLoop::Impl: public ExecutionContext {
     std::list<WaitingCompletionHandler>     waiting_tasks;
 
     void post(CompletionHandler&& handler) override;
+    void dispatch(CompletionHandler&& handler) override;
     void waiting(WaitingCompletionHandler&& handler) override;
     TimerID set_timeout(size_t ms, CompletionHandler&& handler) override;
     void clear(TimerID id) override;
-    bool poll() override;
+    bool poll();
 };
 
 CLASS_PIMPL_IMPLEMENT(EventLoop)
@@ -26,6 +27,10 @@ EventLoop::EventLoop() {
 
 void EventLoop::post(CompletionHandler&& handler) {
     impl->post(std::move(handler));
+}
+
+void EventLoop::dispatch(CompletionHandler&& handler) {
+    impl->dispatch(std::move(handler));
 }
 
 void EventLoop::waiting(WaitingCompletionHandler&& handler) {
@@ -64,6 +69,10 @@ void EventLoop::Impl::post(CompletionHandler&& handler) {
     idle_tasks.push(std::move(handler));
 }
 
+void EventLoop::Impl::dispatch(CompletionHandler &&handler) {
+    post(std::move(handler));
+}
+
 void EventLoop::Impl::waiting(WaitingCompletionHandler&& handler) {
     waiting_tasks.push_back(std::move(handler));
 }
@@ -94,6 +103,7 @@ bool EventLoop::Impl::poll() {
         }
     }
 
+    
     for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
         if ((*it)()) {
             it = waiting_tasks.erase(it);
