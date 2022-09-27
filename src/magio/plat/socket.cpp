@@ -71,7 +71,7 @@ char* IOContextHelper::buf() {
 }
 
 unsigned IOContextHelper::capacity() { 
-    return ioc_->wsa_buf.len; 
+    return server_config.buffer_size; 
 }
 
 unsigned IOContextHelper::len() { 
@@ -232,10 +232,10 @@ Expected<> get_socket(
     Socket* sock, TransportProtocol protocol = TransportProtocol::TCP) {
     switch (protocol) {
         case TransportProtocol::TCP:
-            sock->handle = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            sock->handle = ::WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
             break;
         case TransportProtocol::UDP:
-            sock->handle = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            sock->handle = ::WSASocketW(AF_INET, SOCK_DGRAM, IPPROTO_UDP, 0, 0, WSA_FLAG_OVERLAPPED);
             break;
         default:
             return {Error("Unknown transport protocol")};
