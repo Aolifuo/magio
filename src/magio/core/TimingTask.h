@@ -34,7 +34,7 @@ public:
         if (tasks_.empty()) {
             return {};
         }
-        auto now_time = Clock::now().time_since_epoch().count();
+        size_t now_time = Clock::now().time_since_epoch().count();
         
         if (auto it = tasks_.begin(); it->first <= now_time) {
             auto res = std::move(it->second);
