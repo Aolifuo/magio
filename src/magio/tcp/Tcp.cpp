@@ -1,8 +1,8 @@
 #include "magio/tcp/Tcp.h"
 
+#include <iostream>
 #include "magio/Configs.h"
 #include "magio/coro/Coro.h"
-#include "magio/plat/declare.h"
 #include "magio/plat/iocp.h"
 #include "magio/plat/socket.h"
 #include "magio/plat/errors.h"
@@ -17,6 +17,8 @@ struct RWHook {
     AnyExecutor exe;
 };
 
+static thread_local AnyExecutor ThreadGlobalExecutor;
+
 // TcpStream
 
 struct TcpStream::Impl {
@@ -24,12 +26,11 @@ struct TcpStream::Impl {
     RWHook hook_;
     plat::CompletionHandler* handler_;
     
-    Impl(AnyExecutor exe, plat::IocpInterface* iocp, RWHook hook, plat::CompletionHandler* handler)
+    Impl(plat::IocpInterface* iocp, RWHook hook, plat::CompletionHandler* handler)
         : iocp_(iocp), hook_(hook), handler_(handler)
     {
-        hook.exe = exe;
-        handler->hook = (void*)&hook_;
-        handler->cb = [](void* hook, Error err, plat::SocketHelper sock) {
+        handler_->hook = (void*)&hook_;
+        handler_->cb = [](void* hook, Error err, plat::SocketHelper sock) {
             auto rwhook = (RWHook*)hook;
             rwhook->err = err;
             rwhook->sock = sock;
@@ -53,7 +54,31 @@ Address TcpStream::remote_address() {
     return impl->hook_.sock.remote_addr();
 }
 
+Coro<std::tuple<char*, size_t>> TcpStream::vread() {
+    impl->hook_.exe = co_await this_coro::executor;
+    impl->hook_.err = Error();
+
+    co_await Coro<void>{
+        [impl = impl](std::coroutine_handle<> h) {
+            impl->hook_.h = h;
+            if (auto res = impl->iocp_->post_receive_task(impl->hook_.sock); !res) {
+                impl->hook_.err = res.unwrap_err();
+                h.resume();
+            }
+        }
+    };
+
+    if (impl->hook_.err) {
+        throw std::runtime_error(impl->hook_.err.msg);
+    }
+
+    auto io = impl->hook_.sock.recv_io();
+
+    co_return std::make_tuple(io.buf(), io.len());
+}
+
 Coro<size_t> TcpStream::read(char *buf, size_t len) {
+    impl->hook_.exe = co_await this_coro::executor;
     impl->hook_.err = Error();
 
     co_await Coro<void>{
@@ -77,6 +102,7 @@ Coro<size_t> TcpStream::read(char *buf, size_t len) {
 }
 
 Coro<size_t> TcpStream::write(const char *buf, size_t len) {
+    impl->hook_.exe = co_await this_coro::executor;
     impl->hook_.err = Error();
 
     size_t cp_len = impl->hook_.sock.send_io().capacity() > len ? len : impl->hook_.sock.send_io().capacity();
@@ -113,7 +139,7 @@ Coro<TcpServer> TcpServer::bind(const char* host, short port) {
         auto impl = new Impl{res.unwrap()};
 
         auto executor = co_await this_coro::executor;
-        executor.waiting([impl]() ->bool {
+        executor.waiting([impl]() -> bool {
             int status = impl->server.wait_completion_task();
             if (status == ERROR_ABANDONED_WAIT_0 
                 || status == ERROR_INVALID_HANDLE
@@ -141,7 +167,7 @@ Coro<TcpStream> TcpServer::accept() {
             auto rwhook = (RWHook*)hook;
             rwhook->err = err;
             rwhook->sock = sock;
-            rwhook->exe.post([h = rwhook->h] { h.resume(); });
+            rwhook->exe.post([rwhook] { rwhook->h.resume(); });
         }
     });
 
@@ -160,13 +186,14 @@ Coro<TcpStream> TcpServer::accept() {
     }
 
     auto stream_impl 
-        = new TcpStream::Impl{executor, &impl->server, hook, handler.release()};
+        = new TcpStream::Impl{&impl->server, hook, handler.release()};
     co_return TcpStream{stream_impl};
 }
 
 // TcpClient
 
 struct TcpClient::Impl {
+    AnyExecutor executor;
     plat::IocpClient iocp_client;
 };
 
@@ -175,7 +202,7 @@ CLASS_PIMPL_IMPLEMENT(TcpClient)
 
 Coro<TcpClient> TcpClient::create() {
     if (auto res = plat::IocpClient::create(); res) {
-        auto impl = new Impl{res.unwrap()};
+        auto impl = new Impl{co_await this_coro::executor, res.unwrap()};
 
         auto exe = co_await this_coro::executor;
         exe.waiting([impl] {
@@ -227,8 +254,9 @@ Coro<TcpStream> TcpClient::connect(const char* host1, short port1, const char *h
     hook.sock.remote_addr() = {(unsigned)port2, host2};
 
     auto stream_impl
-         = new TcpStream::Impl{exe, &impl->iocp_client, hook, handler.release()};
+         = new TcpStream::Impl{&impl->iocp_client, hook, handler.release()};
     co_return {stream_impl};
 }
+
 
 }

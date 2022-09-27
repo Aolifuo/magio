@@ -16,6 +16,7 @@ public:
     Address local_address();
     Address remote_address();
 
+    Coro<std::tuple<char*, size_t>> vread();
     Coro<size_t> read(char* buf, size_t len);
     Coro<size_t> write(const char* data, size_t len);
 };
