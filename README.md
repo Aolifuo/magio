@@ -265,3 +265,17 @@ Hello server..
 Hello server..
 Client disconnected
 ```
+
+## Benchmark
+
+Using the Apache Benchmarking tool, 1000000 requests, 1000 concurrency, enable keepalive, the QPS/RPS result below:
+
+| framework      |  RPS [#/sec] (mean) | Language |   Pattern |
+|----------------|--------------------:| --------: |----------:|
+| [C++ asio](docs/benchmark.md#cpp-asio)        | 42389.54  | C++           | coroutine |
+| [C++ libuv](docs/benchmark.md#cpp-libuv)      | 43397.97  | C++           | coroutine |
+| [C++ magio](docs/benchmark.md#cpp-magio)      | 43068.93  | C++           | coroutine |
+| [Rust tokio](docs/benchmark.md#rust-tokio)    | 46215.20  | Rust          | coroutine |
+| [NodeJs](docs/benchmark.md#nodejs)            | 39292.92  | JavaScript    | eventloop |
+
+More detail see: [benchmark.md](docs/benchmark.md)
