@@ -216,11 +216,10 @@ Hello client..
 ```cpp
 Coro<void> process(TcpStream stream) {
     try {
-        array<char, 1024> buf;
         for (; ;) {
-            size_t read_len = co_await stream.read(buf.data(), buf.size());
-            cout << string_view(buf.data(), read_len) << '\n';
-            co_await stream.write("Hello client..", 14);
+            auto [buf, rdlen] = co_await stream.vread();
+            cout << string_view(buf, rdlen) << '\n';
+            co_await stream.write(buf, rdlen);
         }
     } catch(const std::runtime_error& err) {
         cout << err.what() << '\n';
@@ -231,6 +230,7 @@ Coro<void> amain(const char* host, short port) {
     try {
         auto executor = co_await this_coro::executor;
         auto server = co_await TcpServer::bind(host, port);
+        
         for (; ;) {
             auto stream = co_await server.accept();
 
@@ -249,7 +249,7 @@ Coro<void> amain(const char* host, short port) {
 int main() {
     Runtime::run().unwrap();
     EventLoop loop;
-    co_spawn(loop.get_executor(), amain("127.0.0.1", 8080), detached);
+    co_spawn(loop.get_executor(), amain("127.0.0.1", 8000), detached);
     loop.run();
 }
 ```
