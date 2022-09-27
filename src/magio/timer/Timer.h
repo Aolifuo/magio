@@ -2,7 +2,7 @@
 
 #include <cstdio>
 #include "magio/core/Queue.h"
-#include "magio/core/Execution.h"
+#include "magio/execution/Execution.h"
 #include "magio/coro/UseCoro.h"
 
 namespace magio {
@@ -29,7 +29,7 @@ public:
     }
 
     Coro<void> async_wait(UseCoro) {
-        Coro<void> coro(
+        return {
             [=](std::coroutine_handle<> h) {
                 executor_.set_timeout(timeout_, [=] {
                     if (h) {
@@ -37,9 +37,7 @@ public:
                     }
                 });
             }
-        );
-
-        return coro;
+        };
     }
 
     void cancel_one() {
