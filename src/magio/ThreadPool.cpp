@@ -24,12 +24,13 @@ struct ThreadPool::Impl: public ExecutionContext {
     std::vector<std::jthread>               threads;
 
     void post(CompletionHandler&& handler) override;
+    void dispatch(CompletionHandler&& handler) override;
     void waiting(WaitingCompletionHandler&& handler) override;
     TimerID set_timeout(size_t ms, CompletionHandler&& handler) override;
     void clear(TimerID id) override;
-    bool poll() override;
     void wait();
     void join();
+    void attach();
     void destroy();
 
     void worker();
@@ -55,6 +56,10 @@ ThreadPool::ThreadPool(size_t thread_num) {
 
 void ThreadPool::post(CompletionHandler&& handler) {
     impl->post(std::move(handler));
+}
+
+void ThreadPool::dispatch(CompletionHandler &&handler) {
+    impl->dispatch(std::move(handler));
 }
 
 void ThreadPool::waiting(WaitingCompletionHandler&& handler) {
@@ -91,6 +96,10 @@ void ThreadPool::join() {
     impl->join();
 }
 
+void ThreadPool::attach() {
+    impl->attach();
+}
+
 AnyExecutor ThreadPool::get_executor() {
     return AnyExecutor(impl);
 }
@@ -101,6 +110,10 @@ void ThreadPool::Impl::post(CompletionHandler&& handler) {
         idle_tasks.push(std::move(handler));
     }
     idle_condvar.notify_one();
+}
+
+void ThreadPool::Impl::dispatch(CompletionHandler &&handler) {
+    post(std::move(handler));
 }
 
 void ThreadPool::Impl::waiting(WaitingCompletionHandler&& handler) {
@@ -141,6 +154,10 @@ void ThreadPool::Impl::join() {
             th.join();
         }
     }
+}
+
+void ThreadPool::Impl::attach() {
+    worker();
 }
 
 void ThreadPool::Impl::destroy() {
@@ -201,10 +218,6 @@ void ThreadPool::Impl::poller() {
             }
         }
     }
-}
-
-bool ThreadPool::Impl::poll() {
-    return true;
 }
 
 }
