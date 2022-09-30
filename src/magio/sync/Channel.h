@@ -56,12 +56,12 @@ public:
         consumer_.push(std::move(fn));
         lk.unlock();
 
-        if (executor_) {
-            executor_.waiting([p = this->shared_from_this()] {
-                std::lock_guard lk(p->m_);
-                return p->consumer_.empty();
-            });
-        }
+        // if (executor_) {
+        //     executor_.waiting([p = this->shared_from_this()] {
+        //         std::lock_guard lk(p->m_);
+        //         return p->consumer_.empty();
+        //     });
+        // }
     }
 
     Coro<std::tuple<Ts...>> async_receive(UseCoro) {

@@ -12,7 +12,7 @@ struct ThreadPool::Impl: public ExecutionContext {
     };
 
     State                                   state = Stop;
-    RingQueue<CompletionHandler>            idle_tasks;
+    RingQueue<CompletionHandler>            idle_tasks{64};
     TimingTaskManager                       pending_tasks;
     std::list<WaitingCompletionHandler>     waiting_tasks;
 

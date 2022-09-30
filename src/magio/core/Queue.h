@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cmath>
 #include <mutex>
-#include <atomic>
 
 #include "magio/core/MaybeUninit.h"
 
