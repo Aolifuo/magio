@@ -1,41 +1,39 @@
 #pragma once
 
-#include <memory>
 #include <mutex>
+#include <memory>
 
 namespace magio {
 
 class WaitGroup: public std::enable_shared_from_this<WaitGroup> {
 public:
     WaitGroup(size_t task_num)
-        : task_num_(task_num)
-        , cur_num_(0)
+        : wait_num_(task_num)
     {
 
     }
 
     void done() {
-        std::unique_lock lk(m_);
-        if (cur_num_ == task_num_) {
+        std::lock_guard lk(m_);
+        if (wait_num_ == 0) {
             return;
         }
 
-        ++cur_num_;
-        if (cur_num_ == task_num_) {
-            lk.unlock();
+        --wait_num_;
+        if (wait_num_ == 0) {
             cv_.notify_all();
         }
     }
 
     void wait() {
         std::unique_lock lk(m_);
-        cv_.wait(lk, [p = shared_from_this()]
-            { return p->cur_num_ == p->task_num_; });
+        cv_.wait(lk, [p = shared_from_this()] {
+            return p->wait_num_ == 0;
+        });
     }
 private:
-    size_t task_num_;
-    size_t cur_num_;
     std::mutex m_;
+    size_t wait_num_;
     std::condition_variable cv_;
 };
 
