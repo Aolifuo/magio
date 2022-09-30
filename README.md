@@ -71,7 +71,7 @@ Coro<void> func2(shared_ptr<Channel<int, string>> chan) {
 }
 
 int main() {
-    ThreadPool pool(10);
+    ThreadPool pool(8);
 
     auto channel = make_shared<Channel<int, string>>(pool.get_executor());
     for (size_t i = 0; i < 10; ++i) {
@@ -115,7 +115,7 @@ graph LR;
 
 ```cpp
 int main() {
-    ThreadPool pool(1);
+    ThreadPool pool(8);
     
     auto a = Workflow::create_task([](ContextPtr ctx) {
         printf("task a start!\n");
