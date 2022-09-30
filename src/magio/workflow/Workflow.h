@@ -25,8 +25,8 @@ public:
         executor_.post(std::move(handler));
     }
 
-    void set_timeout(size_t ms, CompletionHandler&& handler) {
-        executor_.set_timeout(ms, std::move(handler));
+    TimerID set_timeout(size_t ms, CompletionHandler&& handler) {
+        return executor_.set_timeout(ms, std::move(handler));
     }
 
     void handle_exception() {
