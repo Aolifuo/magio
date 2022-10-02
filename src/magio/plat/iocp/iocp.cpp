@@ -1,11 +1,11 @@
-#include "magio/plat/iocp.h"
+#include "magio/plat/iocp/iocp.h"
 
 #include <iostream>
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 #include <MSWSock.h>
 
-#include "magio/plat/socket.h"
+#include "magio/plat/iocp/socket.h"
 #include "magio/plat/errors.h"
 
 #pragma comment(lib, "ws2_32.lib")

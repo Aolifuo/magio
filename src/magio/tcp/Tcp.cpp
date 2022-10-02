@@ -3,8 +3,8 @@
 #include <iostream>
 #include "magio/Configs.h"
 #include "magio/coro/Coro.h"
-#include "magio/plat/iocp.h"
-#include "magio/plat/socket.h"
+#include "magio/plat/iocp/iocp.h"
+#include "magio/plat/iocp/socket.h"
 #include "magio/plat/errors.h"
 #include "magio/utils/ScopeGuard.h"
 

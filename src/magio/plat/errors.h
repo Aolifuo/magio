@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <system_error>
+#ifdef _WIN32
 #include "winerror.h"
 
 #define SYSTEM_ERROR_MAP() \
@@ -14,8 +15,11 @@
     XX(ERROR_CONNECTION_REFUSED, "The remote computer refused the network connection") \
     XX(ERROR_CONNECTION_ABORTED, "The network connection was aborted by the local system") \
     XX(WSAENOTSOCK, "An operation was attempted on something that is not a socket.")
+#endif
 
 namespace magio {
+
+#ifdef _WIN32
 
 inline const char* system_error_str(int code) {
 #define XX(CODE, STRING) {CODE, STRING},
@@ -31,17 +35,7 @@ inline const char* system_error_str(int code) {
     return "Unknown error";
 }
 
-class SystemError: public std::error_category {
-public:
-    const char* name() const noexcept override {
-        return "Syestem Error";
-    }
-
-    std::string message(int val) const override {
-        return system_error_str(val);
-    }
-private:
-};
+#endif
 
 }
 
