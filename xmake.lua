@@ -12,8 +12,6 @@ end
 
 target("magio")
     set_kind("static")
-    --add_rules("c++.unity_build", {batchsize = 0})
-    --add_files("src/magio/**.cpp", {unity_group = "magio"})
     add_files("src/magio/**.cpp")
     add_includedirs("src", {public = true})
 
