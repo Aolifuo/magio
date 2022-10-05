@@ -1,7 +1,7 @@
 #pragma once
 
-#include <chrono>
 #include <map>
+#include <chrono>
 #include "magio/core/MaybeUninit.h"
 #include "magio/core/Fwd.h"
 
