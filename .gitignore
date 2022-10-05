@@ -15,3 +15,5 @@ _deps
 .xmake/
 .cache/
 tests/
+
+xmake.lua
