@@ -1,12 +1,13 @@
 #pragma once
 
 #include <concepts>
-#include <coroutine>
 #include <exception>
-#include "magio/execution/Execution.h"
+// #include <coroutine>
 #include "magio/core/Error.h"
 #include "magio/core/MaybeUninit.h"
+#include "magio/coro/Config.h"
 #include "magio/utils/Function.h"
+#include "magio/execution/Execution.h"
 
 namespace magio {
 
@@ -64,7 +65,7 @@ struct FinalSuspend {
         return auto_destroy;
     }
 
-    void await_suspend(std::coroutine_handle<> prev_h) noexcept {
+    void await_suspend(coroutine_handle<> prev_h) noexcept {
         
     }
 
@@ -85,7 +86,7 @@ struct YieldSuspend {
         return false;
     }
 
-    void await_suspend(std::coroutine_handle<> prev_h) noexcept {
+    void await_suspend(coroutine_handle<> prev_h) noexcept {
         
     }
 
@@ -103,13 +104,13 @@ template<typename Ret, typename Awaitable>
 struct PromiseTypeBase {
     Awaitable get_return_object() {
             return {
-                std::coroutine_handle<PromiseTypeBase>::from_promise(*this),
+                coroutine_handle<PromiseTypeBase>::from_promise(*this),
                 { }
             };
         }
 
     auto initial_suspend() {
-        return std::suspend_always();
+        return suspend_always{};
     }
 
     auto final_suspend() noexcept {
@@ -143,7 +144,7 @@ struct PromiseTypeBase {
     bool auto_destroy = true;
     std::exception_ptr eptr;
     magio::AnyExecutor executor;
-    std::coroutine_handle<> previous;
+    coroutine_handle<> previous;
     CoroCompletionHandler<Ret> completion_handler;
 
     MaybeUninit<Ret> storage;
@@ -153,13 +154,13 @@ template<typename Awaitable>
 struct PromiseTypeBase<void, Awaitable> {
     Awaitable get_return_object() {
         return {
-            std::coroutine_handle<PromiseTypeBase>::from_promise(*this),
+            coroutine_handle<PromiseTypeBase>::from_promise(*this),
             { }
         };
     }
 
     auto initial_suspend() {
-        return std::suspend_always();
+        return suspend_always();
     }
 
     auto final_suspend() noexcept {
@@ -183,7 +184,7 @@ struct PromiseTypeBase<void, Awaitable> {
     bool auto_destroy = true;
     std::exception_ptr eptr;
     magio::AnyExecutor executor;
-    std::coroutine_handle<> previous;
+    coroutine_handle<> previous;
     CoroCompletionHandler<void> completion_handler;
 };
 

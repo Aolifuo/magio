@@ -1,6 +1,8 @@
 #include "magio/ThreadPool.h"
 
 #include <cstdio>
+#include <list>
+#include <thread>
 #include "magio/core/Queue.h"
 #include "magio/core/TimingTask.h"
 
@@ -21,7 +23,7 @@ struct ThreadPool::Impl: public ExecutionContext {
     std::condition_variable                 idle_condvar;
     std::condition_variable                 pending_condvar;
 
-    std::vector<std::jthread>               threads;
+    std::vector<std::thread>               threads;
 
     void post(CompletionHandler&& handler) override;
     void dispatch(CompletionHandler&& handler) override;

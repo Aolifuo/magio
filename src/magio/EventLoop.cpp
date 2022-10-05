@@ -1,5 +1,8 @@
 #include "magio/EventLoop.h"
 
+#include <list>
+#include "magio/dev/Log.h"
+#include "magio/sync/Lock.h"
 #include "magio/core/Queue.h"
 #include "magio/core/TimingTask.h"
 
@@ -8,8 +11,11 @@ namespace magio {
 struct EventLoop::Impl: public ExecutionContext {
     bool                                    stop_flag = false;
     RingQueue<CompletionHandler>            idle_tasks;
-    TimingTaskManager                       pending_tasks;
+    TimingTaskManager                       timed_tasks;
     std::list<WaitingCompletionHandler>     waiting_tasks;
+
+    SpinLock                                spin_idle;
+    SpinLock                                spin_timed;
 
     void post(CompletionHandler&& handler) override;
     void dispatch(CompletionHandler&& handler) override;
@@ -66,6 +72,7 @@ AnyExecutor EventLoop::get_executor() {
 }
 
 void EventLoop::Impl::post(CompletionHandler&& handler) {
+    std::lock_guard lk(spin_idle);
     idle_tasks.push(std::move(handler));
 }
 
@@ -73,44 +80,59 @@ void EventLoop::Impl::dispatch(CompletionHandler &&handler) {
     post(std::move(handler));
 }
 
+TimerID EventLoop::Impl::set_timeout(size_t ms, CompletionHandler&& handler) {
+    std::lock_guard lk(spin_timed);
+    return timed_tasks.set_timeout(ms, std::move(handler));
+}
+
+void EventLoop::Impl::clear(TimerID id) {
+    std::lock_guard lk(spin_timed);
+    timed_tasks.cancel(id);
+}
+
 void EventLoop::Impl::waiting(WaitingCompletionHandler&& handler) {
     waiting_tasks.push_back(std::move(handler));
 }
 
-TimerID EventLoop::Impl::set_timeout(size_t ms, CompletionHandler&& handler) {
-    return pending_tasks.set_timeout(ms, std::move(handler));
-}
-
-void EventLoop::Impl::clear(TimerID id) {
-    pending_tasks.cancel(id);
-}
 
 bool EventLoop::Impl::poll() {
     if (stop_flag) {
         return false;
     }
 
-    for (; !idle_tasks.empty();) {
-        idle_tasks.front()();
+    for (; ;) {
+        std::unique_lock lk(spin_idle);
+        if (idle_tasks.empty()) {
+            break;
+        }
+        auto task = std::move(idle_tasks.front());
         idle_tasks.pop();
+        lk.unlock();
+
+        task();
     }
 
     for (; ;) {
-        if (auto res = pending_tasks.get_expired_task(); res) {
-            res.unwrap()();
-        } else {
+        std::unique_lock lk(spin_timed);
+        auto res = timed_tasks.get_expired_task();
+        lk.unlock();
+
+        if (!res) {
             break;
         }
+
+        res.unwrap()();
     }
 
-    
+
     for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
         if ((*it)()) {
             it = waiting_tasks.erase(it);
         }
     }
-
-    return !(idle_tasks.empty() && pending_tasks.empty() && waiting_tasks.empty());
+    
+    std::scoped_lock lks(spin_idle, spin_timed);
+    return !(idle_tasks.empty() && timed_tasks.empty() && waiting_tasks.empty());
 }
 
 }

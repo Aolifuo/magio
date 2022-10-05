@@ -20,7 +20,7 @@ public:
         }
     }
 
-    MaybeUninit(MaybeUninit&& other): flag(other.flag) {
+    MaybeUninit(MaybeUninit&& other) noexcept: flag(other.flag) {
         if (flag) {
             new (buf_) T{std::move(other.get())};
         }

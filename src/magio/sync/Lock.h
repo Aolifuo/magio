@@ -15,7 +15,7 @@ public:
     }
 
     bool try_lock() {
-        return flag_.test_and_set(std::memory_order_acquire);
+        return !flag_.test_and_set(std::memory_order_acquire);
     }
 
     void unlock() {

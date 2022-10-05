@@ -2,6 +2,15 @@
 #include "magio/ThreadPool.h"
 #include "magio/sync/WaitGroup.h"
 
+struct Foo {
+    Foo() = default;
+    Foo(const Foo&) {
+        fmt::print("copy\n");
+    }
+    Foo(Foo&&) noexcept {
+        fmt::print("move\n");
+    }
+};
 
 size_t sum_from_to(size_t frist, size_t last) {
     size_t res = 0;
@@ -35,8 +44,10 @@ TestResults test_future() {
     ThreadPool pool(16);
 
     vector<future<size_t>> res_vec;
+    res_vec.reserve(100);
+    int a = 1;
     for (int i = 0; i < 100; ++i) {
-        res_vec.emplace_back(pool.get_future(sum_from_to, 1, 100));
+        res_vec.emplace_back(pool.get_future(sum_from_to, a, 100));
     }
     
     size_t sum = 0;

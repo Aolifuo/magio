@@ -30,8 +30,8 @@ public:
 
     Coro<void> async_wait(UseCoro) {
         return {
-            [=](std::coroutine_handle<> h) {
-                executor_.set_timeout(timeout_, [=] {
+            [=](coroutine_handle<> h) {
+                executor_.set_timeout(timeout_, [=]() mutable {
                     if (h) {
                         h.resume();
                     }
@@ -56,7 +56,7 @@ public:
         return executor_;
     }
 private:
-    static void handle_resume(AnyExecutor executor, size_t ms, std::coroutine_handle<> h) {
+    static void handle_resume(AnyExecutor executor, size_t ms, coroutine_handle<> h) {
         if (h) {
             h.resume();
         } else {

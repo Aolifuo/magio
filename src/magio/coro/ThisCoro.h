@@ -1,6 +1,6 @@
 #pragma once
 
-#include <coroutine>
+#include "magio/coro/Config.h"
 #include "magio/execution/Execution.h"
 
 namespace magio {
@@ -15,7 +15,7 @@ struct GetExecutor {
     bool await_ready() { return false; }
 
     template<typename PT>
-    auto await_suspend(std::coroutine_handle<PT> prev_h) {
+    auto await_suspend(coroutine_handle<PT> prev_h) {
         executor = prev_h.promise().executor;
         prev_h.resume();
     }

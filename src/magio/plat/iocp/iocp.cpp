@@ -1,3 +1,5 @@
+#ifdef _WIN32
+
 #include "magio/plat/iocp/iocp.h"
 
 #include <iostream>
@@ -480,3 +482,4 @@ Expected<> IocpClient::recycle(SocketHelper sock) {
 }  // namespace plat
 
 }  // namespace magio
+#endif

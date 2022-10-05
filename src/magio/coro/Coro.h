@@ -5,9 +5,9 @@
 #include "magio/utils/ScopeGuard.h"
 
 template<typename Ret, typename...Ts>
-struct std::coroutine_traits<magio::Coro<Ret>, Ts...> {
+struct std::experimental::coroutine_traits<magio::Coro<Ret>, Ts...> {
     using promise_type = magio::PromiseTypeBase<Ret, magio::Coro<Ret>>;
-    using handle_type = std::coroutine_handle<promise_type>;
+    using handle_type = std::experimental::coroutine_handle<promise_type>;
 };
 
 namespace magio {
@@ -43,7 +43,7 @@ Coro<
     });
     
     co_await Coro<void>(
-        [&coro_tup, executor](std::coroutine_handle<> h) mutable {
+        [&coro_tup, executor](coroutine_handle<> h) mutable {
             std::apply([executor](auto&&...coros) {
                 (coros.wake(executor, false), ...);
             }, coro_tup);
@@ -54,7 +54,7 @@ Coro<
                 }, coro_tup);
 
                 if (flag) {
-                    executor.post([h] { h.resume(); });
+                    executor.post([h]() mutable { h.resume(); });
                 }
 
                 return flag;

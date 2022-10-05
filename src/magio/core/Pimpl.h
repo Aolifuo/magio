@@ -2,8 +2,8 @@
 
 #define CLASS_PIMPL_DECLARE(CLASS) \
 public: \
-    CLASS(CLASS &&); \
-    CLASS& operator=(CLASS &&); \
+    CLASS(CLASS &&) noexcept; \
+    CLASS& operator=(CLASS &&) noexcept; \
     ~CLASS(); \
 private: \
     struct Impl; \
@@ -14,11 +14,11 @@ private: \
 CLASS::CLASS(Impl* d) { \
     impl = d; \
 } \
-CLASS::CLASS(CLASS&& other) { \
+CLASS::CLASS(CLASS&& other) noexcept { \
     impl = other.impl; \
     other.impl = nullptr; \
 } \
-CLASS& CLASS::operator=(CLASS&& other) { \
+CLASS& CLASS::operator=(CLASS&& other) noexcept { \
     impl = other.impl; \
     other.impl = nullptr; \
     return *this; \

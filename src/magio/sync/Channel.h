@@ -78,8 +78,8 @@ public:
 
         MaybeUninit<std::tuple<Ts...>> ret;
         co_await Coro<void>{
-            [&lk, &ret, p = this->shared_from_this()](std::coroutine_handle<> h) mutable {
-                p->consumer_.push([&ret, h](Ts...args) {
+            [&lk, &ret, p = this->shared_from_this()](coroutine_handle<> h) mutable {
+                p->consumer_.push([&ret, h](Ts...args) mutable {
                     ret = std::make_tuple(std::move(args)...);
                     h.resume();
                 });
