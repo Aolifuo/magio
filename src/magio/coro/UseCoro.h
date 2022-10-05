@@ -4,14 +4,7 @@
 
 namespace magio {
 
-namespace detail {
-
-template<typename T>
-using ResumeHandler = std::function<T(std::coroutine_handle<>)>;
-
-}
-
-using ResumeHandler = std::function<void(std::coroutine_handle<>)>;
+using ResumeHandler = std::function<void(coroutine_handle<>)>;
 
 template<typename Ret>
 struct Coro {
@@ -20,7 +13,7 @@ struct Coro {
         , resume_handler_(std::move(resume_h))
     { }
 
-    Coro(std::coroutine_handle<PromiseTypeBase<Ret, Coro>> h, ResumeHandler&& resume_h)
+    Coro(coroutine_handle<PromiseTypeBase<Ret, Coro>> h, ResumeHandler&& resume_h)
         : main_h_(h)
         , resume_handler_(std::move(resume_h)) 
     { }
@@ -28,7 +21,7 @@ struct Coro {
     bool await_ready() { return false; }
 
     template<typename PT>
-    void await_suspend(std::coroutine_handle<PT> prev_h) {
+    void await_suspend(coroutine_handle<PT> prev_h) {
         if (main_h_) {
             main_h_.promise().executor = prev_h.promise().executor;
             main_h_.promise().previous = prev_h;
@@ -56,7 +49,7 @@ struct Coro {
         if (main_h_) {
             main_h_.promise().executor = executor;
             main_h_.promise().auto_destroy = auto_destroy;
-            executor.post([main_h_ = main_h_] { main_h_.resume(); });
+            executor.post([main_h_ = main_h_]() mutable { main_h_.resume(); });
         } else {
             executor.post([r = std::move(resume_handler_)] { r(nullptr); });
         }
@@ -89,7 +82,7 @@ struct Coro {
         return main_h_ != nullptr;
     }
 private:
-    std::coroutine_handle<PromiseTypeBase<Ret, Coro>> main_h_;
+    coroutine_handle<PromiseTypeBase<Ret, Coro>> main_h_;
     ResumeHandler resume_handler_;
 };
 
