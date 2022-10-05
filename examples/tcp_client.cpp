@@ -3,7 +3,7 @@
 #include "magio/Runtime.h"
 #include "magio/EventLoop.h"
 #include "magio/coro/CoSpawn.h"
-#include "magio/tcp/Tcp.h"
+#include "magio/net/tcp/Tcp.h"
 
 using namespace std;
 using namespace magio;
