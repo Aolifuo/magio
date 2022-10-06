@@ -15,7 +15,6 @@ public:
         Stop, Running
     };
 
-    Channel() = default;
     Channel(AnyExecutor executor): executor_(executor) {}
 
     void async_send(Ts...args) {
@@ -54,14 +53,6 @@ public:
         }
 
         consumer_.push(std::move(fn));
-        lk.unlock();
-
-        // if (executor_) {
-        //     executor_.waiting([p = this->shared_from_this()] {
-        //         std::lock_guard lk(p->m_);
-        //         return p->consumer_.empty();
-        //     });
-        // }
     }
 
     Coro<std::tuple<Ts...>> async_receive(UseCoro) {
@@ -84,13 +75,6 @@ public:
                     h.resume();
                 });
                 lk.unlock();
-
-                // if (exe) {
-                //     exe.waiting([p] {
-                //         std::lock_guard lk(p->m_);
-                //         return p->consumer_.empty();
-                //     });
-                // }
             }
         };
 

@@ -10,6 +10,7 @@
 #include <cassert>
 #include <variant>
 #include <concepts>
+#include <iostream>
 #include <exception>
 #include <functional>
 

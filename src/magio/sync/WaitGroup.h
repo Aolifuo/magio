@@ -37,4 +37,13 @@ private:
     std::condition_variable cv_;
 };
 
+class WaitGroup2 {
+public:
+    WaitGroup2(size_t task_num) {
+
+    }
+private:
+    
+};
+
 }

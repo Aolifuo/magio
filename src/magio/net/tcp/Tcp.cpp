@@ -42,7 +42,7 @@ struct TcpStream::Impl {
 
 CLASS_PIMPL_IMPLEMENT(TcpStream)
 
-Coro<std::tuple<char*, size_t>> TcpStream::read() {
+Coro<std::string_view> TcpStream::read() {
     auto hook = EventHook{};
 
     auto evdata = plat::EventData{
@@ -64,7 +64,7 @@ Coro<std::tuple<char*, size_t>> TcpStream::read() {
     }
 
     auto [buf, len] = impl->iodata->input_buffer;
-    co_return std::make_tuple(buf, len);
+    co_return std::string_view(buf, len);
 }
 
 Coro<size_t> TcpStream::write(const char* buf, size_t len) {
@@ -110,7 +110,9 @@ struct TcpServer::Impl {
     size_t index = 0;
 
     ~Impl() {
-        
+        for (auto& loop : loops) {
+            loop->close();
+        }
     }
 };
 
@@ -213,7 +215,6 @@ Coro<TcpStream> TcpServer::accept() {
         ::close(*p);
     }};
 
-    // 非阻塞化
     if (auto ec = plat::set_nonblock(hook.fd)) {
         throw std::system_error(ec);
     }
@@ -232,16 +233,43 @@ Coro<TcpStream> TcpServer::accept() {
 // TcpClient
 
 struct TcpClient::Impl {
-    inline static std::shared_ptr<plat::IOLoop> loop_ptr;
+    std::shared_ptr<plat::IOLoop> loop_ptr;
+
+    ~Impl() {
+        loop_ptr->close();
+    }
 };
 
 CLASS_PIMPL_IMPLEMENT(TcpClient)
+
+Coro<TcpClient> TcpClient::create() {
+    auto expect_loop = plat::IOLoop::create(global_config.max_sockets, -2);
+    if (!expect_loop) {
+        throw std::system_error(expect_loop.unwrap_err());
+    }
+    auto loop_ptr = std::make_shared<plat::IOLoop>(expect_loop.unwrap());
+
+    auto exe = co_await this_coro::executor;
+    exe.waiting([loop_ptr] {
+        if (auto ec = loop_ptr->poll(0)) {
+            std::printf("main loop: %s\n", ec.message().c_str());
+            return true;
+        }
+        return false;
+    });
+
+    co_return {new Impl{loop_ptr}};
+}
 
 Coro<TcpStream> TcpClient::connect(const char* host, uint_least16_t port) {
     int fd = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (-1 == fd) {
         THROW_SYSTEM_ERROR;
     }
+
+    auto fd_guard = ScopeGuard{&fd, [](int *p) {
+        ::close(*p);
+    }};
 
     ::sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -250,23 +278,40 @@ Coro<TcpStream> TcpClient::connect(const char* host, uint_least16_t port) {
         THROW_SYSTEM_ERROR;
     }
 
-    if (-1 == ::connect(fd, (sockaddr*)&addr, sizeof(addr))) {
+    int connres = ::connect(fd, (sockaddr*)&addr, sizeof(addr));
+    if (-1 == connres && errno != EINPROGRESS) {
         THROW_SYSTEM_ERROR;
     }
 
-    auto expect_loop = plat::IOLoop::create(global_config.max_sockets, fd);
-    if (!expect_loop) {
-        throw std::system_error(expect_loop.unwrap_err());
+    auto hook = EventHook{};
+    auto evdata = plat::EventData{
+        .data = &hook,
+        .cb = resume_from_hook
+    };
+    
+    if (0 != connres) {
+        co_await Coro<void>{
+            [&hook, &evdata, this, fd](coroutine_handle<> h) {
+                hook.h = h;
+                impl->loop_ptr->async_connect(fd, &evdata);
+            }
+        };
     }
-    impl->loop_ptr = std::make_shared<plat::IOLoop>(expect_loop.unwrap());
 
-
+    if (hook.ec) {
+        throw std::system_error(hook.ec);
+    }
+    
+    if (auto ec = impl->loop_ptr->add(fd)) {
+        throw std::system_error(ec);
+    }
+    
     auto io = plat::global_io().get();
     io->fd = fd;
 
+    fd_guard.release();
     co_return {new TcpStream::Impl{impl->loop_ptr, io}};
 }
-
 
 #endif
 

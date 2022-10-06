@@ -5,7 +5,7 @@
 
 namespace magio {
 
-// #define MAGIO_DEBUG 1
+#define MAGIO_DEBUG 1
 
 #ifdef MAGIO_DEBUG
 #define DEBUG_LOG(args...) \
@@ -17,7 +17,7 @@ namespace magio {
 inline std::mutex GLOBAL_MUTEX;
 
 template<typename...Args>
-void debug_log(Args&&...args) {
+inline void debug_log(Args&&...args) {
     std::lock_guard lk(GLOBAL_MUTEX);
     ((std::cout << args), ...);
     std::cout << '\n';

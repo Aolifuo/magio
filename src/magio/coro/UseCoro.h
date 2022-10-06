@@ -6,7 +6,7 @@ namespace magio {
 
 using ResumeHandler = std::function<void(coroutine_handle<>)>;
 
-template<typename Ret>
+template<typename Ret = void>
 struct Coro {
     Coro(ResumeHandler&& resume_h)
         : main_h_(nullptr)
@@ -17,6 +17,10 @@ struct Coro {
         : main_h_(h)
         , resume_handler_(std::move(resume_h)) 
     { }
+
+    Coro(const Coro&) = delete;
+    Coro(Coro&&) noexcept = default;
+    Coro& operator=(Coro&&) noexcept = default;
 
     bool await_ready() { return false; }
 
@@ -66,7 +70,7 @@ struct Coro {
         if constexpr (!std::is_void_v<Ret>) {
             return main_h_.promise().get_value();
         } else {
-            return None{};
+            return Unit{};
         }
     }
 
@@ -86,12 +90,5 @@ private:
     ResumeHandler resume_handler_;
 };
 
-struct UseCoro { };
-
-struct UseFuture { };
-
-inline UseCoro use_coro;
-
-inline UseFuture use_future;
 
 }

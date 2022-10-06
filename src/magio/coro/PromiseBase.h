@@ -2,44 +2,16 @@
 
 #include <concepts>
 #include <exception>
-// #include <coroutine>
+#include "magio/coro/Fwd.h"
+#include "magio/coro/Config.h"
 #include "magio/core/Error.h"
 #include "magio/core/MaybeUninit.h"
-#include "magio/coro/Config.h"
 #include "magio/utils/Function.h"
 #include "magio/execution/Execution.h"
 
 namespace magio {
 
-struct None {};
-
 namespace detail {
-
-template<typename Yield>
-concept YieldType =
-    std::is_function_v<Yield> &&  
-    (
-        std::is_object_v<typename FunctorTraits<Yield>::ReturnType> // ||
-        // std::is_void_v<typename FunctorTraits<Yield>::ReturnType>
-    ) &&  
-    (
-        FunctorTraits<Yield>::Arguments::Length == 1 // ||
-        // FunctorTraits<Yield>::Arguments::Length == 0
-    );
-
-template<typename Yield>
-using YieldReturnType = std::conditional_t<
-    std::is_void_v<typename FunctorTraits<Yield>::ReturnType>,
-    None,
-    typename FunctorTraits<Yield>::ReturnType
->;
-
-template<typename Yield>
-using YieldReceiveType = std::conditional_t<
-    FunctorTraits<Yield>::Arguments::Length == 0,
-    void,
-    typename FunctorTraits<Yield>::Arguments::template At<0>
->;
 
 template<typename Ret>
 struct CoroCompletionHandler {
@@ -56,17 +28,40 @@ struct CoroCompletionHandler<void> {
 template<typename Ret>
 using CoroCompletionHandler = typename detail::CoroCompletionHandler<Ret>::type;
 
+template<typename Ret, typename Awaitable>
+struct PromiseTypeBase;
+
+template<typename Ret, typename A>
 struct FinalSuspend {
-    FinalSuspend(bool flag) {
-        auto_destroy = flag;
+    FinalSuspend(bool flag, PromiseTypeBase<Ret, A>& pro)
+        : auto_destroy(flag)
+        , promise(pro)
+    {
+
     }
 
-    bool await_ready() noexcept {
-        return auto_destroy;
-    }
+    bool await_ready() noexcept { return false; }
 
     void await_suspend(coroutine_handle<> prev_h) noexcept {
-        
+        if (promise.completion_handler) {
+            if (promise.eptr) {
+                promise.completion_handler(promise.eptr);
+            } else {
+                if constexpr (std::is_void_v<Ret>) {
+                    promise.completion_handler(Unit{});
+                } else {
+                    promise.completion_handler(promise.storage.unwrap());
+                }
+            }
+        }
+
+        if (promise.previous) {
+            promise.previous.resume();
+        }
+
+        if (auto_destroy) {
+            prev_h.destroy();
+        }
     }
 
     void await_resume() noexcept {
@@ -74,31 +69,8 @@ struct FinalSuspend {
     }
 
     bool auto_destroy;
+    PromiseTypeBase<Ret, A>& promise;
 };
-
-template<typename Recv>
-struct YieldSuspend {
-    YieldSuspend(MaybeUninit<Recv>& r)
-        : recv(r)
-    { }
-
-    bool await_ready() noexcept {
-        return false;
-    }
-
-    void await_suspend(coroutine_handle<> prev_h) noexcept {
-        
-    }
-
-    Recv await_resume() noexcept {
-        return recv.unwrap();
-    }
-
-    MaybeUninit<Recv>& recv;
-};
-
-template<typename Ret, typename Awaitable>
-struct PromiseTypeBase;
 
 template<typename Ret, typename Awaitable>
 struct PromiseTypeBase {
@@ -114,19 +86,7 @@ struct PromiseTypeBase {
     }
 
     auto final_suspend() noexcept {
-        if (completion_handler) {
-            if (eptr) {
-                completion_handler(eptr);
-            } else {
-                completion_handler(storage.unwrap());
-            }
-        }
-
-        if (previous) {
-            previous.resume();
-        }
-
-        return FinalSuspend(auto_destroy);
+        return FinalSuspend(auto_destroy, *this);
     }
 
     void return_value(Ret value) {
@@ -143,7 +103,7 @@ struct PromiseTypeBase {
 
     bool auto_destroy = true;
     std::exception_ptr eptr;
-    magio::AnyExecutor executor;
+    AnyExecutor executor;
     coroutine_handle<> previous;
     CoroCompletionHandler<Ret> completion_handler;
 
@@ -164,15 +124,7 @@ struct PromiseTypeBase<void, Awaitable> {
     }
 
     auto final_suspend() noexcept {
-        if (completion_handler) {
-            completion_handler(eptr);
-        }
-
-        if (previous) {
-            previous.resume();
-        } 
-        
-        return FinalSuspend(auto_destroy);
+        return FinalSuspend(auto_destroy, *this);
     }
 
     void return_void() { }
@@ -183,7 +135,7 @@ struct PromiseTypeBase<void, Awaitable> {
 
     bool auto_destroy = true;
     std::exception_ptr eptr;
-    magio::AnyExecutor executor;
+    AnyExecutor executor;
     coroutine_handle<> previous;
     CoroCompletionHandler<void> completion_handler;
 };

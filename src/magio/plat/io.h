@@ -16,8 +16,8 @@ struct IOData {
 
 auto& global_io() {
     static SyncObjectPool<IOData> pool(
-        global_config.max_sockets / 2 + 1, 
-        global_config.max_sockets
+        global_config.default_buffers, 
+        global_config.default_buffers
     );
 
     return pool;

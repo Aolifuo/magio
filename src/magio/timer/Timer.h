@@ -2,8 +2,8 @@
 
 #include <cstdio>
 #include "magio/core/Queue.h"
+#include "magio/coro/Fwd.h"
 #include "magio/execution/Execution.h"
-#include "magio/coro/UseCoro.h"
 
 namespace magio {
 
@@ -24,21 +24,11 @@ public:
         timeout_ = ms;
     }
 
-    void async_wait(CompletionHandler handler) {
+    void async_wait(CompletionHandler&& handler) {
         timer_ids_.push(executor_.set_timeout(timeout_, std::move(handler)));
     }
 
-    Coro<void> async_wait(UseCoro) {
-        return {
-            [=](coroutine_handle<> h) {
-                executor_.set_timeout(timeout_, [=]() mutable {
-                    if (h) {
-                        h.resume();
-                    }
-                });
-            }
-        };
-    }
+    Coro<void> async_wait(UseCoro);
 
     void cancel_one() {
         executor_.clear(timer_ids_.front());
@@ -52,18 +42,10 @@ public:
         }
     }
 
-    AnyExecutor get_executor() {
+    AnyExecutor get_executor() const {
         return executor_;
     }
 private:
-    static void handle_resume(AnyExecutor executor, size_t ms, coroutine_handle<> h) {
-        if (h) {
-            h.resume();
-        } else {
-            executor.set_timeout(ms, [=] { handle_resume(executor, ms, h); });
-        }
-    }
-
     AnyExecutor executor_;
     size_t timeout_;
     RingQueue<TimerID> timer_ids_;

@@ -23,7 +23,7 @@ public:
     void join();
     void attach();
 
-    AnyExecutor get_executor();
+    AnyExecutor get_executor() const;
 
     template<typename Fn, typename...Args>
     auto get_future(Fn&& fn, Args&&...args) {

@@ -1,20 +1,22 @@
 #include <array>
 #include <iostream>
-#include "magio/Runtime.h"
 #include "magio/EventLoop.h"
 #include "magio/coro/CoSpawn.h"
-#include "magio/coro/ThisCoro.h"
 #include "magio/net/tcp/Tcp.h"
+#include "magio/coro/Operation.h"
 
 using namespace std;
 using namespace magio;
+using namespace magio::operation;
 
 Coro<void> process(TcpStream stream) {
     try {
         for (; ;) {
-            auto [buf, rdlen] = co_await stream.read();
-            cout << string_view(buf, rdlen) << '\n';
-            co_await stream.write(buf, rdlen);
+            auto [str, wlen] = co_await (
+                stream.read() | 
+                stream.write("hello client", 12)
+            );
+            cout << str << '\n';
         }
     } catch(const std::runtime_error& err) {
         cout << err.what() << '\n';

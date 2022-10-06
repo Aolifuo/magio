@@ -1,7 +1,6 @@
 #include <iostream>
 #include "magio/EventLoop.h"
 #include "magio/coro/CoSpawn.h"
-#include "magio/coro/ThisCoro.h"
 #include "magio/net/tcp/Tcp.h"
 
 using namespace std;
@@ -9,8 +8,8 @@ using namespace magio;
 
 Coro<void> process(TcpStream stream) {
     for (; ;) {
-        auto [buf, rdlen] = co_await stream.read();
-        co_await stream.write(buf, rdlen);
+        auto str = co_await stream.read();
+        co_await stream.write(str.data(), str.length());
     }
 }
 

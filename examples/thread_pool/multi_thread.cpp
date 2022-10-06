@@ -1,6 +1,6 @@
 #include "magio/ThreadPool.h"
 #include "magio/coro/CoSpawn.h"
-#include "magio/coro/Coro.h"
+#include "magio/coro/Operation.h"
 #include <thread>
 #include <iostream>
 

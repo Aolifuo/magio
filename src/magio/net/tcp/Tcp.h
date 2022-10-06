@@ -1,8 +1,7 @@
 #pragma once
 
-#include "magio/plat/declare.h"
+#include "magio/coro/Fwd.h"
 #include "magio/core/Pimpl.h"
-#include "magio/coro/UseCoro.h"
 #include "magio/net/Address.h"
 
 namespace magio {
@@ -17,7 +16,7 @@ public:
     Address local_address();
     Address remote_address();
 
-    Coro<std::tuple<char*, size_t>> read();
+    Coro<std::string_view> read();
     Coro<size_t> write(const char* data, size_t len);
 };
 
@@ -35,6 +34,7 @@ class TcpClient {
     CLASS_PIMPL_DECLARE(TcpClient)
 
 public:
+    static Coro<TcpClient> create();
 
     Coro<TcpStream> connect(const char* host, uint_least16_t port);
 };

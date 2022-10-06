@@ -9,13 +9,15 @@
 namespace magio {
 
 struct EventLoop::Impl: public ExecutionContext {
-    bool                                    stop_flag = false;
+    std::atomic_flag                        stop_flag;
     RingQueue<CompletionHandler>            idle_tasks;
     TimingTaskManager                       timed_tasks;
-    std::list<WaitingCompletionHandler>     waiting_tasks;
+    RingQueue<WaitingCompletionHandler>     waiting_tasks;
 
     SpinLock                                spin_idle;
     SpinLock                                spin_timed;
+    SpinLock                                spin_wait;
+    std::atomic_size_t                      count = 0;
 
     void post(CompletionHandler&& handler) override;
     void dispatch(CompletionHandler&& handler) override;
@@ -60,20 +62,21 @@ void EventLoop::run() {
 }
 
 void EventLoop::stop() {
-    impl->stop_flag = true;
+    impl->stop_flag.test_and_set(std::memory_order_relaxed);
 }
 
 void EventLoop::restart() {
-    impl->stop_flag = false;
+    impl->stop_flag.clear(std::memory_order_relaxed);
 }
 
-AnyExecutor EventLoop::get_executor() {
+AnyExecutor EventLoop::get_executor() const {
     return AnyExecutor(impl);
 }
 
 void EventLoop::Impl::post(CompletionHandler&& handler) {
     std::lock_guard lk(spin_idle);
     idle_tasks.push(std::move(handler));
+    count.fetch_add(1, std::memory_order_relaxed);
 }
 
 void EventLoop::Impl::dispatch(CompletionHandler &&handler) {
@@ -82,21 +85,26 @@ void EventLoop::Impl::dispatch(CompletionHandler &&handler) {
 
 TimerID EventLoop::Impl::set_timeout(size_t ms, CompletionHandler&& handler) {
     std::lock_guard lk(spin_timed);
-    return timed_tasks.set_timeout(ms, std::move(handler));
+    auto id = timed_tasks.set_timeout(ms, std::move(handler));
+    count.fetch_add(1, std::memory_order_relaxed);
+    return id;
 }
 
 void EventLoop::Impl::clear(TimerID id) {
     std::lock_guard lk(spin_timed);
     timed_tasks.cancel(id);
+    count.fetch_sub(1);
 }
 
 void EventLoop::Impl::waiting(WaitingCompletionHandler&& handler) {
-    waiting_tasks.push_back(std::move(handler));
+    std::lock_guard lk(spin_wait);
+    waiting_tasks.emplace(std::move(handler));
+    count.fetch_add(1, std::memory_order_relaxed);
 }
 
 
 bool EventLoop::Impl::poll() {
-    if (stop_flag) {
+    if (stop_flag.test(std::memory_order_relaxed)) {
         return false;
     }
 
@@ -110,6 +118,7 @@ bool EventLoop::Impl::poll() {
         lk.unlock();
 
         task();
+        count.fetch_sub(1);
     }
 
     for (; ;) {
@@ -122,17 +131,26 @@ bool EventLoop::Impl::poll() {
         }
 
         res.unwrap()();
+        count.fetch_sub(1);
     }
 
+    {
+        std::unique_lock lk(spin_wait);
+        if (!waiting_tasks.empty()) {
+            auto task = std::move(waiting_tasks.front());
+            waiting_tasks.pop();    
+            lk.unlock();
 
-    for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
-        if ((*it)()) {
-            it = waiting_tasks.erase(it);
+            if (!task()) {
+                lk.lock();
+                waiting_tasks.emplace(std::move(task));
+            } else {
+                count.fetch_sub(1);
+            }
         }
     }
     
-    std::scoped_lock lks(spin_idle, spin_timed);
-    return !(idle_tasks.empty() && timed_tasks.empty() && waiting_tasks.empty());
+    return count.load() != 0;
 }
 
 }

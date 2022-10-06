@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <system_error>
+#include "magio/core/Fwd.h"
 
 namespace magio {
 
@@ -26,8 +27,6 @@ struct ExpectedTraits<Expected<Ok, Err>> {
 };
 
 }
-
-struct Unit {};
 
 template<typename Ok = Unit, typename Err = std::error_code>
 class Expected {

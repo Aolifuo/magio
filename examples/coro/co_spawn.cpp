@@ -1,7 +1,6 @@
 #include "magio/EventLoop.h"
 #include "magio/timer/Timer.h"
 #include "magio/coro/CoSpawn.h"
-#include "magio/coro/ThisCoro.h"
 
 using namespace std;
 using namespace magio;

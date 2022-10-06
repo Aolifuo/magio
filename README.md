@@ -2,6 +2,34 @@
 
 magio是一个基于事件循环和线程池的协程库
 
+## Hello world
+
+```cpp
+Coro<string> task1() {
+    co_return "hello ";
+}
+
+Coro<string> task2() {
+    co_return "world";
+}
+
+Coro<> do_tasks() {
+    co_await timeout(3000);
+    auto [s1, s2] = co_await (task1() && task2());
+    cout << s1 << s2 << endl;
+}
+
+int main() {
+    EventLoop loop;
+    co_spawn(loop.get_executor(), do_tasks(), detached);
+    loop.run();
+}
+```
+
+```shell
+hello world
+```
+
 ## Coro
 
 ```cpp
@@ -181,10 +209,11 @@ Coro<void> amain() {
              << '\n';
 
         for (int i = 0; i < 5; ++i) {
-            co_await stream.write("Hello server..", 14);
-            auto [buf, len] = co_await stream.read();
-
-            cout << string_view(buf, len) << '\n';
+            auto [wlen, str] = co_await (
+                stream.write("Hello server..", 14) | 
+                stream.read()
+            );
+            cout << str << '\n';
         }
     } catch(const std::exception& err) {
         cout <<  err.what() << '\n';
@@ -215,9 +244,11 @@ Hello client..
 Coro<void> process(TcpStream stream) {
     try {
         for (; ;) {
-            auto [buf, rdlen] = co_await stream.read();
-            cout << string_view(buf, rdlen) << '\n';
-            co_await stream.write(buf, rdlen);
+            auto [str, wlen] = co_await (
+                stream.read() | 
+                stream.write("hello client", 12)
+            );
+            cout << str << '\n';
         }
     } catch(const std::runtime_error& err) {
         cout << err.what() << '\n';
