@@ -26,6 +26,8 @@ int main() {
 }
 ```
 
+output
+
 ```shell
 hello world
 ```
