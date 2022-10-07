@@ -78,7 +78,7 @@ private:
         std::exception_ptr eptr;
 
         if (method_ == Sequential) {
-            ((std::get<Idx>(may_res) = std::move(co_await coro_void_to_unit(std::move(std::get<Len - Idx - 1>(tup))))), ...);
+            ((std::get<Idx>(may_res) = co_await coro_void_to_unit(std::move(std::get<Len - Idx - 1>(tup)))), ...);
 
             co_return std::apply([](auto&&...args){
                 return std::make_tuple(args.unwrap()...);

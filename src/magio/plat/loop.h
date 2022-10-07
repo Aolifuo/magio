@@ -6,6 +6,7 @@
 #include "magio/dev/Log.h"
 #include "magio/core/Queue.h"
 #include "magio/plat/io.h"
+#include "magio/plat/declare.h"
 #include "magio/plat/errors.h"
 #include "magio/plat/epoll/epoll.h"
 
@@ -15,9 +16,9 @@ namespace plat {
 
 struct EventData {
     int     fd;
+    IOOP    op;
     IOData* io;
     void*   data;
-    
     void(*cb)(std::error_code, void*, int);
 };
 
@@ -79,7 +80,7 @@ public:
 
     void async_connect(int fd, EventData* data) {
         DEBUG_LOG("async_connect");
-        auto ec = update_epoll(EPOLL_CTL_ADD, EPOLLIN | EPOLLOUT | EPOLLET, fd, data);
+        auto ec = update_epoll(EPOLL_CTL_ADD, EPOLLOUT, fd, data);
         if (ec) {
             data->cb(ec, data->data, fd);
         }
@@ -115,30 +116,28 @@ public:
         DEBUG_LOG("have events: ");
 
         for (int i = 0; i < evlen; ++i) {
-            if (events_[i].events & EPOLLERR) {
-                handle_error(events_[i]);
-                continue;
-            }
-
             // accept
             if (events_[i].data.fd == fd_) {
                 do_accept();
                 continue;
             }
 
+            auto data = (EventData*)events_[i].data.ptr;
+
             // connect
-            if (-2 == fd_) {
-                do_connect(events_[i]);
+            if (data->op == IOOP::Connect) {
+                do_connect(data);
+                continue;
             }
 
             // send or recv
             if (events_[i].events & EPOLLIN) {
-                do_receive(events_[i]);
-            } 
-
-            if (events_[i].events & EPOLLOUT) {
-                do_send(events_[i]);
-            } 
+                do_receive(data);
+            } else if (events_[i].events & EPOLLOUT) {
+                do_send(data);
+            } else if (events_[i].events & EPOLLERR) {
+                handle_error(data);
+            }
         }
 
         return {};
@@ -164,9 +163,9 @@ private:
         }
     }
 
-    void do_connect(::epoll_event& ev) {
+    void do_connect(EventData* data) {
         DEBUG_LOG("do connect");
-        auto data = (EventData*)ev.data.ptr;
+
         std::error_code ec;
         int error = 0;
         socklen_t len = sizeof(error);
@@ -179,8 +178,7 @@ private:
         data->cb(ec, data->data, data->fd);
     }
 
-    void do_receive(::epoll_event& ev) {
-        auto data = (EventData*)ev.data.ptr;
+    void do_receive(EventData* data) {
 
         std::error_code ec;
         auto rdlen = ::recv(data->fd, data->io->input_buffer.buf, global_config.buffer_size, 0);
@@ -192,11 +190,10 @@ private:
             data->io->input_buffer.len = rdlen;
         }
         
-        data->cb(ec, data->data, ev.data.fd);
+        data->cb(ec, data->data, data->fd);
     }
 
-    void do_send(::epoll_event& ev) {
-        auto data = (EventData*)ev.data.ptr;
+    void do_send(EventData* data) {
 
         std::error_code ec;
         auto wlen = ::send(data->fd, data->io->output_buffer.buf, data->io->output_buffer.len, 0);
@@ -211,15 +208,14 @@ private:
         
         ec = update_epoll(EPOLL_CTL_MOD, 0, data->fd, nullptr);
 
-        data->cb(ec, data->data, ev.data.fd);
+        data->cb(ec, data->data, data->fd);
     }
 
-    void handle_error(::epoll_event& ev) {
+    void handle_error(EventData* data) {
         DEBUG_LOG("epoll event err");
-        if (!ev.data.ptr) {
+        if (!data) {
             return;
         }
-        auto data = (EventData*)ev.data.ptr;
 
         std::error_code ec;
         int error = 0;

@@ -16,7 +16,7 @@ struct ThreadPool::Impl: public ExecutionContext {
     State                                   state = Stop;
     RingQueue<CompletionHandler>            idle_tasks{64};
     TimingTaskManager                       pending_tasks;
-    std::list<WaitingCompletionHandler>     waiting_tasks;
+    RingQueue<WaitingCompletionHandler>     waiting_tasks;
 
     std::mutex                              idle_m;
     std::mutex                              pending_m;
@@ -123,7 +123,7 @@ void ThreadPool::Impl::dispatch(CompletionHandler &&handler) {
 void ThreadPool::Impl::waiting(WaitingCompletionHandler&& handler) {
     {
         std::lock_guard lk(pending_m);
-        waiting_tasks.push_back(std::move(handler)); 
+        waiting_tasks.emplace(std::move(handler)); 
     }
     count.fetch_add(1, std::memory_order_relaxed);
     pending_condvar.notify_one();
@@ -223,9 +223,15 @@ void ThreadPool::Impl::poller() {
             }
         }
 
-        for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
-            if ((*it)()) {
-                waiting_tasks.erase(it);
+        if (!waiting_tasks.empty()) {
+            auto task = std::move(waiting_tasks.front());
+            waiting_tasks.pop();
+            lk.unlock();
+
+            if (!task()) {
+                lk.lock();
+                waiting_tasks.emplace(std::move(task));
+            } else {
                 count.fetch_sub(1);
             }
         }

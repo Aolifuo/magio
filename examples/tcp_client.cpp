@@ -23,6 +23,7 @@ Coro<void> amain() {
                 stream.write("Hello server..", 14) | 
                 stream.read()
             );
+            // co_await stream.write("Hello server..", 14);
             cout << str << '\n';
         }
     } catch(const std::exception& err) {

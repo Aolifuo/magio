@@ -47,6 +47,7 @@ Coro<std::string_view> TcpStream::read() {
 
     auto evdata = plat::EventData{
         .fd = impl->iodata->fd,
+        .op = plat::IOOP::Receive,
         .io = impl->iodata,
         .data = &hook,
         .cb = resume_from_hook
@@ -76,6 +77,7 @@ Coro<size_t> TcpStream::write(const char* buf, size_t len) {
 
     auto evdata = plat::EventData{
         .fd = impl->iodata->fd,
+        .op = plat::IOOP::Send,
         .io = impl->iodata,
         .data = &hook,
         .cb = resume_from_hook
@@ -285,6 +287,8 @@ Coro<TcpStream> TcpClient::connect(const char* host, uint_least16_t port) {
 
     auto hook = EventHook{};
     auto evdata = plat::EventData{
+        .fd = fd,
+        .op = plat::IOOP::Connect,
         .data = &hook,
         .cb = resume_from_hook
     };
@@ -300,10 +304,6 @@ Coro<TcpStream> TcpClient::connect(const char* host, uint_least16_t port) {
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
-    }
-    
-    if (auto ec = impl->loop_ptr->add(fd)) {
-        throw std::system_error(ec);
     }
     
     auto io = plat::global_io().get();

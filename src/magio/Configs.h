@@ -6,8 +6,8 @@ namespace magio {
 
 struct GlobalConfig {
     size_t max_sockets = 1024;
-    size_t worker_threads = 1;
-    size_t default_buffers = 64;
+    size_t worker_threads = 16;
+    size_t default_buffers = 512;
 
     static constexpr size_t buffer_size = 1024 * 4;
 };

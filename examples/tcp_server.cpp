@@ -14,7 +14,7 @@ Coro<void> process(TcpStream stream) {
         for (; ;) {
             auto [str, wlen] = co_await (
                 stream.read() | 
-                stream.write("hello client", 12)
+                stream.write("Hello client..", 14)
             );
             cout << str << '\n';
         }
