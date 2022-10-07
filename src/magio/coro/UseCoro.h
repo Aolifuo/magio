@@ -4,31 +4,28 @@
 
 namespace magio {
 
-namespace detail {
+using ResumeHandler = std::function<void(coroutine_handle<>)>;
 
-template<typename T>
-using ResumeHandler = std::function<T(std::coroutine_handle<>)>;
-
-}
-
-using ResumeHandler = std::function<void(std::coroutine_handle<>)>;
-
-template<typename Ret>
+template<typename Ret = void>
 struct Coro {
     Coro(ResumeHandler&& resume_h)
         : main_h_(nullptr)
         , resume_handler_(std::move(resume_h))
     { }
 
-    Coro(std::coroutine_handle<PromiseTypeBase<Ret, Coro>> h, ResumeHandler&& resume_h)
+    Coro(coroutine_handle<PromiseTypeBase<Ret, Coro>> h, ResumeHandler&& resume_h)
         : main_h_(h)
         , resume_handler_(std::move(resume_h)) 
     { }
 
+    Coro(const Coro&) = delete;
+    Coro(Coro&&) noexcept = default;
+    Coro& operator=(Coro&&) noexcept = default;
+
     bool await_ready() { return false; }
 
     template<typename PT>
-    void await_suspend(std::coroutine_handle<PT> prev_h) {
+    void await_suspend(coroutine_handle<PT> prev_h) {
         if (main_h_) {
             main_h_.promise().executor = prev_h.promise().executor;
             main_h_.promise().previous = prev_h;
@@ -56,7 +53,7 @@ struct Coro {
         if (main_h_) {
             main_h_.promise().executor = executor;
             main_h_.promise().auto_destroy = auto_destroy;
-            executor.post([main_h_ = main_h_] { main_h_.resume(); });
+            executor.post([main_h_ = main_h_]() mutable { main_h_.resume(); });
         } else {
             executor.post([r = std::move(resume_handler_)] { r(nullptr); });
         }
@@ -73,7 +70,7 @@ struct Coro {
         if constexpr (!std::is_void_v<Ret>) {
             return main_h_.promise().get_value();
         } else {
-            return None{};
+            return Unit{};
         }
     }
 
@@ -89,16 +86,9 @@ struct Coro {
         return main_h_ != nullptr;
     }
 private:
-    std::coroutine_handle<PromiseTypeBase<Ret, Coro>> main_h_;
+    coroutine_handle<PromiseTypeBase<Ret, Coro>> main_h_;
     ResumeHandler resume_handler_;
 };
 
-struct UseCoro { };
-
-struct UseFuture { };
-
-inline UseCoro use_coro;
-
-inline UseFuture use_future;
 
 }

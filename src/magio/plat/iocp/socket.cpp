@@ -1,3 +1,5 @@
+#ifdef _WIN32
+
 #include "magio/plat/iocp/socket.h"
 
 #include <WinSock2.h>
@@ -16,7 +18,7 @@ struct IOContext {
     OVERLAPPED overlapped;
     Socket* socket;
     WSABUF wsa_buf;
-    char buf[server_config.buffer_size]{0};
+    char buf[global_config.buffer_size]{0};
     unsigned len = 0;
     IOOperation io_type = IOOperation::Noop;
 };
@@ -32,7 +34,7 @@ struct Socket {
     void init_io(IOContext& ioc) {
         ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
         ioc.wsa_buf.buf = ioc.buf;
-        ioc.wsa_buf.len = server_config.buffer_size;
+        ioc.wsa_buf.len = global_config.buffer_size;
         ioc.socket = this;
     }
 
@@ -71,7 +73,7 @@ char* IOContextHelper::buf() {
 }
 
 unsigned IOContextHelper::capacity() { 
-    return server_config.buffer_size; 
+    return global_config.buffer_size; 
 }
 
 unsigned IOContextHelper::len() { 
@@ -168,7 +170,7 @@ void SocketHelper::for_async_task(IOOperation op) {
         case IOOperation::Receive:
             sock_->io_recv.io_type = IOOperation::Receive;
             ZeroMemory(&sock_->io_recv.overlapped, sizeof(OVERLAPPED));
-            sock_->io_recv.wsa_buf.len = server_config.buffer_size;
+            sock_->io_recv.wsa_buf.len = global_config.buffer_size;
             break;
         case IOOperation::Send:
             sock_->io_send.io_type = IOOperation::Send;
@@ -201,7 +203,7 @@ struct SocketServer::Data {
 };
 
 SocketServer::SocketServer() { 
-    data = new Data{server_config.max_socket_num}; 
+    data = new Data{global_config.max_sockets}; 
 }
 
 SocketServer::~SocketServer() {
@@ -286,3 +288,4 @@ int last_error() { return ::GetLastError(); }
 }  // namespace plat
 
 }  // namespace magio
+#endif

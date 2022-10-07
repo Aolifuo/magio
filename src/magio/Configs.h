@@ -1,11 +1,18 @@
 #pragma once
 
-struct ServerConfig {
-    size_t listener_num = 10;
-    size_t max_socket_num = 1100;
-    size_t thread_num = 16;
+#include <cstddef>
+
+namespace magio {
+
+struct GlobalConfig {
+    size_t max_sockets = 1024;
+    size_t worker_threads = 16;
+    size_t default_buffers = 512;
 
     static constexpr size_t buffer_size = 1024 * 4;
 };
 
-inline ServerConfig server_config;
+inline GlobalConfig global_config;
+
+}
+

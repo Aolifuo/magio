@@ -1,8 +1,8 @@
 #include <cassert>
 #include "magio/timer/Timer.h"
 #include "magio/EventLoop.h"
+#include "magio/coro/Operation.h"
 #include "magio/coro/CoSpawn.h"
-#include "magio/coro/ThisCoro.h"
 
 using namespace std;
 using namespace magio;
@@ -30,9 +30,7 @@ int main() {
                 factorial("B", 3),
                 factorial("C", 4)
             );
-            assert(a == 2);
-            assert(b == 6);
-            assert(c = 24);
+            printf("%d %d %d\n", a, b, c);
         }(),
         detached
     );

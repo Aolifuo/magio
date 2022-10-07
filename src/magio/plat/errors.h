@@ -1,7 +1,7 @@
 #pragma once
 
-#include <unordered_map>
 #include <system_error>
+
 #ifdef _WIN32
 #include "winerror.h"
 
@@ -35,6 +35,14 @@ inline const char* system_error_str(int code) {
     return "Unknown error";
 }
 
+#endif
+
+#ifdef __linux__
+#define THROW_SYSTEM_ERROR (throw std::system_error(std::make_error_code((std::errc)errno)))
+#define SYSTEM_ERROR (std::make_error_code((std::errc)errno))
+#elif _WIN32
+#define THROW_SYSTEM_ERROR
+#define SYSTEM_ERROR
 #endif
 
 }

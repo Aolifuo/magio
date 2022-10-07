@@ -1,6 +1,8 @@
 #include "magio/ThreadPool.h"
 
 #include <cstdio>
+#include <list>
+#include <thread>
 #include "magio/core/Queue.h"
 #include "magio/core/TimingTask.h"
 
@@ -14,14 +16,15 @@ struct ThreadPool::Impl: public ExecutionContext {
     State                                   state = Stop;
     RingQueue<CompletionHandler>            idle_tasks{64};
     TimingTaskManager                       pending_tasks;
-    std::list<WaitingCompletionHandler>     waiting_tasks;
+    RingQueue<WaitingCompletionHandler>     waiting_tasks;
 
     std::mutex                              idle_m;
     std::mutex                              pending_m;
     std::condition_variable                 idle_condvar;
     std::condition_variable                 pending_condvar;
+    std::atomic_size_t                      count = 0;
 
-    std::vector<std::jthread>               threads;
+    std::vector<std::thread>                threads;
 
     void post(CompletionHandler&& handler) override;
     void dispatch(CompletionHandler&& handler) override;
@@ -100,7 +103,7 @@ void ThreadPool::attach() {
     impl->attach();
 }
 
-AnyExecutor ThreadPool::get_executor() {
+AnyExecutor ThreadPool::get_executor() const {
     return AnyExecutor(impl);
 }
 
@@ -109,6 +112,7 @@ void ThreadPool::Impl::post(CompletionHandler&& handler) {
         std::lock_guard lk(idle_m);
         idle_tasks.push(std::move(handler));
     }
+    count.fetch_add(1, std::memory_order_relaxed);
     idle_condvar.notify_one();
 }
 
@@ -119,28 +123,35 @@ void ThreadPool::Impl::dispatch(CompletionHandler &&handler) {
 void ThreadPool::Impl::waiting(WaitingCompletionHandler&& handler) {
     {
         std::lock_guard lk(pending_m);
-        waiting_tasks.push_back(std::move(handler)); 
+        waiting_tasks.emplace(std::move(handler)); 
     }
+    count.fetch_add(1, std::memory_order_relaxed);
     pending_condvar.notify_one();
 }
 
 TimerID ThreadPool::Impl::set_timeout(size_t ms, CompletionHandler&& handler) {
-    std::lock_guard lk(pending_m);
-    TimerID id = pending_tasks.set_timeout(ms, std::move(handler));
+    TimerID id;
+    {
+        std::lock_guard lk(pending_m);
+        id = pending_tasks.set_timeout(ms, std::move(handler));
+    }
+    count.fetch_add(1, std::memory_order_relaxed);
     pending_condvar.notify_one();
     return id;
 }
 
 void ThreadPool::Impl::clear(TimerID id) {
-    std::lock_guard lk(pending_m);
-    pending_tasks.cancel(id);
+    {
+        std::lock_guard lk(pending_m);
+        pending_tasks.cancel(id);
+    }
+    count.fetch_sub(1);
 }
 
 void ThreadPool::Impl::wait() {
     for (; ;) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::scoped_lock lk(idle_m, pending_m);
-        if (idle_tasks.empty() && pending_tasks.empty() && waiting_tasks.empty()) {
+        if (count.load(std::memory_order_seq_cst) == 0) {
             return;
         }
     }
@@ -185,13 +196,12 @@ void ThreadPool::Impl::worker() {
         lk.unlock();
 
         task();
+        count.fetch_sub(1);
     }
 }
 
 void ThreadPool::Impl::poller() {
     for (; ;) {
-        std::this_thread::yield();
-
         std::unique_lock lk(pending_m);
         pending_condvar.wait(lk, [this] {
             return (state == Running && (!pending_tasks.empty() || !waiting_tasks.empty())) 
@@ -206,15 +216,23 @@ void ThreadPool::Impl::poller() {
             if (auto res = pending_tasks.get_expired_task(); res) {
                 lk.unlock();
                 post(res.unwrap());
+                count.fetch_sub(1);
                 lk.lock();
             } else {
                 break;
             }
         }
 
-        for (auto it = waiting_tasks.begin(); it != waiting_tasks.end(); ++it) {
-            if ((*it)()) {
-                waiting_tasks.erase(it);
+        if (!waiting_tasks.empty()) {
+            auto task = std::move(waiting_tasks.front());
+            waiting_tasks.pop();
+            lk.unlock();
+
+            if (!task()) {
+                lk.lock();
+                waiting_tasks.emplace(std::move(task));
+            } else {
+                count.fetch_sub(1);
             }
         }
     }

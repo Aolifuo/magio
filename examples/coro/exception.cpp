@@ -10,7 +10,7 @@ using namespace magio;
 
 Coro<string> amain() {
     try {
-        throw exception("Error");
+        throw runtime_error("Error");
     } catch(const exception& e) {
         printf("Amain: %s\n", e.what());
         throw e;

@@ -1,74 +1,65 @@
 #pragma once
 
-#include <memory>
-#include <memory_resource>
-#include <vector>
+#include <cassert>
+#include <mutex>
+#include <deque>
+#include <list>
 
 namespace magio {
 
-template<typename T, typename Gen>
-requires std::is_object_v<T> && std::is_same_v<std::invoke_result_t<Gen>, T>
-class UnsyncObjectPool {
-public:
-    UnsyncObjectPool(size_t init, size_t inc, size_t reduce, Gen gen)
-        : inc_(inc), reduce_(reduce), gen_(std::move(gen))
-    {
-        assert(init <= 0 || inc <= 0 || reduce <= 0);
+template<typename T>
+struct DefaultGenerator {
+    constexpr T operator()() const {
+        return {};
+    }
+};
 
-        free_list_.reserve(init * 2);
+template<typename T, typename Gen = DefaultGenerator<T>>
+class SyncObjectPool {
+public:
+    SyncObjectPool(size_t init, size_t max, Gen gen = Gen{})
+        : gen_(std::move(gen)) 
+    {
+        assert(init >= 1 && max >= 1);
+
         for (size_t i = 0; i < init; ++i) {
-            free_list_.emplace_back(std::make_unique<T>(gen()));
+            free_que_.emplace_back(std::addressof(fixed_list_.emplace_front(gen_())));
         }
-        free_size_ = init;
-        active_size_ = 0;
     }
 
-    UnsyncObjectPool(UnsyncObjectPool&&) = delete;
-    UnsyncObjectPool& operator=(UnsyncObjectPool&&) = delete;
-
-    std::shared_ptr<T> borrow_shared() {
-        if (free_size_ <= 0) {
-            for (size_t i = 0; i < inc_; ++i) {
-                free_list_.emplace_back(std::make_unique<T>(gen_()));
-                ++free_size_;
-            }
+    T* get() {
+        std::lock_guard lk(m_);
+        if (free_que_.empty()) {
+            grow(fixed_list_.size() / 2 + 1);
         }
 
-        auto obj = std::move(free_list_.back());
-        free_list_.pop_back();
-        --free_size_;
-        ++active_size_;
-        return std::shared_ptr<T>(obj.release(), [this](T* elem){ give_back(elem); });
+        T* ret = free_que_.front();
+        free_que_.pop_front();
+        return ret;
+    }
+
+    void put(T* ptr) {
+        std::lock_guard lk(m_);
+        free_que_.emplace_back(ptr);
+    }
+
+    
+private:
+    void grow(size_t num) {
+        for (size_t i = 0; i < num; ++i) {
+            free_que_.emplace_back(std::addressof(fixed_list_.emplace_front(gen_())));
+        }
     }
 
     void shrink() {
-        for (size_t i = 0; i < reduce_ && free_size_ > 0 ; ++i) {
-            free_list_.pop_back();
-        }
+
     }
-
-    size_t free_size() {
-        return free_size_;
-    }
-
-    size_t active_size() {
-        return active_size_;
-    }
-private:
-
-    void give_back(T* elem) {
-        free_list_.emplace_back(std::make_unique<T>(elem));
-        ++free_size_;
-        --active_size_;
-    }
-
-    std::vector<std::unique_ptr<T>> free_list_;
-
-    size_t free_size_;
-    size_t active_size_;
-    size_t inc_;
-    size_t reduce_;
     Gen gen_;
+
+    std::deque<T*> free_que_;
+    std::list<T> fixed_list_;
+
+    std::mutex m_;
 };
 
 }

@@ -1,9 +1,11 @@
 #pragma once
 
+#ifdef _WIN32
+
 #include "magio/core/Pool.h"
 #include "magio/core/Error.h"
 #include "magio/plat/declare.h"
-#include "magio/tcp/Tcp.h"
+#include "magio/net/tcp/Tcp.h"
 
 namespace magio {
 
@@ -108,3 +110,4 @@ inline IOContextHelper unpack(IOContext* ioc) { return {ioc}; }
 }  // namespace plat
 
 }  // namespace magio
+#endif

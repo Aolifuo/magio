@@ -3,6 +3,12 @@
 #include "magio/coro/CoSpawn.h"
 #include <cstdio>
 
+struct Foo {
+    ~Foo() {
+        std::printf("finish\n");
+    }
+};
+
 magio::Coro<int> get_num() {
     co_return 10;
 }

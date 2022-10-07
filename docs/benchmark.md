@@ -347,7 +347,7 @@ int main() {
 #include "magio/EventLoop.h"
 #include "magio/coro/CoSpawn.h"
 #include "magio/coro/ThisCoro.h"
-#include "magio/tcp/Tcp.h"
+#include "magio/net/tcp/Tcp.h"
 
 using namespace std;
 using namespace magio;

@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <string>
+#include "magio/Configs.h"
 
 namespace magio {
 
@@ -9,7 +10,7 @@ namespace plat {
 
 enum class TransportProtocol { TCP, UDP };
 
-enum class IOOperation {
+enum class IOOP {
     Noop,
     Accept,
     Receive,
@@ -19,23 +20,7 @@ enum class IOOperation {
 
 using socket_type = uint64_t;
 
-struct IOContext;
-
-struct Socket;
-
-class IOContextHelper;
-
-class SocketHelper;
-
 }
 
-struct Address {
-    unsigned host;
-    std::string ip;
-
-    std::string to_string() {
-        return ip + ":" + std::to_string(host);
-    }
-};
 
 }

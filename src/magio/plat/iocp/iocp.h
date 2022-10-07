@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef _WIN32
+
 #include "magio/core/Pimpl.h"
 #include "magio/core/Error.h"
 #include "magio/plat/declare.h"
@@ -62,3 +64,4 @@ public:
 } // namespace plat
 
 } // namespace magio
+#endif

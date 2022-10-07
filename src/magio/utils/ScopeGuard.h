@@ -8,7 +8,7 @@ namespace detail {
 
 template<typename T>
 struct DefaultDeleter {
-    void operator()(T* p) {
+    void operator()(T* p) const {
         delete p;
     }
 };

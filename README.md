@@ -2,6 +2,36 @@
 
 magio是一个基于事件循环和线程池的协程库
 
+## Hello world
+
+```cpp
+Coro<string> task1() {
+    co_return "hello ";
+}
+
+Coro<string> task2() {
+    co_return "world";
+}
+
+Coro<> do_tasks() {
+    co_await timeout(3000);
+    auto [s1, s2] = co_await (task1() && task2());
+    cout << s1 << s2 << endl;
+}
+
+int main() {
+    EventLoop loop;
+    co_spawn(loop.get_executor(), do_tasks(), detached);
+    loop.run();
+}
+```
+
+output
+
+```shell
+hello world
+```
+
 ## Coro
 
 ```cpp
@@ -172,9 +202,8 @@ task f start!
 ```cpp
 Coro<void> amain() {
     try {
-        std::array<char, 1024> buf;
         auto client = co_await TcpClient::create();
-        auto stream = co_await client.connect("127.0.0.1", 1234, "127.0.0.1", 8080);
+        auto stream = co_await client.connect("127.0.0.1", 8000);
 
         cout << stream.remote_address().to_string()
              << " connect "
@@ -182,18 +211,18 @@ Coro<void> amain() {
              << '\n';
 
         for (int i = 0; i < 5; ++i) {
-            co_await stream.write("Hello server..", 14);
-            size_t recv_len = co_await stream.read(buf.data(), buf.size());
-
-            cout << string_view(buf.data(), recv_len) << '\n';
+            auto [wlen, str] = co_await (
+                stream.write("Hello server..", 14) | 
+                stream.read()
+            );
+            cout << str << '\n';
         }
-    } catch(const std::runtime_error& err) {
+    } catch(const std::exception& err) {
         cout <<  err.what() << '\n';
     }
 }
 
 int main() {
-    Runtime::run().unwrap();
     EventLoop loop;
     co_spawn(loop.get_executor(), amain(), detached);
     loop.run();
@@ -217,20 +246,20 @@ Hello client..
 Coro<void> process(TcpStream stream) {
     try {
         for (; ;) {
-            auto [buf, rdlen] = co_await stream.vread();
-            cout << string_view(buf, rdlen) << '\n';
-            co_await stream.write(buf, rdlen);
+            auto [str, wlen] = co_await (
+                stream.read() | 
+                stream.write("hello client", 12)
+            );
+            cout << str << '\n';
         }
     } catch(const std::runtime_error& err) {
         cout << err.what() << '\n';
     }
 }
 
-Coro<void> amain(const char* host, short port) {
+Coro<void> amain() {
     try {
-        auto executor = co_await this_coro::executor;
-        auto server = co_await TcpServer::bind(host, port);
-        
+        auto server = co_await TcpServer::bind("127.0.0.1", 8000);
         for (; ;) {
             auto stream = co_await server.accept();
 
@@ -239,7 +268,7 @@ Coro<void> amain(const char* host, short port) {
                  << stream.local_address().to_string()
                  << '\n';
         
-            co_spawn(executor, process(std::move(stream)), detached);
+            co_spawn(co_await this_coro::executor, process(std::move(stream)), detached);
         }
     } catch(const std::runtime_error& err) {
         cout << err.what() << '\n';
@@ -247,9 +276,8 @@ Coro<void> amain(const char* host, short port) {
 }
 
 int main() {
-    Runtime::run().unwrap();
     EventLoop loop;
-    co_spawn(loop.get_executor(), amain("127.0.0.1", 8000), detached);
+    co_spawn(loop.get_executor(), amain(), detached);
     loop.run();
 }
 ```

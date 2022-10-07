@@ -1,72 +1,47 @@
 #pragma once
 
-#include "magio/coro/ThisCoro.h"
 #include "magio/coro/UseCoro.h"
 #include "magio/utils/ScopeGuard.h"
 
 template<typename Ret, typename...Ts>
-struct std::coroutine_traits<magio::Coro<Ret>, Ts...> {
+struct std::experimental::coroutine_traits<magio::Coro<Ret>, Ts...> {
     using promise_type = magio::PromiseTypeBase<Ret, magio::Coro<Ret>>;
-    using handle_type = std::coroutine_handle<promise_type>;
+    using handle_type = std::experimental::coroutine_handle<promise_type>;
 };
 
 namespace magio {
 
-namespace detail {
+namespace this_coro {
 
-template<typename Ret>
-Coro<Ret> make_coro(Coro<Ret>&& coro) {
-    co_return co_await coro;
+struct GetExecutor {
+    bool await_ready() { return false; }
+
+    template<typename PT>
+    auto await_suspend(coroutine_handle<PT> prev_h) {
+        executor = prev_h.promise().executor;
+        prev_h.resume();
+    }
+
+    auto await_resume() {
+        return executor;
+    }
+
+    AnyExecutor executor;
+};
+
+inline GetExecutor executor;
+
 }
 
-}
-
-template<typename...Rets>
-Coro<
-    std::tuple<
-        std::conditional_t<
-            std::is_void_v<Rets>,
-            None,
-            Rets
-        >...
-    >
-> coro_join(Coro<Rets>&&...coros) {
-    AnyExecutor executor = co_await this_coro::executor;
-    
-    auto coro_tup =
-        std::make_tuple((coros.has_coro_handle() ? std::move(coros) : detail::make_coro(std::move(coros)))...);
-    
-    auto guard = ScopeGuard(&coro_tup, [](auto* p){
-        std::apply([](auto&&...coros) {
-            (coros.destroy(), ...);
-        }, *p);
-    });
-    
-    co_await Coro<void>(
-        [&coro_tup, executor](std::coroutine_handle<> h) mutable {
-            std::apply([executor](auto&&...coros) {
-                (coros.wake(executor, false), ...);
-            }, coro_tup);
-
-            executor.waiting([&coro_tup, h, executor]() mutable {
-                bool flag = std::apply([](auto&&...coros) {
-                    return (coros.done() && ...);
-                }, coro_tup);
-
-                if (flag) {
-                    executor.post([h] { h.resume(); });
-                }
-
-                return flag;
+inline Coro<> timeout(size_t ms) {
+    auto exe = co_await this_coro::executor;
+    co_await Coro<>{
+        [exe, ms](coroutine_handle<> h) mutable {
+            exe.set_timeout(ms, [h]() mutable {
+                h.resume();
             });
-        });
-
-    auto ret_tup = std::apply(
-        [](auto&&...coros) {
-            return std::make_tuple((coros.get_value())...);
-        }, coro_tup);
-
-    co_return ret_tup;
+        }
+    };
 }
 
 }

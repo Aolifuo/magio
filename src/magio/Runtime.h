@@ -1,16 +1,14 @@
 #pragma once
 
-#include "magio/plat/iocp/socket.h"
+#include "magio/EventLoop.h"
+#include <cstdio>
 
 namespace magio {
 
-class Runtime {
-public:
-    static Expected<> run() {
-        return plat::SocketServer::instance().initialize();
-    }
-
-private:
-};
+AnyExecutor default_executor() {
+    static EventLoop loop;
+    std::printf("aaaa\n");
+    return loop.get_executor();
+}
 
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <mutex>
 
 #include "magio/core/MaybeUninit.h"
@@ -25,10 +26,10 @@ public:
         cap_ = cap + 1;
     }
 
-    RingQueue(RingQueue&& other)
+    RingQueue(RingQueue&& other) noexcept
         : owned_(other.owned_)
         , cap_(other.cap_)
-        , front_(other.len_)
+        , front_(other.front_)
         , rear_(other.rear_)
         , alloc_(std::move(other.alloc_)) 
     {
@@ -38,7 +39,7 @@ public:
         other.rear_ = 0;
     }
 
-    RingQueue& operator=(RingQueue&& other) {
+    RingQueue& operator=(RingQueue&& other) noexcept {
         owned_ = other.owned_;
         cap_ = other.cap_;
         front_ = other.front_;
@@ -138,7 +139,7 @@ public:
     explicit BlockedQueue(size_t cap)
         :queue_(cap) {}
 
-    BlockedQueue(BlockedQueue&& other) = default;
+    BlockedQueue(BlockedQueue&& other) noexcept = default;
 
     void push(T elem) {
         std::lock_guard<std::mutex> lock(mutex_);

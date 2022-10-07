@@ -1,18 +1,20 @@
 #pragma once
 
-#include <cassert>
-#include <chrono>
-#include <exception>
 #include <mutex>
+#include <thread>
 #include <string>
 #include <vector>
-#include <concepts>
 #include <ranges>
-#include <variant>
 #include <random>
+#include <chrono>
+#include <cassert>
+#include <variant>
+#include <concepts>
+#include <iostream>
+#include <exception>
 #include <functional>
 
-#include "magio/core/Log.h"
+#include "fmt/core.h"
 #include "magio/core/Error.h"
 
 #define TESTCASE(cases...) \
@@ -34,7 +36,7 @@
     do { \
         auto results = collect_test_results(__VA_ARGS__); \
         is_all_ok_or_throw(results); \
-        LOG("Ok\n"); \
+        fmt::print("Ok\n"); \
     } while(0)
 
 
@@ -65,16 +67,16 @@ struct TestResults {
 
 template<typename L, typename R>
 requires std::equality_comparable_with<L, R>
-inline Expected<Unit, TestError> test(L left, R right, std::string err = "") {
+inline Expected<Unit, TestError> test(L left, R right, const std::string& err = "") {
     if (left != right) {
-        return {TestError{std::format("{}\nleft:\n{}\nright:\n{}\n", err, left, right)}};
+        return {TestError{fmt::format("{}\nleft:\n{}\nright:\n{}\n", err, left, right)}};
     }
     return {Unit()};
 }
 
 inline Expected<Unit, TestError> test(bool flag, std::string err = "") {
     if (!flag) {
-        return {TestError{std::format("{}\n", err)}};
+        return {TestError{fmt::format("{}\n", err)}};
     }
     return {Unit()};
 }
@@ -102,13 +104,13 @@ inline void is_all_ok_or_throw(std::vector<TestResults>& results) {
         for (auto& res : test_res.results) {
             if (!res) {
                 flag = false;
-                LOG("{}: {}\n", test_res.test_name, res.unwrap_err().msg);
+                fmt::print("{}: {}\n", test_res.test_name, res.unwrap_err().msg);
             }
         }
     }
 
     if (!flag) {
-        throw std::exception("Test failed");
+        std::terminate();
     }
 }
 
@@ -134,7 +136,7 @@ public:
             if (flag) {
                 return;
             }
-            LOG("{}\n", msg_);
+            fmt::print("{}\n", msg_);
             std::terminate();
         });
         

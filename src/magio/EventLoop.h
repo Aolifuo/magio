@@ -22,7 +22,7 @@ public:
     void stop();
     void restart();
 
-    AnyExecutor get_executor();
+    AnyExecutor get_executor() const;
 private:
 };
 

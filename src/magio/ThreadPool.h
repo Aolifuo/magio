@@ -1,6 +1,7 @@
 #include <future>
 #include "magio/execution/Execution.h"
 #include "magio/core/Pimpl.h"
+#include "magio/utils/Function.h"
 
 namespace magio {
 
@@ -22,11 +23,11 @@ public:
     void join();
     void attach();
 
-    AnyExecutor get_executor();
+    AnyExecutor get_executor() const;
 
     template<typename Fn, typename...Args>
     auto get_future(Fn&& fn, Args&&...args) {
-        std::packaged_task task(std::forward<Fn>(fn));
+        std::packaged_task<typename FunctorTraits<std::remove_cvref_t<Fn>>::FunctionType> task(std::forward<Fn>(fn));
         auto fut = task.get_future();
 
         post(

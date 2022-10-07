@@ -1,7 +1,8 @@
 #pragma once
 
-#include <format>
-#include <type_traits>
+#include <stdexcept>
+#include <system_error>
+#include "magio/core/Fwd.h"
 
 namespace magio {
 
@@ -27,30 +28,7 @@ struct ExpectedTraits<Expected<Ok, Err>> {
 
 }
 
-struct Error {
-    // 0 => no error
-    int code = 0;
-    std::string msg;
-
-    Error(const Error&) = default;
-    Error(Error&&) = default;
-    Error& operator=(const Error&) = default;
-    Error& operator=(Error&&) = default;
-
-    Error() {}
-    explicit Error(int code): code(code) {}
-    explicit Error(std::string_view str): code(1), msg(str) {}
-    explicit Error(int code, std::string_view str): code(code), msg(str) {}
-
-    // true => has error
-    operator bool() {
-        return code;
-    }
-};
-
-struct Unit {};
-
-template<typename Ok = Unit, typename Err = Error>
+template<typename Ok = Unit, typename Err = std::error_code>
 class Expected {
 public:
 
@@ -70,7 +48,7 @@ public:
         }
     }
 
-    Expected(Expected&& other): flag_(other.flag_) {
+    Expected(Expected&& other) noexcept: flag_(other.flag_) {
         if (flag_) {
             new (buf_) Ok(std::move(other.template get<Ok>()));
         } else {
@@ -102,7 +80,7 @@ public:
         return *this;
     }
 
-    Expected& operator=(const Expected& other) {
+    Expected& operator=(const Expected& other) noexcept {
         if (!flag_ && !other.flag_) {
             get<Err>() = other.template get<Err>();
         } else if (flag_ && other.flag_) {
@@ -119,7 +97,7 @@ public:
         return *this;
     }
 
-    Expected& operator=(Expected&& other) {
+    Expected& operator=(Expected&& other) noexcept {
         if (!flag_ && !other.flag_) {
             get<Err>() = std::move(other.template get<Err>());
         } else if (flag_ && other.flag_) {
@@ -228,10 +206,3 @@ private:
 
 }
 
-template<typename CharT>
-struct std::formatter<magio::Error, CharT>: std::formatter<int, CharT> {
-    template<typename FormatContext>
-    auto format(const magio::Error& err, FormatContext& fc) {
-        return std::format_to(fc.out(), "code:{}. {}", err.code, err.msg);
-    }
-};
