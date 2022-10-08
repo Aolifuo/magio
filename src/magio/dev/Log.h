@@ -2,14 +2,15 @@
 
 #include <mutex>
 #include <iostream>
+#include "magio/dev/Config.h"
 
 namespace magio {
 
-#define MAGIO_DEBUG 1
+namespace dev {
 
 #ifdef MAGIO_DEBUG
 #define DEBUG_LOG(args...) \
-    debug_log("[file: ", __FILE__, "] [line: ", __LINE__, "] [thread:", std::this_thread::get_id(), "]: ", args)
+    dev::debug_log("[file: ", __FILE__, "] [line: ", __LINE__, "] [thread:", std::this_thread::get_id(), "]: ", args)
 #else
 #define DEBUG_LOG(args...)
 #endif
@@ -22,5 +23,8 @@ inline void debug_log(Args&&...args) {
     ((std::cout << args), ...);
     std::cout << '\n';
 }
+
+}
+
 
 }
