@@ -20,7 +20,6 @@ public:
     bool poll();
     void run();
     void stop();
-    void restart();
 
     AnyExecutor get_executor() const;
 private:

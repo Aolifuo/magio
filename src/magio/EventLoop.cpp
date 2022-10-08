@@ -58,15 +58,12 @@ bool EventLoop::poll() {
 }
 
 void EventLoop::run() {
+    impl->stop_flag.clear(std::memory_order_relaxed);
     while (impl->poll());
 }
 
 void EventLoop::stop() {
     impl->stop_flag.test_and_set(std::memory_order_relaxed);
-}
-
-void EventLoop::restart() {
-    impl->stop_flag.clear(std::memory_order_relaxed);
 }
 
 AnyExecutor EventLoop::get_executor() const {
