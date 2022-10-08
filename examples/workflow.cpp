@@ -9,7 +9,7 @@ using namespace magio;
 
 
 int main() {
-    ThreadPool pool(10);
+    ThreadPool pool(8);
     
     auto a = Workflow::create_task([](ContextPtr ctx) {
         printf("task a start!\n");
