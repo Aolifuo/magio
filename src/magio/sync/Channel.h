@@ -55,7 +55,7 @@ public:
         consumer_.push(std::move(fn));
     }
 
-    Coro<std::tuple<Ts...>> async_receive(UseCoro) {
+    Coro<std::tuple<Ts...>> async_receive(detail::UseCoro) {
         std::unique_lock lk(m_);
         if (state_ == Stop) {
             throw std::runtime_error("The channel is in a stopped state");
