@@ -1,7 +1,5 @@
 #include <iostream>
-#include "magio/sync/Channel.h"
-#include "magio/ThreadPool.h"
-#include "magio/coro/CoSpawn.h"
+#include "magio/magio.h"
 
 using namespace std;
 using namespace magio;

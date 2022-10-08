@@ -1,19 +1,15 @@
 #include <cassert>
-#include "magio/timer/Timer.h"
-#include "magio/EventLoop.h"
-#include "magio/coro/Operation.h"
-#include "magio/coro/CoSpawn.h"
+#include "magio/magio.h"
 
 using namespace std;
 using namespace magio;
 
 Coro<int> factorial(std::string_view name, int num) {
     int res = 1;
-    Timer timer(co_await this_coro::executor, 1000);
 
     for (int i = 2; i <= num; ++i) {
         printf("Task %s: Compute factorial %d, now i = %d\n", name.data(), num, i);
-        co_await timer.async_wait(use_coro);
+        co_await timeout(1000);
         res *= i;
     }
     printf("Task %s: factorial %d = %d\n", name.data(), num, res);
@@ -21,9 +17,7 @@ Coro<int> factorial(std::string_view name, int num) {
 }
 
 int main() {
-    EventLoop loop;
-    co_spawn(
-        loop.get_executor(), 
+    this_context::run(
         []() -> Coro<void> {
             auto [a, b, c] = co_await coro_join(
                 factorial("A", 2),
@@ -31,8 +25,6 @@ int main() {
                 factorial("C", 4)
             );
             printf("%d %d %d\n", a, b, c);
-        }(),
-        detached
+        }()
     );
-    loop.run();
 }

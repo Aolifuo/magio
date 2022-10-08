@@ -9,7 +9,7 @@ using namespace magio;
 Coro<void> process(TcpStream stream) {
     for (; ;) {
         auto str = co_await stream.read();
-        co_await stream.write(str.data(), str.length());
+        co_await stream.write(str);
     }
 }
 

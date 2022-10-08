@@ -20,7 +20,5 @@ Coro<> do_tasks() {
 }
 
 int main() {
-    EventLoop loop;
-    co_spawn(loop.get_executor(), do_tasks(), detached);
-    loop.run();
+    this_context::run(do_tasks());
 }
