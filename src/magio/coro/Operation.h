@@ -33,11 +33,11 @@ enum ChainMethod {
 };
 
 template<typename Ret>
-Coro<Ret> coro_void_to_unit(Coro<Ret>&& coro) {
+inline Coro<Ret> coro_void_to_unit(Coro<Ret>&& coro) {
     return std::move(coro);
 }
 
-Coro<Unit> coro_void_to_unit(Coro<void>&& coro) {
+inline Coro<Unit> coro_void_to_unit(Coro<void>&& coro) {
     co_await coro;
     co_return Unit{};
 }
@@ -78,14 +78,14 @@ private:
         std::exception_ptr eptr;
 
         if (method_ == Sequential) {
-            ((std::get<Idx>(may_res) = co_await coro_void_to_unit(std::move(std::get<Len - Idx - 1>(tup)))), ...);
-
-            co_return std::apply([](auto&&...args){
-                return std::make_tuple(args.unwrap()...);
-            }, may_res);
+            (
+                (
+                    std::get<Idx>(may_res) = co_await coro_void_to_unit(std::move(std::get<Len - Idx - 1>(tup)))
+                ), ...
+            );
         }
 
-        if (method_ == Concurrent) {
+        else if (method_ == Concurrent) {
             std::atomic_size_t count = Len;
             auto exe = co_await this_coro::executor;
 
