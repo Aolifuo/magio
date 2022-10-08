@@ -43,7 +43,9 @@ public:
         free_que_.emplace_back(ptr);
     }
 
-    
+    size_t free_size() {
+        return fixed_list_.size();
+    }
 private:
     void grow(size_t num) {
         for (size_t i = 0; i < num; ++i) {
