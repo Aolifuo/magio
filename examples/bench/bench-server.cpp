@@ -1,7 +1,5 @@
 #include <iostream>
-#include "magio/EventLoop.h"
-#include "magio/coro/CoSpawn.h"
-#include "magio/net/tcp/Tcp.h"
+#include "magio/magio.h"
 
 using namespace std;
 using namespace magio;
@@ -18,16 +16,13 @@ Coro<void> amain() {
         auto server = co_await TcpServer::bind("127.0.0.1", 8000);
         for (; ;) {
             auto stream = co_await server.accept();
-            co_spawn(co_await this_coro::executor, process(std::move(stream)), detached);
+            this_context::spawn(process(std::move(stream)));
         }
     } catch (const runtime_error& e) {
         cout << e.what() << '\n';
     }
-    
 }
 
 int main() {
-    EventLoop loop;
-    co_spawn(loop.get_executor(), amain(), detached);
-    loop.run();
+    this_context::run(amain());
 }
