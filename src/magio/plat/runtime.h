@@ -1,6 +1,7 @@
 #pragma once
 
 #include <thread>
+#include <functional>
 #include "magio/Configs.h"
 #include "magio/core/Queue.h"
 
@@ -58,6 +59,7 @@ private:
             auto task = std::move(tasks_.front());
             tasks_.pop();
             lk.unlock();
+            
             task();
         }
     }
