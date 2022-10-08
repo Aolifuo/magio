@@ -28,7 +28,7 @@ public:
         timer_ids_.push(executor_.set_timeout(timeout_, std::move(handler)));
     }
 
-    Coro<void> async_wait(UseCoro);
+    Coro<void> async_wait(detail::UseCoro);
 
     void cancel_one() {
         executor_.clear(timer_ids_.front());

@@ -3,7 +3,7 @@
 
 namespace magio {
 
-Coro<void> Timer::async_wait(UseCoro) {
+Coro<void> Timer::async_wait(detail::UseCoro) {
     co_await Coro<void> {
         [=](coroutine_handle<> h) {
             executor_.set_timeout(timeout_, [=]() mutable {
