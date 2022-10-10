@@ -1,48 +1,83 @@
 #pragma once
 
 #include <system_error>
+#include "magio/dev/Log.h"
 
 #ifdef _WIN32
-#include "winerror.h"
-
-#define SYSTEM_ERROR_MAP() \
-    XX(ERROR_INVALID_HANDLE, "The handle is invalid") \
-    XX(ERROR_DUP_NAME, "You were not connected because a duplicate name exists on the network. If joining a domain, go to System in Control Panel to change the computer name and try again. If joining a workgroup, choose another workgroup name.") \
-    XX(ERROR_NETNAME_DELETED, "The specified network name is no longer available") \
-    XX(WAIT_TIMEOUT, "The wait operation timed out") \
-    XX(ERROR_ABANDONED_WAIT_0, "Iocp service is interrupted") \
-    XX(ERROR_OPERATION_ABORTED, "The I/O operation has been aborted because of either a thread exit or an application request") \
-    XX(ERROR_CONNECTION_REFUSED, "The remote computer refused the network connection") \
-    XX(ERROR_CONNECTION_ABORTED, "The network connection was aborted by the local system") \
-    XX(WSAENOTSOCK, "An operation was attempted on something that is not a socket.")
+#include <atlconv.h>
 #endif
 
 namespace magio {
 
+// -1 EOF
+// -2 Not start
+
 #ifdef _WIN32
 
-inline const char* system_error_str(int code) {
-#define XX(CODE, STRING) {CODE, STRING},
-    static std::unordered_map<int, const char*> system_error_map
-    {
-        SYSTEM_ERROR_MAP()
-    };
-#undef XX
-    if (auto it = system_error_map.find(code); it != system_error_map.end()) {
-        return it->second;
+class WinSystemError: std::error_category {
+public:
+    const char* name() const noexcept override {
+        return "windows system error";
     }
-    std::printf("system_error %d\n", code);
-    return "Unknown error";
+
+    std::string message(int code) const override {
+        switch (code) {
+        case -1:
+            return "EOF";
+        case -2:
+            return "IO loop Not start";
+        }
+
+        LPTSTR lp_buffer = nullptr;
+        if (0 == FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            code,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPTSTR)&lp_buffer,
+            0,
+            NULL)) 
+        {
+            return "Unknown error";
+        } else {
+            std::string str = lp_buffer;
+            LocalFree(lp_buffer);
+            return str;
+        }
+    }
+    
+    static std::error_category& get() {
+        static WinSystemError win_sys_error;
+        return win_sys_error;
+    }
+private:
+};
+
+inline std::error_code make_win_system_error(int code) {
+    return std::error_code(code, WinSystemError::get());
 }
+
+
+#define MAGIO_SYSTEM_ERROR \
+    (DEBUG_LOG("make error ", ::GetLastError()), make_win_system_error(::GetLastError()))
+
+#define MAGIO_NO_DEBUG_SYSTEM_ERROR \
+    ((make_win_system_error(::GetLastError())))
+
+#define MAGIO_THROW_SYSTEM_ERROR \
+    do { DEBUG_LOG("throw error"); throw std::system_error(MAGIO_SYSTEM_ERROR); } while(0)
+
 
 #endif
 
 #ifdef __linux__
-#define THROW_SYSTEM_ERROR (throw std::system_error(std::make_error_code((std::errc)errno)))
-#define SYSTEM_ERROR (std::make_error_code((std::errc)errno))
-#elif _WIN32
-#define THROW_SYSTEM_ERROR
-#define SYSTEM_ERROR
+
+#define MAGIO_SYSTEM_ERROR \
+    (std::make_error_code((std::errc)errno))
+
+#define MAGIO_THROW_SYSTEM_ERROR \
+    do { DEBUG_LOG("throw error"); throw std::system_error(SYSTEM_ERROR); } while(0)
+
 #endif
 
 }
