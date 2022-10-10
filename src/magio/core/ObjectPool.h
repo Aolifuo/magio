@@ -64,4 +64,50 @@ private:
     std::mutex m_;
 };
 
+template<typename T, typename Gen = DefaultGenerator<T>>
+class UnSyncObjectPool {
+public:
+    UnSyncObjectPool(size_t init, size_t max, Gen gen = Gen{})
+        : gen_(std::move(gen)) 
+    {
+        assert(init >= 1 && max >= 1);
+
+        for (size_t i = 0; i < init; ++i) {
+            free_que_.emplace_back(std::addressof(fixed_list_.emplace_front(gen_())));
+        }
+    }
+
+    T* get() {
+        if (free_que_.empty()) {
+            grow(fixed_list_.size() / 2 + 1);
+        }
+
+        T* ret = free_que_.front();
+        free_que_.pop_front();
+        return ret;
+    }
+
+    void put(T* ptr) {
+        free_que_.emplace_back(ptr);
+    }
+
+    size_t free_size() {
+        return fixed_list_.size();
+    }
+private:
+    void grow(size_t num) {
+        for (size_t i = 0; i < num; ++i) {
+            free_que_.emplace_back(std::addressof(fixed_list_.emplace_front(gen_())));
+        }
+    }
+
+    void shrink() {
+
+    }
+    Gen gen_;
+
+    std::deque<T*> free_que_;
+    std::list<T> fixed_list_;
+};
+
 }
