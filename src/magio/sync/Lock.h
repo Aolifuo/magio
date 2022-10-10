@@ -25,5 +25,30 @@ private:
     std::atomic_flag flag_;
 };
 
+template<typename Lock>
+class UseLock {
+public:
+
+    explicit UseLock(Lock& lock, bool use_lock)
+        : lock_(lock)
+        , use_lock_(use_lock) 
+    { 
+        if (use_lock_) {
+            lock_.lock();
+        }
+    }
+
+    ~UseLock() {
+        if (use_lock_) {
+            lock_.unlock();
+        }
+    }
+private:
+    Lock& lock_;
+    bool use_lock_;
+};
+
+template<typename L>
+UseLock(L&, bool) -> UseLock<L>; 
 
 }
