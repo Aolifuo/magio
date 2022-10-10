@@ -1,67 +1,90 @@
 #pragma once
 
 #ifdef _WIN32
-
-#include "magio/core/Pimpl.h"
+#include <WinSock2.h>
 #include "magio/core/Error.h"
-#include "magio/plat/declare.h"
+#include "magio/plat/errors.h"
 
 namespace magio {
 
 namespace plat {
-//
-struct Message {
-    int code;
-    std::string_view msg;
-};
-struct CompletionHandler { 
-    void* hook;
-    void(*cb)(void *, Error, SocketHelper);
-};
 
-class IocpInterface {
+class IOCompletionPort{
 public:
-    virtual Expected<> post_receive_task(SocketHelper) = 0;
-    virtual Expected<> post_send_task(SocketHelper) = 0;
-    virtual Expected<> recycle(SocketHelper) = 0;
-    virtual ~IocpInterface() = default;
+    IOCompletionPort() = default;
+
+    IOCompletionPort(const IOCompletionPort&) = delete;
+
+    ~IOCompletionPort() {
+        close();
+    }
+
+    std::error_code open() {
+        if (handle_) {
+            return {};
+        }
+
+        HANDLE handle = ::CreateIoCompletionPort(
+            INVALID_HANDLE_VALUE, 
+            NULL, 
+            0, 
+            0);
+        
+        if (!handle) {
+            return MAGIO_SYSTEM_ERROR;
+        }
+
+        handle_ = handle;
+        return {};
+    }
+
+    void close() {
+        if (handle_) {
+            ::CloseHandle(handle_);
+        }
+    }
+
+    std::error_code relate(SOCKET sock) {
+        HANDLE handle = ::CreateIoCompletionPort(
+            (HANDLE)sock,
+            handle_, 
+            NULL,
+            0);
+
+        if (!handle) {
+            return MAGIO_SYSTEM_ERROR;
+        }
+
+        return {};
+    }
+
+    std::error_code wait(size_t ms, DWORD* pbytes, void** piodata) {
+        if (!handle_) {
+            return make_win_system_error(-2);
+        }
+
+        void* key;
+        bool status = ::GetQueuedCompletionStatus(
+            handle_,
+            pbytes, 
+            (PULONG_PTR)&key, 
+            (LPOVERLAPPED*)piodata, 
+            (ULONG)ms);
+            
+        if (!status) {
+            if (::GetLastError() != WAIT_TIMEOUT) {
+                return MAGIO_SYSTEM_ERROR;
+            }
+        }
+
+        return {};
+    }
 private:
+    HANDLE handle_ = nullptr;
 };
 
-class IocpServer: public IocpInterface {
+}
 
-    CLASS_PIMPL_DECLARE(IocpServer)
+}
 
-public:
-    static Expected<IocpServer> bind(const char* host, short port, TransportProtocol protocol = TransportProtocol::TCP);
-    
-    Expected<> post_accept_task(SocketHelper, CompletionHandler*);
-    Expected<> post_receive_task(SocketHelper) override;
-    Expected<> post_send_task(SocketHelper) override;
-    int wait_completion_task();
-
-    Expected<> associate_with(SocketHelper, CompletionHandler* h = nullptr);
-    Expected<> recycle(SocketHelper) override;
-};
-
-class IocpClient: public IocpInterface {
-
-    CLASS_PIMPL_DECLARE(IocpClient)
-
-public:
-    static Expected<IocpClient> create();
-
-    Expected<> post_connect_task(const char* host1, short port1, 
-                                const char* host2, short port2, CompletionHandler*);
-    Expected<> post_send_task(SocketHelper) override;
-    Expected<> post_receive_task(SocketHelper) override;
-    int wait_completion_task();
-
-    Expected<> associate_with(SocketHelper, CompletionHandler* h = nullptr);
-    Expected<> recycle(SocketHelper) override;
-};
-
-} // namespace plat
-
-} // namespace magio
 #endif
