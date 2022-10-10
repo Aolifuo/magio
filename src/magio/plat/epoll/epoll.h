@@ -24,6 +24,8 @@ public:
         }
     }
 
+    Epoll(const Epoll&) = delete;
+
     Epoll(Epoll&& other) noexcept : epfd_(other.epfd_) {
         other.epfd_ = -1;
     }
