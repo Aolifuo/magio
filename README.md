@@ -2,46 +2,15 @@
 
 magio是一个基于事件循环和线程池的协程库
 
-## Hello world
-
-```cpp
-Coro<string> task1() {
-    co_return "hello ";
-}
-
-Coro<string> task2() {
-    co_return "world";
-}
-
-Coro<> do_tasks() {
-    co_await timeout(3000);
-    auto [s1, s2] = co_await (task1() && task2());
-    cout << s1 << s2 << endl;
-}
-
-int main() {
-    EventLoop loop;
-    co_spawn(loop.get_executor(), do_tasks(), detached);
-    loop.run();
-}
-```
-
-output
-
-```shell
-hello world
-```
-
 ## Coro
 
 ```cpp
 Coro<int> factorial(std::string_view name, int num) {
     int res = 1;
-    Timer timer(co_await this_coro::executor, 1000);
 
     for (int i = 2; i <= num; ++i) {
         printf("Task %s: Compute factorial %d, now i = %d\n", name.data(), num, i);
-        co_await timer.async_wait(use_coro);
+        co_await timeout(1000);
         res *= i;
     }
     printf("Task %s: factorial %d = %d\n", name.data(), num, res);
@@ -49,20 +18,17 @@ Coro<int> factorial(std::string_view name, int num) {
 }
 
 int main() {
-    EventLoop loop;
+    EventLoop loop(1);
     co_spawn(
-        loop.get_executor(), 
-        []() -> Coro<void> {
+        loop.get_executor(),
+        []() -> Coro<> {
             auto [a, b, c] = co_await coro_join(
                 factorial("A", 2),
                 factorial("B", 3),
                 factorial("C", 4)
             );
-            assert(a == 2);
-            assert(b == 6);
-            assert(c = 24);
-        }(),
-        detached
+            printf("%d %d %d\n", a, b, c);
+        }()
     );
     loop.run();
 }
@@ -80,6 +46,7 @@ Task C: Compute factorial 4, now i = 3
 Task B: factorial 3 = 6
 Task C: Compute factorial 4, now i = 4
 Task C: factorial 4 = 24
+24 6 2
 ```
 
 ## Channel
@@ -109,8 +76,6 @@ int main() {
     }
     pool.post([=] { func1(channel); });
     co_spawn(pool.get_executor(), func2(channel), detached);
-    
-    pool.join();
 }
 ```
 
@@ -195,36 +160,69 @@ task e timeout!
 task f start!
 ```
 
+## Udp echo
+
+```cpp
+Coro<> amain() {
+    auto exe = co_await this_coro::executor;
+    auto socket = co_await UdpSocket::bind("127.0.0.1", 8001);
+    auto channel = make_shared<Channel<string_view, SocketAddress>>(exe);
+
+    // send
+    co_spawn(exe, [&socket, channel]() -> Coro<> {
+        for (; ;) {
+            auto [str, addr] = co_await channel->async_receive(use_coro);
+            co_await socket.write_to(str.data(), str.length(), addr);
+        }
+    }());
+
+    // receive
+    array<char, 1024> buf;
+    for (; ;) {
+        auto [rdlen, addr] = co_await socket.read_from(buf.data(), buf.size());
+        channel->async_send({buf.data(), rdlen}, addr);
+    }
+}
+
+int main() {
+    EventLoop loop(1);
+    co_spawn(loop.get_executor(), amain());
+    loop.run();
+}
+```
+
 ## Tcp echo
 
 ### Client
 
 ```cpp
-Coro<void> amain() {
+Coro<> amain(EventLoop& loop) {
     try {
-        auto client = co_await TcpClient::create();
-        auto stream = co_await client.connect("127.0.0.1", 8000);
+        auto stream = co_await TcpStream::connect("127.0.0.1", 8000);
 
-        cout << stream.remote_address().to_string()
+        cout << stream.local_address().to_string()
              << " connect "
-             << stream.local_address().to_string()
+             << stream.remote_address().to_string()
              << '\n';
 
+        array<char, 1024> buf;
         for (int i = 0; i < 5; ++i) {
-            auto [wlen, str] = co_await (
-                stream.write("Hello server..", 14) | 
-                stream.read()
+            auto [_, rdlen] = co_await (
+                stream.write("Hello server..", 14) &&
+                stream.read(buf.data(), buf.size())
             );
-            cout << str << '\n';
+            cout << string_view(buf.data(), rdlen) << '\n';
         }
     } catch(const std::exception& err) {
         cout <<  err.what() << '\n';
     }
+
+    loop.stop();
 }
 
 int main() {
-    EventLoop loop;
-    co_spawn(loop.get_executor(), amain(), detached);
+    EventLoop loop(1);
+    co_spawn(loop.get_executor(), amain(loop));
     loop.run();
 }
 ```
@@ -232,7 +230,7 @@ int main() {
 output
 
 ```shell
-127.0.0.1:8080 connect 127.0.0.1:1234
+127.0.0.1:49699 connect 127.0.0.1:8000
 Hello client..
 Hello client..
 Hello client..
@@ -243,32 +241,33 @@ Hello client..
 ### Server
 
 ```cpp
-Coro<void> process(TcpStream stream) {
+Coro<> process(TcpStream stream) {
     try {
+        array<char, 1024> buf;
         for (; ;) {
-            auto [str, wlen] = co_await (
-                stream.read() | 
-                stream.write("hello client", 12)
+            auto [rdlen, _] = co_await (
+                stream.read(buf.data(), buf.size()) &&
+                stream.write("Hello client..", 14)
             );
-            cout << str << '\n';
+            cout << string_view(buf.data(), rdlen) << '\n';
         }
     } catch(const std::runtime_error& err) {
         cout << err.what() << '\n';
     }
 }
 
-Coro<void> amain() {
+Coro<> amain() {
     try {
         auto server = co_await TcpServer::bind("127.0.0.1", 8000);
         for (; ;) {
             auto stream = co_await server.accept();
 
-            cout << stream.remote_address().to_string() 
+            cout << stream.local_address().to_string() 
                  << " connect "
-                 << stream.local_address().to_string()
+                 << stream.remote_address().to_string()
                  << '\n';
-        
-            co_spawn(co_await this_coro::executor, process(std::move(stream)), detached);
+
+            co_spawn(co_await this_coro::executor, process(std::move(stream)));
         }
     } catch(const std::runtime_error& err) {
         cout << err.what() << '\n';
@@ -276,8 +275,8 @@ Coro<void> amain() {
 }
 
 int main() {
-    EventLoop loop;
-    co_spawn(loop.get_executor(), amain(), detached);
+    EventLoop loop(1);
+    co_spawn(loop.get_executor(), amain());
     loop.run();
 }
 ```
@@ -285,13 +284,13 @@ int main() {
 output
 
 ```shell
-127.0.0.1:1234 connect 127.0.0.1:8080
+127.0.0.1:8000 connect 127.0.0.1:49699
 Hello server..
 Hello server..
 Hello server..
 Hello server..
 Hello server..
-Client disconnected
+EOF
 ```
 
 ## Benchmark
