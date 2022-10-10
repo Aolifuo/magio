@@ -7,20 +7,24 @@
 
 #ifdef _WIN32
 #include "magio/plat/iocp/iocp.h"
-#include <Ws2tcpip.h>
 #include <MSWSock.h>
 #endif
 
-#include "magio/dev/Log.h"
 #include "magio/core/Queue.h"
-#include "magio/plat/io.h"
-#include "magio/plat/declare.h"
+#include "magio/plat/socket.h"
 #include "magio/plat/errors.h"
-
+#include "magio/utils/ScopeGuard.h"
 
 namespace magio {
 
+namespace detail {
+
+inline int sockaddr_in_len = sizeof(sockaddr_in);
+
+}
+
 namespace plat {
+
 #ifdef __linux__
 
 struct EventData {
@@ -43,7 +47,7 @@ class IOLoop {
     }
 public:
     // fd = -1 => no thing,  fd = -2 => connect
-    static Expected<IOLoop> create(size_t max_event, int fd = -1) {
+    static Expected<IOLoop> create(int fd = -1) {
         auto expect_epoll = Epoll::create((int)max_event);
         if (!expect_epoll) {
             return expect_epoll.unwrap_err();
@@ -279,19 +283,33 @@ private:
 #ifdef _WIN32
 
 class IOLoop {
-    IOLoop(IOCompletionPort&& iocp, void* accpet_ex, void* connect_ex)
-        : iocp_(std::move(iocp))
-        , accept_ex_((LPFN_ACCEPTEX)accpet_ex)
-        , connect_ex_((LPFN_CONNECTEX)connect_ex)
-    { }
 public:
-    IOLoop(IOLoop&& other) noexcept = default;
-    IOLoop& operator=(IOLoop&& other) noexcept = default;
+    IOLoop() = default;
 
-    static Expected<IOLoop> create(SOCKET sock) {
+    std::error_code open() {
+        plat::WebSocket::init();
+        void* accept_ex_ptr = nullptr;
+        void* connect_ex_ptr = nullptr;
+        void* get_sock_addr_ptr = nullptr;
+
+        if (auto ec = iocp_.open()) {
+            return ec;
+        }
+
+        auto sock = make_socket(Protocol::TCP);
+        if (MAGIO_INVALID_SOCKET == sock) {
+            return MAGIO_SYSTEM_ERROR;
+        }
+
+        auto sock_guard = ScopeGuard{
+            &sock,
+            [](plat::socket_type* p) {
+                close_socket(*p);
+            }
+        };
+
         GUID GuidAcceptEx = WSAID_ACCEPTEX;
         DWORD bytes_return;
-        void* accept_ex_ptr = nullptr;
         if (0 != ::WSAIoctl(
             sock, 
             SIO_GET_EXTENSION_FUNCTION_POINTER, 
@@ -303,11 +321,10 @@ public:
             NULL, 
             NULL))
         {
-            return SYSTEM_ERROR;
+            return MAGIO_SYSTEM_ERROR;
         }
 
         GUID GUidConnectEx = WSAID_CONNECTEX;
-        void* connect_ex_ptr = nullptr;
         if (0 != ::WSAIoctl(
             sock, 
             SIO_GET_EXTENSION_FUNCTION_POINTER, 
@@ -319,14 +336,29 @@ public:
             NULL, 
             NULL))
         {
-            return SYSTEM_ERROR;
+            return MAGIO_SYSTEM_ERROR;
         }
 
-        auto iocp = IOCompletionPort::create();
-        if (!iocp) {
-            return iocp.unwrap_err();
+        GUID GuidGetAcceptExSockAddrs = WSAID_GETACCEPTEXSOCKADDRS;
+        if (0 != ::WSAIoctl(
+            sock, 
+            SIO_GET_EXTENSION_FUNCTION_POINTER, 
+            &GuidGetAcceptExSockAddrs, 
+            sizeof(GuidGetAcceptExSockAddrs), 
+            &get_sock_addr_ptr, 
+            sizeof(get_sock_addr_ptr), 
+            &bytes_return, 
+            NULL, 
+            NULL))
+        {
+            return MAGIO_SYSTEM_ERROR;
         }
-        return IOLoop{iocp.unwrap(), accept_ex_ptr, connect_ex_ptr};
+
+        accept_ex_ = (LPFN_ACCEPTEX)accept_ex_ptr;
+        connect_ex_ = (LPFN_CONNECTEX)connect_ex_ptr;
+        get_acc_addr_ = (LPFN_GETACCEPTEXSOCKADDRS)get_sock_addr_ptr;
+        
+        return {};
     }
 
     std::error_code relate(SOCKET fd) {
@@ -340,7 +372,7 @@ public:
         bool status = accept_ex_(
             fd,
             io->fd,
-            io->input_buffer.buf,
+            io->wsa_buf.buf,
             0,
             sizeof(sockaddr_in) + 16,
             sizeof(sockaddr_in) + 16,
@@ -349,7 +381,7 @@ public:
         );
 
         if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-            io->cb(SYSTEM_ERROR, io->ptr, fd);
+            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, fd);
             return;
         }
     }
@@ -363,7 +395,7 @@ public:
         remote_addr.sin_family = AF_INET;
         remote_addr.sin_port = ::htons(port);
         if (-1 == ::inet_pton(AF_INET, host, &remote_addr.sin_addr)) {
-            io->cb(SYSTEM_ERROR, io->ptr, io->fd);
+            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
             return;
         }
 
@@ -379,16 +411,13 @@ public:
         );
 
         if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-            io->cb(SYSTEM_ERROR, io->ptr, io->fd);
+            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
         }
-
     }
 
     void async_receive(IOData* io) {
         io->op = IOOP::Receive;
         ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
-        io->wsa_buf.buf = io->input_buffer.buf;
-        io->wsa_buf.len = global_config.buffer_size;
 
         DWORD flag = 0;
         int status = ::WSARecv(
@@ -401,15 +430,34 @@ public:
             NULL);
     
         if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-            io->cb(SYSTEM_ERROR, io->ptr, io->fd);
+            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
+        }
+    }
+
+    void async_receive_from(IOData* io) {
+        io->op = IOOP::Receive;
+        ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
+
+        DWORD flag = 0;
+        int status = ::WSARecvFrom(
+            io->fd, 
+            &io->wsa_buf, 
+            1,
+            NULL, 
+            &flag, 
+            (sockaddr*)&io->remote, 
+            &detail::sockaddr_in_len, 
+            (LPOVERLAPPED)&io->overlapped, 
+            NULL);
+        
+        if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
+            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
         }
     }
 
     void async_send(IOData* io) {
         io->op = IOOP::Send;
         ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
-        io->wsa_buf.buf = io->output_buffer.buf;
-        io->wsa_buf.len = (ULONG)io->output_buffer.len;
 
         DWORD flag = 0;
         int status = ::WSASend(
@@ -422,7 +470,28 @@ public:
             NULL);
         
         if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-            io->cb(SYSTEM_ERROR, io->ptr, io->fd);
+            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
+        }
+    }
+
+    void async_send_to(IOData* io) {
+        io->op = IOOP::Send;
+        ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
+
+        DWORD flag = 0;
+        int status = ::WSASendTo(
+            io->fd,
+            &io->wsa_buf, 
+            1, 
+            NULL, 
+            flag, 
+            (const sockaddr *)&io->remote, 
+            sizeof(io->remote), 
+            (LPOVERLAPPED)&io->overlapped,
+            NULL);
+        
+        if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
+            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
         }
     }
 
@@ -442,6 +511,26 @@ public:
         switch (iodata->op) {
         case IOOP::Accept: {
             DEBUG_LOG("do accept");
+
+            LPSOCKADDR local_addr_ptr;
+            LPSOCKADDR remote_addr_ptr;
+            int local_addr_len = 0;
+            int remote_addr_len = 0;
+
+            get_acc_addr_(
+                iodata->wsa_buf.buf,
+                0,
+                sizeof(sockaddr_in) + 16,
+                sizeof(sockaddr_in) + 16,
+                &local_addr_ptr,
+                &local_addr_len,
+                &remote_addr_ptr,
+                &remote_addr_len
+            );
+
+            iodata->local = *((sockaddr_in*)local_addr_ptr);
+            iodata->remote = *((sockaddr_in*)remote_addr_ptr);
+
             iodata->cb(ec, iodata->ptr, iodata->fd);
             break;
         } 
@@ -452,7 +541,7 @@ public:
         }
         case IOOP::Receive:
             DEBUG_LOG("do receive");
-            iodata->input_buffer.len = bytes_transferred;
+            iodata->wsa_buf.len = bytes_transferred;
             if (bytes_transferred == 0) {
                 ec = make_win_system_error(-1);
             }
@@ -460,7 +549,7 @@ public:
             break;
         case IOOP::Send:
             DEBUG_LOG("do send");
-            iodata->output_buffer.len = bytes_transferred;
+            iodata->wsa_buf.len = bytes_transferred;
             if (bytes_transferred == 0) {
                 ec = make_win_system_error(-1);
             }
@@ -473,14 +562,15 @@ public:
         return {};
     }
 
-    void close() {
-        iocp_.close();
+    std::error_code poll2(size_t timeout) {
+        return poll(timeout);
     }
 private:
-    IOCompletionPort                            iocp_;
+    IOCompletionPort                iocp_;
 
-    LPFN_ACCEPTEX                               accept_ex_;
-    LPFN_CONNECTEX                              connect_ex_;
+    LPFN_ACCEPTEX                   accept_ex_;
+    LPFN_CONNECTEX                  connect_ex_;
+    LPFN_GETACCEPTEXSOCKADDRS       get_acc_addr_;
 };
 
 #endif
