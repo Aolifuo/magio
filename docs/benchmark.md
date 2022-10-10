@@ -343,35 +343,42 @@ int main() {
 ### Cpp magio code
 
 ```cpp
-#include "magio/Runtime.h"
-#include "magio/EventLoop.h"
-#include "magio/coro/CoSpawn.h"
-#include "magio/coro/ThisCoro.h"
-#include "magio/net/tcp/Tcp.h"
+#include <iostream>
+#include "magio/magio.h"
 
 using namespace std;
 using namespace magio;
 
 Coro<void> process(TcpStream stream) {
-    for (; ;) {
-        auto [buf, rdlen] = co_await stream.vread();
-        co_await stream.write(buf, rdlen);
+    try {
+        char buf[1024];
+        for (; ;) {
+            auto rdlen = co_await stream.read(buf, sizeof(buf));
+            co_await stream.write(buf, rdlen);
+        }
+    } catch (const runtime_error& e) {
+        // cout << e.what() << '\n';
     }
 }
 
-Coro<void> amain() {
-    auto exe = co_await this_coro::executor;
-    auto server = co_await TcpServer::bind("127.0.0.1", 8000);
-    for (; ;) {
-        auto stream = co_await server.accept();
-        co_spawn(exe, process(std::move(stream)), detached);
+Coro<void> amain(EventLoop& loop) {
+    try {
+        auto server = co_await TcpServer::bind("127.0.0.1", 8000);
+        auto exe = co_await this_coro::executor;
+        for (; ;) {
+            auto stream = co_await server.accept();
+            co_spawn(exe, process(std::move(stream)));
+        }
+    } catch (const runtime_error& e) {
+        cout << e.what() << '\n';
     }
+
+    loop.stop();
 }
 
 int main() {
-    Runtime::run().unwrap();
-    EventLoop loop;
-    co_spawn(loop.get_executor(), amain(), detached);
+    EventLoop loop(1);
+    co_spawn(loop.get_executor(), amain(loop));
     loop.run();
 }
 ```
