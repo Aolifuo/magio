@@ -50,9 +50,9 @@ public:
                 fn(std::move(args)...);
             }, tup);
             return;
+        } else {
+            consumer_.push(std::move(fn));
         }
-
-        consumer_.push(std::move(fn));
     }
 
     Coro<std::tuple<Ts...>> async_receive(detail::UseCoro) {
