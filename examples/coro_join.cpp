@@ -1,4 +1,3 @@
-#include <cassert>
 #include "magio/magio.h"
 
 using namespace std;
@@ -17,8 +16,10 @@ Coro<int> factorial(std::string_view name, int num) {
 }
 
 int main() {
-    this_context::run(
-        []() -> Coro<void> {
+    EventLoop loop(1);
+    co_spawn(
+        loop.get_executor(),
+        []() -> Coro<> {
             auto [a, b, c] = co_await coro_join(
                 factorial("A", 2),
                 factorial("B", 3),
@@ -27,4 +28,5 @@ int main() {
             printf("%d %d %d\n", a, b, c);
         }()
     );
+    loop.run();
 }

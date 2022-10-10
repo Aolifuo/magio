@@ -5,24 +5,34 @@ using namespace std;
 using namespace magio;
 
 Coro<void> process(TcpStream stream) {
-    for (; ;) {
-        auto str = co_await stream.read();
-        co_await stream.write(str);
+    try {
+        char buf[1024];
+        for (; ;) {
+            auto rdlen = co_await stream.read(buf, sizeof(buf));
+            co_await stream.write(buf, rdlen);
+        }
+    } catch (const runtime_error& e) {
+        // cout << e.what() << '\n';
     }
 }
 
-Coro<void> amain() {
+Coro<void> amain(EventLoop& loop) {
     try {
         auto server = co_await TcpServer::bind("127.0.0.1", 8000);
+        auto exe = co_await this_coro::executor;
         for (; ;) {
             auto stream = co_await server.accept();
-            this_context::spawn(process(std::move(stream)));
+            co_spawn(exe, process(std::move(stream)));
         }
     } catch (const runtime_error& e) {
         cout << e.what() << '\n';
     }
+
+    loop.stop();
 }
 
 int main() {
-    this_context::run(amain());
+    EventLoop loop(1);
+    co_spawn(loop.get_executor(), amain(loop));
+    loop.run();
 }
