@@ -2,16 +2,6 @@
 #include "magio/ThreadPool.h"
 #include "magio/sync/WaitGroup.h"
 
-struct Foo {
-    Foo() = default;
-    Foo(const Foo&) {
-        fmt::print("copy\n");
-    }
-    Foo(Foo&&) noexcept {
-        fmt::print("move\n");
-    }
-};
-
 size_t sum_from_to(size_t frist, size_t last) {
     size_t res = 0;
     for (size_t i = frist; i <= last; ++i) {
@@ -21,7 +11,7 @@ size_t sum_from_to(size_t frist, size_t last) {
 }
 
 TestResults test_post() {
-    ThreadPool pool(16);
+    ThreadPool pool(8);
     
     auto waiter = make_shared<WaitGroup>(100);
     atomic_size_t sum = 0;
@@ -41,7 +31,7 @@ TestResults test_post() {
 }
 
 TestResults test_future() {
-    ThreadPool pool(16);
+    ThreadPool pool(8);
 
     vector<future<size_t>> res_vec;
     res_vec.reserve(100);
@@ -60,8 +50,27 @@ TestResults test_future() {
     );
 }
 
+TestResults test_copy_times() {
+    ThreadPool pool(8);
+
+    PrintCopy cp;
+
+    pool.get_future([](PrintCopy pc) {
+
+    }, PrintCopy{});
+
+    pool.get_future([](PrintCopy& rpc) {
+
+    }, std::ref(cp));
+
+    TESTCASE(
+        test(PrintCopy::cp_times, 1, "copy times error")
+    );
+}
+
 int main() {
     TESTALL(
-        test_future()
+        test_future(),
+        test_copy_times()
     );
 }

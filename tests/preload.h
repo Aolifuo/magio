@@ -17,9 +17,9 @@
 #include "fmt/core.h"
 #include "magio/core/Error.h"
 
-#define TESTCASE(cases...) \
+#define TESTCASE(...) \
     do { \
-        return collect(__FUNCTION__, {cases}); \
+        return collect(__FUNCTION__, {__VA_ARGS__}); \
     } while(0)
 
 #define TESTFAIL(MSG) \
@@ -53,6 +53,25 @@ struct NoCopy {
     void operator()() const {
 
     }
+};
+
+struct PrintCopy {
+    PrintCopy() = default;
+    PrintCopy(const PrintCopy&) {
+        ++cp_times;
+        cout << "Copy once\n";
+    }
+
+    PrintCopy& operator=(const PrintCopy&) {
+        ++cp_times;
+        cout << "Copy once\n";
+        return *this;
+    }
+
+    PrintCopy(PrintCopy&&) noexcept = default;
+    PrintCopy& operator=(PrintCopy&&) noexcept = default;
+
+    inline static size_t cp_times = 0;
 };
 
 struct TestError {
