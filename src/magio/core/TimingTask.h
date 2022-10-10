@@ -12,7 +12,7 @@ public:
     using Clock = std::chrono::steady_clock;
     using Ms = std::chrono::milliseconds;
 
-    TimerID set_timeout(size_t ms, CompletionHandler handler) {
+    TimerID set_timeout(size_t ms, Handler handler) {
         size_t id = (Clock::now() + Ms(ms)).time_since_epoch().count();
         tasks_.emplace(id, std::move(handler));
         return id;
@@ -30,7 +30,7 @@ public:
         return tasks_.size() == 0;
     }
 
-    MaybeUninit<CompletionHandler> get_expired_task() {
+    MaybeUninit<Handler> get_expired_task() {
         if (tasks_.empty()) {
             return {};
         }
@@ -44,7 +44,7 @@ public:
         return {};
     }
 private:
-    std::map<size_t, CompletionHandler> tasks_;
+    std::map<size_t, Handler> tasks_;
 };
 
 }
