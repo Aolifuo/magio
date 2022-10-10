@@ -1,8 +1,4 @@
-#include <exception>
-#include <iostream>
-#include <stdexcept>
-#include "magio/workflow/Workflow.h"
-#include "magio/ThreadPool.h"
+#include "magio/magio.h"
 
 using namespace std;
 using namespace magio;
