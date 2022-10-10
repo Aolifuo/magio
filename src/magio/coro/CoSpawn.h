@@ -6,12 +6,12 @@
 namespace magio {
 
 template<typename Ret>
-inline void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, detail::Detached) {
+inline void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, detail::Detached d = {}) {
     coro.wake(executor, true);
 }
 
 template<typename Ret>
-inline void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, CoroCompletionHandler<Ret> handler) {
+inline void co_spawn(AnyExecutor executor, Coro<Ret>&& coro, CoroHandler<Ret> handler) {
     coro.set_completion_handler(std::move(handler));
     coro.wake(executor, true);
 }
@@ -38,6 +38,5 @@ inline std::future<Ret> co_spawn(AnyExecutor executor, Coro<Ret>&& coro, detail:
     coro.wake(executor, true);
     return fut;
 }
-
 
 }
