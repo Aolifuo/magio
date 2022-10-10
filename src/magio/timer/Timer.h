@@ -24,7 +24,7 @@ public:
         timeout_ = ms;
     }
 
-    void async_wait(CompletionHandler&& handler) {
+    void async_wait(Handler&& handler) {
         timer_ids_.push(executor_.set_timeout(timeout_, std::move(handler)));
     }
 
