@@ -12,15 +12,25 @@ using VoidToUnit = std::conditional_t<std::is_void_v<T>, Unit, T>;
 
 }
 
-template<typename>
-struct Coro;
+namespace detail {
 
 struct UseCoro {};
 
+struct UseFuture {};
+
 struct Detached{};
 
-inline UseCoro use_coro;
+}
 
-inline Detached detached;
+template<typename>
+struct Coro;
+
+inline detail::UseCoro use_coro;
+
+inline detail::UseFuture use_future;
+
+inline detail::Detached detached;
+
+
 
 }
