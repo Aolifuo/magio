@@ -14,19 +14,19 @@ namespace magio {
 namespace detail {
 
 template<typename Ret>
-struct CoroCompletionHandler {
+struct CoroHandler {
     using type = std::function<void(Expected<Ret, std::exception_ptr>)>;
 };
 
 template<>
-struct CoroCompletionHandler<void> {
+struct CoroHandler<void> {
     using type = std::function<void(Expected<Unit, std::exception_ptr>)>;
 };
 
 }
 
 template<typename Ret>
-using CoroCompletionHandler = typename detail::CoroCompletionHandler<Ret>::type;
+using CoroHandler = typename detail::CoroHandler<Ret>::type;
 
 template<typename Ret, typename Awaitable>
 struct PromiseTypeBase;
@@ -105,7 +105,7 @@ struct PromiseTypeBase {
     std::exception_ptr eptr;
     AnyExecutor executor;
     coroutine_handle<> previous;
-    CoroCompletionHandler<Ret> completion_handler;
+    CoroHandler<Ret> completion_handler;
 
     MaybeUninit<Ret> storage;
 };
@@ -137,7 +137,7 @@ struct PromiseTypeBase<void, Awaitable> {
     std::exception_ptr eptr;
     AnyExecutor executor;
     coroutine_handle<> previous;
-    CoroCompletionHandler<void> completion_handler;
+    CoroHandler<void> completion_handler;
 };
 
 }

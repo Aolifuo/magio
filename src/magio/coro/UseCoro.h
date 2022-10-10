@@ -43,7 +43,7 @@ struct Coro {
         }
     }
 
-    void set_completion_handler(CoroCompletionHandler<Ret>&& handler) {
+    void set_completion_handler(CoroHandler<Ret>&& handler) {
         if (main_h_) {
             main_h_.promise().completion_handler = std::move(handler);
         }
