@@ -21,11 +21,11 @@ public:
 
     }
 
-    void post(CompletionHandler&& handler) {
+    void post(Handler&& handler) {
         executor_.post(std::move(handler));
     }
 
-    TimerID set_timeout(size_t ms, CompletionHandler&& handler) {
+    TimerID set_timeout(size_t ms, Handler&& handler) {
         return executor_.set_timeout(ms, std::move(handler));
     }
 
