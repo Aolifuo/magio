@@ -3,11 +3,20 @@
 #include "magio/coro/UseCoro.h"
 #include "magio/utils/ScopeGuard.h"
 
+#ifdef __cpp_impl_coroutine
+template<typename Ret, typename...Ts>
+struct std::coroutine_traits<magio::Coro<Ret>, Ts...> {
+    using promise_type = magio::PromiseTypeBase<Ret, magio::Coro<Ret>>;
+    using handle_type = std::coroutine_handle<promise_type>;
+};
+#else
 template<typename Ret, typename...Ts>
 struct std::experimental::coroutine_traits<magio::Coro<Ret>, Ts...> {
     using promise_type = magio::PromiseTypeBase<Ret, magio::Coro<Ret>>;
     using handle_type = std::experimental::coroutine_handle<promise_type>;
 };
+#endif
+
 
 namespace magio {
 
@@ -22,7 +31,7 @@ struct GetExecutor {
         prev_h.resume();
     }
 
-    auto await_resume() {
+    AnyExecutor await_resume() {
         return executor;
     }
 
