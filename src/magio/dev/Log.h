@@ -9,10 +9,10 @@ namespace magio {
 namespace dev {
 
 #ifdef MAGIO_DEBUG
-#define DEBUG_LOG(args...) \
-    dev::debug_log("[file: ", __FILE__, "] [line: ", __LINE__, "] [thread:", std::this_thread::get_id(), "]: ", args)
+#define DEBUG_LOG(...) \
+    dev::debug_log("[file: ", __FILE__, "] [line: ", __LINE__, "] [thread:", std::this_thread::get_id(), "]: ", __VA_ARGS__)
 #else
-#define DEBUG_LOG(args...)
+#define DEBUG_LOG(...) 1
 #endif
 
 inline std::mutex GLOBAL_MUTEX;
