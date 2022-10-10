@@ -1,14 +1,16 @@
 #pragma once
 
 #include <stdint.h>
-#include <string>
-#include "magio/Configs.h"
+
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
 
 namespace magio {
 
 namespace plat {
 
-enum class TransportProtocol { TCP, UDP };
+enum class Protocol { TCP, UDP };
 
 enum class IOOP {
     Noop,
@@ -18,7 +20,16 @@ enum class IOOP {
     Connect,
 };
 
-using socket_type = uint64_t;
+constexpr size_t MAGIO_INFINITE = 0xFFFFFFFF;
+
+#ifdef __linux__
+using sokcet_type = int;
+constexpr int MAGIO_INVALID_SOCKET = -1;
+#endif
+#ifdef _WIN32
+using socket_type = SOCKET;
+constexpr auto MAGIO_INVALID_SOCKET = INVALID_SOCKET;
+#endif
 
 }
 
