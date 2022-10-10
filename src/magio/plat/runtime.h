@@ -2,15 +2,15 @@
 
 #include <thread>
 #include <functional>
-#include "magio/Configs.h"
 #include "magio/core/Queue.h"
+#include "magio/execution/Execution.h"
 
 namespace magio {
 
 namespace plat {
 
 class Runtime {
-
+public:
     Runtime(size_t worker_threads) {
         for (size_t i = 0; i < worker_threads; ++i) {
             work_threads_.emplace_back([this] {
@@ -18,15 +18,13 @@ class Runtime {
             });
         }
     }
-public:
-    Runtime(const Runtime&) = delete;
-    Runtime(Runtime&&) = delete;
 
     ~Runtime() {
         {
-            std::unique_lock lk(m_);
+            std::lock_guard lk(m_);
             stop_flag_ = true;
         }
+
         cv_.notify_all();
         for (auto& th : work_threads_) {
             if (th.joinable()) {
@@ -35,17 +33,16 @@ public:
         }
     }
 
-    static Runtime& ins() {
-        static Runtime runtime(global_config.worker_threads);
-        return runtime;
-    }
-
     void post(std::function<void()>&& task) {
         {
             std::lock_guard lk(m_);
             tasks_.emplace(std::move(task));
         }
         cv_.notify_one();
+    }
+
+    size_t workers() {
+        return work_threads_.size();
     }
 private:
     void worker() {
@@ -64,13 +61,14 @@ private:
         }
     }
 
-    bool                                stop_flag_ = false;
-    std::mutex                          m_;
-    std::condition_variable             cv_;
+    bool                                                    stop_flag_ = false;
+    std::mutex                                              m_; // protect tasks
+    std::condition_variable                                 cv_;
 
-    RingQueue<std::function<void()>>    tasks_{128};
-    std::vector<std::thread>            work_threads_;
+    RingQueue<std::function<void()>>                        tasks_{128};
+    std::vector<std::thread>                                work_threads_;
 };
+
 
 }
 
