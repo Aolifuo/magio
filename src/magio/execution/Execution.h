@@ -1,23 +1,24 @@
 #pragma once
 
 #include "magio/core/Fwd.h"
+#include "magio/net/IOService.h"
 
 namespace magio {
 
 class ExecutionContext {
-public:
-    virtual void post(CompletionHandler&&) = 0;
-    virtual void dispatch(CompletionHandler&&) = 0;
-    virtual void waiting(WaitingCompletionHandler&&) = 0;
-    virtual TimerID set_timeout(size_t ms, CompletionHandler&&) = 0;
-    virtual void clear(TimerID) = 0;
-    virtual ~ExecutionContext() = default;
+    friend class AnyExecutor;
 
+public:
+    virtual void post(Handler&&) = 0;
+    virtual void dispatch(Handler&&) = 0;
+    virtual TimerID set_timeout(size_t ms, Handler&&) = 0;
+    virtual void clear(TimerID) = 0;
+    virtual IOService get_service() = 0;
+    virtual ~ExecutionContext() = default;
 private:
 };
 
 class AnyExecutor {
-    
 public:
     AnyExecutor() { }
 
@@ -25,25 +26,25 @@ public:
         : context_(context) 
     {}
 
-    void post(CompletionHandler&& handler) {
+    void post(Handler&& handler) {
         context_->post(std::move(handler));
     }
 
-    void dispatch(CompletionHandler&& handler) {
+    void dispatch(Handler&& handler) {
         context_->dispatch(std::move(handler));
     }
 
-    void waiting(WaitingCompletionHandler&& handler) {
-        context_->waiting(std::move(handler));
-    }
-
-    TimerID set_timeout(size_t ms, CompletionHandler&& handler) {
+    TimerID set_timeout(size_t ms, Handler&& handler) {
         return context_->set_timeout(ms, std::move(handler));
     }
 
     void clear(TimerID id) {
         context_->clear(id);
-    } 
+    }
+
+    IOService get_service() {
+        return context_->get_service();
+    }
 
     operator bool() const {
         return context_ != nullptr;
