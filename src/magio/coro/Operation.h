@@ -111,6 +111,10 @@ private:
             };
         }
 
+        else if (method_ == Race) {
+            // TODO
+        }
+
         if (eptr) {
             std::rethrow_exception(eptr);
         }
@@ -161,6 +165,16 @@ detail::CoroChain<Ret, Ts...> operator&& (detail::CoroChain<Ts...>&& chain, Coro
 template<typename T, typename U>
 detail::CoroChain<U, T> operator&& (Coro<T>&& left, Coro<U>&& right) {
     return detail::CoroChain<U, T>{detail::ChainMethod::Concurrent, std::move(right), std::move(left)};
+}
+
+template<typename Ret, typename...Ts>
+detail::CoroChain<Ret, Ts...> operator|| (detail::CoroChain<Ts...>&& chain, Coro<Ret>&& coro) {
+    return detail::operation_impl(detail::ChainMethod::Race, std::move(chain), std::move(coro));
+}
+
+template<typename T, typename U>
+detail::CoroChain<U, T> operator|| (Coro<T>&& left, Coro<U>&& right) {
+    return detail::CoroChain<U, T>{detail::ChainMethod::Race, std::move(right), std::move(left)};
 }
 
 }
