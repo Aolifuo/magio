@@ -6,71 +6,32 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 
-#include "magio/dev/Log.h"
-#include "magio/core/Error.h"
+#include "magio/plat/errors.h"
 
 namespace magio {
 
 class Epoll {
-
-    Epoll(int epfd) {
-        epfd_ = epfd;
-    }
-
 public:
-    ~Epoll() {
-        if (epfd_ != -1) {
-            ::close(epfd_);
-        }
-    }
-
+    Epoll() = default;
+    
     Epoll(const Epoll&) = delete;
 
-    Epoll(Epoll&& other) noexcept : epfd_(other.epfd_) {
-        other.epfd_ = -1;
+    ~Epoll() {
+        close();
     }
 
-    Epoll& operator=(Epoll&& other) noexcept {
-        epfd_ = other.epfd_;
-        other.epfd_ = -1;
-        return *this;
-    }
+    std::error_code open() {
+        if (-1 != epfd_) {
+            return {};
+        }
 
-    static Expected<Epoll> create(int num) {
-        int fd = ::epoll_create(num);
+        int fd = ::epoll_create(1);
         if (-1 == fd) {
-            return std::make_error_code((std::errc)errno);
+            return MAGIO_SYSTEM_ERROR;
         }
-        return Epoll(fd);
-    }
 
-    std::error_code add(int fd, epoll_event& ev) {
-        if (-1 == ::epoll_ctl(epfd_, EPOLL_CTL_ADD, fd, &ev)) {
-            return std::make_error_code((std::errc)errno);
-        }
+        epfd_ = fd;
         return {};
-    }
-
-    std::error_code update(int fd, epoll_event& ev) {
-        if (-1 == ::epoll_ctl(epfd_, EPOLL_CTL_MOD, fd, &ev)) {
-            return std::make_error_code((std::errc)errno);
-        }
-        return {};
-    }
-
-    std::error_code remove(int fd) {
-        if (-1 == ::epoll_ctl(epfd_, EPOLL_CTL_DEL, fd, nullptr)) {
-            return std::make_error_code((std::errc)errno);
-        }
-        return {};
-    }
-
-    Expected<size_t> wait(epoll_event* events, int max, int timeout) {
-        auto evlen = ::epoll_wait(epfd_, events, max, timeout);
-        if (-1 == evlen) {
-            return std::make_error_code((std::errc)errno);
-        }
-        return evlen;
     }
 
     void close() {
@@ -79,8 +40,33 @@ public:
             epfd_ = -1;
         }
     }
+
+    std::error_code add(int fd, epoll_event& ev) {
+        if (-1 == ::epoll_ctl(epfd_, EPOLL_CTL_ADD, fd, &ev)) {
+            return MAGIO_SYSTEM_ERROR;
+        }
+        return {};
+    }
+
+    std::error_code update(int fd, epoll_event& ev) {
+        if (-1 == ::epoll_ctl(epfd_, EPOLL_CTL_MOD, fd, &ev)) {
+            return MAGIO_SYSTEM_ERROR;
+        }
+        return {};
+    }
+
+    std::error_code remove(int fd) {
+        if (-1 == ::epoll_ctl(epfd_, EPOLL_CTL_DEL, fd, nullptr)) {
+            return MAGIO_SYSTEM_ERROR;
+        }
+        return {};
+    }
+
+    int wait(epoll_event* events, int max, int timeout) {
+        return ::epoll_wait(epfd_, events, max, timeout);
+    }
 private:
-    int epfd_;
+    int epfd_ = -1;
 };
 
 }

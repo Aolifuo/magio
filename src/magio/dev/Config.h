@@ -1,3 +1,3 @@
 #pragma once
 
-// #define MAGIO_DEBUG
+#define MAGIO_DEBUG

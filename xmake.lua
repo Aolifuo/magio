@@ -1,15 +1,14 @@
--- set_toolchains("clang")
--- set_config("cxxflags", "-stdlib=libc++ -fcoroutines-ts")
--- set_config("ldflags", "-lc++")
+set_toolchains("clang")
+set_config("cxxflags", "-stdlib=libc++ -fcoroutines-ts")
+set_config("ldflags", "-lc++")
 
 set_project("magio")
 set_version("0.0.5")
 
 add_rules("mode.debug", "mode.release")
-add_cxxflags("/EHa", {force = true})
+--add_cxxflags("/EHa", {force = true})
 set_languages("cxx20")
 set_warnings("all")
-
 add_requires("fmt")
 
 if is_mode("release") then 
@@ -18,11 +17,14 @@ end
 
 if is_plat("linux") then
     add_syslinks("pthread")
+    add_requires("liburing")
+    add_packages("liburing")
 end
 
 if is_plat("windows") then 
     add_syslinks("ws2_32")
 end
+
 
 target("magio")
     set_kind("static")

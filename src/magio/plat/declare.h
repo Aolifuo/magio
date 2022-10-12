@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstddef>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -23,8 +23,9 @@ enum class IOOP {
 constexpr size_t MAGIO_INFINITE = 0xFFFFFFFF;
 
 #ifdef __linux__
-using sokcet_type = int;
+using socket_type = int;
 constexpr int MAGIO_INVALID_SOCKET = -1;
+constexpr size_t MAGIO_LIBURING_ENTRIES = 512;
 #endif
 #ifdef _WIN32
 using socket_type = SOCKET;

@@ -59,10 +59,6 @@ public:
     }
 
     std::error_code wait(size_t ms, DWORD* pbytes, void** piodata) {
-        if (!handle_) {
-            return make_win_system_error(-2);
-        }
-
         void* key;
         bool status = ::GetQueuedCompletionStatus(
             handle_,
