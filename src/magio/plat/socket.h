@@ -1,7 +1,7 @@
 #pragma once
 
-#include <system_error>
 #include "magio/plat/declare.h"
+#include "magio/plat/errors.h"
 #include "magio/net/SocketAddress.h"
 #include "magio/dev/Resource.h"
 
@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <unistd.h> // close
 #endif
 
 #ifdef _WIN32
@@ -22,6 +23,23 @@ namespace magio {
 namespace plat {
 
 #ifdef __linux__
+
+struct Buffer {
+    char* buf;
+    size_t len;
+};
+
+struct IOData {
+    int     fd;
+    IOOP    op;
+    sockaddr_in local;
+    sockaddr_in remote;
+    void*   ptr;
+    void(*cb)(std::error_code, void*, int);
+    Buffer  wsa_buf;
+};
+
+
 inline SocketAddress local_address(int fd) {
     ::sockaddr_in addr{};
     ::socklen_t len = sizeof(sockaddr_in);
@@ -45,7 +63,17 @@ inline std::error_code set_nonblock(int fd) {
     return {};
 }
 
-inline fd make_socket(Protocol procotol) {
+inline std::error_code get_error(int fd) {
+    int error = 0;
+    socklen_t len = sizeof(error);
+    if (-1 == getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len)) {
+        return MAGIO_SYSTEM_ERROR;
+    }
+
+    return make_linux_system_error(error);
+}
+
+inline socket_type make_socket(Protocol procotol) {
     MAGIO_MAKE_SOCKET;
     if(procotol == Protocol::TCP) {
         return ::socket(AF_INET, SOCK_STREAM, 0);
@@ -90,7 +118,7 @@ inline SocketAddress remote_address(SOCKET fd) {
     return {buff, ::ntohs(addr.sin_port), addr};
 }
 
-inline SOCKET make_socket(Protocol procotol) {
+inline sokcet_type make_socket(Protocol procotol) {
     MAGIO_MAKE_SOCKET;
     if(procotol == Protocol::TCP) {
         return ::WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
