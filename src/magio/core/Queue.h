@@ -142,12 +142,12 @@ public:
     BlockedQueue(BlockedQueue&& other) noexcept = default;
 
     void push(T elem) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         queue_.push(std::move(elem));
     }
 
     MaybeUninit<T> try_take() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         if (queue_.empty()) {
             return {};
         }
@@ -155,6 +155,11 @@ public:
         MaybeUninit<T> result(std::move(queue_.front()));
         queue_.pop();
         return result;
+    }
+
+    void clear() {
+        std::lock_guard lock(mutex_);
+        queue_.clear();
     }
 private:
     Container queue_;
