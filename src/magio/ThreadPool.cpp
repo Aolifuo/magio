@@ -5,6 +5,7 @@
 #include <thread>
 #include "magio/core/Queue.h"
 #include "magio/core/TimingTask.h"
+#include "magio/plat/io_service.h"
 
 namespace magio {
 
@@ -14,14 +15,16 @@ struct ThreadPool::Impl: public ExecutionContext {
     };
 
     State                                   state = Stop;
-    RingQueue<Handler>                      idle_tasks{64};
+    RingQueue<Handler>                      posted_tasks{64};
     TimingTaskManager                       timed_tasks;
 
-    std::mutex                              idle_m; // protect idle
+    std::mutex                              posted_m; // protect idle
     std::mutex                              timed_m; // protect timed
-    std::condition_variable                 idle_cv;
+    std::condition_variable                 posted_cv;
     std::condition_variable                 timed_cv;
     std::atomic_size_t                      count = 0;
+
+    plat::IOService                         service; //empty
 
     std::vector<std::thread>                threads;
 
@@ -36,7 +39,7 @@ struct ThreadPool::Impl: public ExecutionContext {
     void destroy();
 
     void worker();
-    void poller();
+    void time_poller();
 
     ~Impl() {
         join();
@@ -51,7 +54,7 @@ ThreadPool::ThreadPool(size_t thread_num) {
     for (size_t i = 0; i < thread_num; ++i) {
         impl->threads.emplace_back(&Impl::worker, impl);
     }
-    impl->threads.emplace_back(&Impl::poller, impl);
+    impl->threads.emplace_back(&Impl::time_poller, impl);
 
     run();
 }
@@ -74,19 +77,19 @@ void ThreadPool::clear(TimerID id) {
 
 void ThreadPool::run() {
     {
-        std::scoped_lock lk(impl->idle_m, impl->timed_m);
+        std::scoped_lock lk(impl->posted_m, impl->timed_m);
         impl->state = Impl::Running;
     }
-    impl->idle_cv.notify_all();
+    impl->posted_cv.notify_all();
     impl->timed_cv.notify_all();
 }
 
 void ThreadPool::stop() {
     {
-        std::scoped_lock lk(impl->idle_m, impl->timed_m);
+        std::scoped_lock lk(impl->posted_m, impl->timed_m);
         impl->state = Impl::Stop;
     }
-    impl->idle_cv.notify_all();
+    impl->posted_cv.notify_all();
     impl->timed_cv.notify_all();
 }
 
@@ -109,10 +112,10 @@ AnyExecutor ThreadPool::get_executor() const {
 void ThreadPool::Impl::post(Handler&& handler) {
     count.fetch_add(1, std::memory_order_acquire);
     {
-        std::lock_guard lk(idle_m);
-        idle_tasks.push(std::move(handler));
+        std::lock_guard lk(posted_m);
+        posted_tasks.push(std::move(handler));
     }
-    idle_cv.notify_one();
+    posted_cv.notify_one();
 }
 
 void ThreadPool::Impl::dispatch(Handler &&handler) {
@@ -139,7 +142,7 @@ void ThreadPool::Impl::clear(TimerID id) {
 }
 
 plat::IOService& ThreadPool::Impl::get_service() {
-    //
+    return service;
 }
 
 void ThreadPool::Impl::wait() {
@@ -167,18 +170,18 @@ void ThreadPool::Impl::attach() {
 
 void ThreadPool::Impl::destroy() {
     {
-        std::scoped_lock lk(idle_m, timed_m);
+        std::scoped_lock lk(posted_m, timed_m);
         state = PendingDestroy;
     }
-    idle_cv.notify_all();
+    posted_cv.notify_all();
     timed_cv.notify_all();
 }   
 
 void ThreadPool::Impl::worker() {
     for (; ;) {
-        std::unique_lock lk(idle_m);
-        idle_cv.wait(lk, [this] {
-            return (state == Running && !idle_tasks.empty()) 
+        std::unique_lock lk(posted_m);
+        posted_cv.wait(lk, [this] {
+            return (state == Running && !posted_tasks.empty()) 
                 || state == PendingDestroy;
         });
 
@@ -186,8 +189,8 @@ void ThreadPool::Impl::worker() {
             return;
         }
 
-        auto task = std::move(idle_tasks.front());
-        idle_tasks.pop();
+        auto task = std::move(posted_tasks.front());
+        posted_tasks.pop();
         lk.unlock();
 
         task();
@@ -195,7 +198,7 @@ void ThreadPool::Impl::worker() {
     }
 }
 
-void ThreadPool::Impl::poller() {
+void ThreadPool::Impl::time_poller() {
     for (; ;) {
         std::unique_lock lk(timed_m);
         timed_cv.wait(lk, [this] {
