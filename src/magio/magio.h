@@ -1,6 +1,6 @@
 #pragma once
 
-#include "magio/EventLoop.h"
+#include "magio/Magico.h"
 #include "magio/ThreadPool.h"
 #include "magio/coro/CoSpawn.h"
 #include "magio/coro/Operation.h"
