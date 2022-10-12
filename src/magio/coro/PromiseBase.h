@@ -2,11 +2,11 @@
 
 #include <concepts>
 #include <exception>
+#include "magio/dev/Resource.h"
 #include "magio/coro/Fwd.h"
 #include "magio/coro/Config.h"
 #include "magio/core/Error.h"
 #include "magio/core/MaybeUninit.h"
-#include "magio/utils/Function.h"
 #include "magio/execution/Execution.h"
 
 namespace magio {
@@ -60,6 +60,7 @@ struct FinalSuspend {
         }
 
         if (auto_destroy) {
+            MAGIO_DESTROY_CORO;
             prev_h.destroy();
         }
     }
@@ -75,11 +76,12 @@ struct FinalSuspend {
 template<typename Ret, typename Awaitable>
 struct PromiseTypeBase {
     Awaitable get_return_object() {
-            return {
-                coroutine_handle<PromiseTypeBase>::from_promise(*this),
-                { }
-            };
-        }
+        MAGIO_CREATE_CORO;
+        return {
+            coroutine_handle<PromiseTypeBase>::from_promise(*this),
+            { }
+        };
+    }
 
     auto initial_suspend() {
         return suspend_always{};
@@ -113,6 +115,7 @@ struct PromiseTypeBase {
 template<typename Awaitable>
 struct PromiseTypeBase<void, Awaitable> {
     Awaitable get_return_object() {
+        MAGIO_CREATE_CORO;
         return {
             coroutine_handle<PromiseTypeBase>::from_promise(*this),
             { }
