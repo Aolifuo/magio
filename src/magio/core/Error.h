@@ -31,7 +31,6 @@ struct ExpectedTraits<Expected<Ok, Err>> {
 template<typename Ok = Unit, typename Err = std::error_code>
 class Expected {
 public:
-
     Expected(Ok elem): flag_(true) {
         new (buf_) Ok(std::move(elem));
     }
@@ -144,11 +143,12 @@ public:
         return ok;
     }
 
-    Ok except() {
+    Ok expect() {
         if (flag_) {
             return std::move(get<Ok>());
         }
-        throw std::runtime_error(std::move(get<Err>().msg));
+
+        throw std::system_error(std::move(get<Err>()));
     }
 
     // Error type must be the same
