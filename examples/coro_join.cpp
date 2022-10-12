@@ -16,7 +16,7 @@ Coro<int> factorial(std::string_view name, int num) {
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(
         loop.get_executor(),
         []() -> Coro<> {
