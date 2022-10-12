@@ -31,6 +31,7 @@ namespace plat {
 
 class IOService {
 public:
+    IOService() = default;
     IOService(std::atomic_size_t& c)
         : count(&c)
     { }
@@ -177,7 +178,7 @@ private:
         ::io_uring_sqe_set_flags(sqe, 0);
     }
 
-    io_uring ring_;
+    io_uring            ring_;
 };
 
 #endif
@@ -186,6 +187,7 @@ private:
 
 class IOService {
 public:
+    IOService() = default;
     IOService(std::atomic_size_t& p): count(&p) { }
 
     std::error_code open() {
@@ -456,9 +458,6 @@ public:
         case IOOP::Send:
             DEBUG_LOG("do send");
             iodata->wsa_buf.len = bytes_transferred;
-            if (bytes_transferred == 0) {
-                ec = make_win_system_error(-1);
-            }
             iodata->cb(ec, iodata->ptr, iodata->fd);
             break;
         default:
