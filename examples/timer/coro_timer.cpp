@@ -1,4 +1,4 @@
-#include "magio/EventLoop.h"
+#include "magio/Magico.h"
 #include "magio/timer/Timer.h"
 #include "magio/coro/CoSpawn.h"
 #include "magio/coro/Coro.h"
@@ -15,7 +15,7 @@ Coro<void> amain() {
 }
 
 int main() {
-    EventLoop loop;
+    Magico loop;
 
     co_spawn(loop.get_executor(), amain(), detached);
 

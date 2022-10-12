@@ -1,6 +1,6 @@
 #include <cstdio>
 #include <exception>
-#include "magio/EventLoop.h"
+#include "magio/Magico.h"
 #include "magio/core/Error.h"
 #include "magio/coro/Coro.h"
 #include "magio/coro/CoSpawn.h"
@@ -19,7 +19,7 @@ Coro<string> amain() {
 }
 
 int main() {
-    EventLoop loop;
+    Magico loop;
 
     magio::co_spawn(loop.get_executor(), amain(), [](Expected<string, exception_ptr> exp) {
         try {

@@ -16,7 +16,7 @@ Coro<void> process(TcpStream stream) {
     }
 }
 
-Coro<void> amain(EventLoop& loop) {
+Coro<void> amain(Magico& loop) {
     try {
         auto server = co_await TcpServer::bind("127.0.0.1", 8000);
         auto exe = co_await this_coro::executor;
@@ -27,12 +27,10 @@ Coro<void> amain(EventLoop& loop) {
     } catch (const runtime_error& e) {
         cout << e.what() << '\n';
     }
-
-    loop.stop();
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain(loop));
     loop.run();
 }

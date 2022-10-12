@@ -1,6 +1,6 @@
 #include <iostream>
 #include "magio/timer/Timer.h"
-#include "magio/EventLoop.h"
+#include "magio/Magico.h"
 
 using namespace std;
 
@@ -15,7 +15,7 @@ void func(magio::AnyExecutor executor, size_t times) {
 }
 
 int main() {
-    magio::EventLoop loop;
+    magio::Magico loop;
 
     loop.set_timeout(1000, [&loop]{
         func(loop.get_executor(), 1); 

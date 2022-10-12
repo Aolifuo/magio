@@ -26,7 +26,7 @@ Coro<> amain() {
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain());
     loop.run();
 }

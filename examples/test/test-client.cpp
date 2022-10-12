@@ -5,7 +5,7 @@ using namespace std;
 using namespace magio;
 using namespace magio::operation;
 
-Coro<> amain(EventLoop& loop) {
+Coro<> amain(Magico& loop) {
     try {
         auto stream = co_await TcpStream::connect("127.0.0.1", 8000);
 
@@ -26,11 +26,10 @@ Coro<> amain(EventLoop& loop) {
         cout <<  err.what() << '\n';
     }
 
-    loop.stop();
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain(loop));
     loop.run();
 }

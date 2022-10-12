@@ -5,7 +5,7 @@ using namespace std;
 using namespace magio;
 using namespace operation;
 
-Coro<> amain(EventLoop& loop) {
+Coro<> amain(Magico& loop) {
     try {
         array<char, 1024> buf;
         auto socket = co_await UdpSocket::bind("127.0.0.1", 8001);
@@ -20,11 +20,10 @@ Coro<> amain(EventLoop& loop) {
         cout << e.what() << '\n';
     }
     
-    loop.stop();
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain(loop));
     loop.run();
 }
