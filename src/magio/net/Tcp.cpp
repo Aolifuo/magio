@@ -31,9 +31,15 @@ Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
 
     auto socket = Socket::create(exe, Protocol::TCP).expect();
 
-#ifdef __linux__
+#ifdef _WIN32
+    auto local_address = make_address("127.0.0.1", 0).expect();
+    socket.bind(local_address).expect();
 
-    auto address = make_address(host, port).expect();
+    if (auto ec = exe.get_service().relate(socket.handle())) {
+        throw std::system_error(ec);
+    }
+#endif
+    auto remote_address = make_address(host, port).expect();
 
     auto hook = EventHook{};
 
@@ -43,9 +49,9 @@ Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
     io.cb = resume_from_hook;
 
     co_await Coro<> {
-        [&hook, &address, exe, pio = &io](coroutine_handle<> h) mutable {
+        [&hook, &remote_address, exe, pio = &io](coroutine_handle<> h) mutable {
             hook.h = h;
-            exe.get_service().async_connect(pio, address._sockaddr);
+            exe.get_service().async_connect(pio, remote_address._sockaddr);
         }
     };
 
@@ -56,52 +62,7 @@ Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
     co_return TcpStream{
         std::move(socket), 
         plat::local_address(socket.handle()),
-        address};
-#endif
-#ifdef _WIN32
-    // local addr
-    sockaddr_in local_addr{};
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_port = 0; // auto
-
-    if (-1 == ::inet_pton(AF_INET, host, &local_addr.sin_addr)) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
-
-    if (-1 == ::bind(fd, (sockaddr*)&local_addr, sizeof(local_addr))) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
-
-    if (auto ec = loop->relate(fd)) {
-        throw std::system_error(ec);
-    }
-
-    auto hook = EventHook{};
-
-    plat::IOData io;
-    io.fd = fd;
-    io.ptr = &hook;
-    io.cb = resume_from_hook;
-
-    co_await Coro<> {
-        [host, port, pio = &io, loop, &hook](coroutine_handle<> h) {
-            hook.h = h;
-            loop->async_connect(pio, host, port);
-        }
-    };
-
-    if (hook.ec) {
-        throw std::system_error(hook.ec);
-    }
-
-    co_return {
-        new TcpStream::Impl{
-            *fd_guard.release(),
-            loop, 
-            plat::local_address(fd),
-            SocketAddress{host, port}
-        }};
-#endif
+        remote_address};
 }
 
 Coro<size_t> TcpStream::read(char* buf, size_t len) {
@@ -187,7 +148,7 @@ Coro<TcpServer> TcpServer::bind(const char* host, uint_least16_t port) {
 #endif
 #ifdef _WIN32
     // 关联iocp
-    if (auto ec = loop->relate(fd)) {
+    if (auto ec = exe.get_service().relate(socket.handle())) {
         throw std::system_error(ec);
     }
 #endif
@@ -200,13 +161,11 @@ Coro<TcpStream> TcpServer::accept() {
 
     plat::IOData io;
 #ifdef _WIN32
+    auto socket = Socket::create(listener.get_executor(), Protocol::TCP).expect();
+
     char buf[128];
 
-    io.fd = plat::make_socket(plat::Protocol::TCP);
-    if (plat::MAGIO_INVALID_SOCKET == io.fd) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
-
+    io.fd = socket.handle();
     io.wsa_buf.buf = buf;
     io.wsa_buf.len = sizeof(buf);
 #endif
@@ -224,13 +183,14 @@ Coro<TcpStream> TcpServer::accept() {
         throw std::system_error(hook.ec);
     }
 
+#ifdef __linux__
     co_return TcpStream{
         Socket(listener.get_executor(), io.fd), 
         plat::local_address(io.fd), 
         {::inet_ntoa(io.remote.sin_addr), ::ntohs(io.remote.sin_port)}};
-
+#endif
 #ifdef _WIN32
-    if (auto ec = impl->loop->relate(io.fd)) {
+    if (auto ec = listener.get_executor().get_service().relate(io.fd)) {
         throw std::system_error(ec);
     }
 
@@ -242,12 +202,11 @@ Coro<TcpStream> TcpServer::accept() {
     ::inet_ntop(io.remote.sin_family, &io.remote.sin_addr, buf, 40);
     SocketAddress remote{buf, ::ntohs(io.remote.sin_port), io.remote};
 
-    co_return {new TcpStream::Impl{
-        *fd_guard.release(),
-        impl->loop,
+    co_return {
+        std::move(socket),
         std::move(local),
         std::move(remote)
-    }};
+    };
 #endif
 }
 
