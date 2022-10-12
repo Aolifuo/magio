@@ -29,7 +29,7 @@ struct ThreadPool::Impl: public ExecutionContext {
     void dispatch(Handler&& handler) override;
     TimerID set_timeout(size_t ms, Handler&& handler) override;
     void clear(TimerID id) override;
-    IOService get_service() override;
+    plat::IOService& get_service() override;
     void wait();
     void join();
     void attach();
@@ -138,8 +138,8 @@ void ThreadPool::Impl::clear(TimerID id) {
     count.fetch_sub(1, std::memory_order_release);
 }
 
-IOService ThreadPool::Impl::get_service() {
-    return {};
+plat::IOService& ThreadPool::Impl::get_service() {
+    //
 }
 
 void ThreadPool::Impl::wait() {
