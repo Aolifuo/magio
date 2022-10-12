@@ -18,7 +18,7 @@ Coro<int> factorial(std::string_view name, int num) {
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(
         loop.get_executor(),
         []() -> Coro<> {
@@ -185,7 +185,7 @@ Coro<> amain() {
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain());
     loop.run();
 }
@@ -196,7 +196,7 @@ int main() {
 ### Client
 
 ```cpp
-Coro<> amain(EventLoop& loop) {
+Coro<> amain(Magico& loop) {
     try {
         auto stream = co_await TcpStream::connect("127.0.0.1", 8000);
 
@@ -217,11 +217,10 @@ Coro<> amain(EventLoop& loop) {
         cout <<  err.what() << '\n';
     }
 
-    loop.stop();
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain(loop));
     loop.run();
 }
@@ -275,7 +274,7 @@ Coro<> amain() {
 }
 
 int main() {
-    EventLoop loop(1);
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain());
     loop.run();
 }
