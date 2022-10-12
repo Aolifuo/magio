@@ -10,7 +10,7 @@
 namespace magio {
 
 // -1 EOF
-// -2 Not start
+// -2 Unkown error
 
 #ifdef _WIN32
 
@@ -57,7 +57,6 @@ inline std::error_code make_win_system_error(int code) {
     return std::error_code(code, WinSystemError::get());
 }
 
-
 #define MAGIO_SYSTEM_ERROR \
     (DEBUG_LOG("make error ", ::GetLastError()), make_win_system_error(::GetLastError()))
 
@@ -72,11 +71,39 @@ inline std::error_code make_win_system_error(int code) {
 
 #ifdef __linux__
 
+class LinuxSystemError: std::error_category {
+public:
+    const char* name() const noexcept override {
+        return "windows system error";
+    }
+
+    std::string message(int code) const override {
+        switch (code) {
+        case -1:
+            return "EOF";
+        case -2:
+            return "Accept error";
+        }
+
+        return strerror(code);
+    }
+    
+    static std::error_category& get() {
+        static LinuxSystemError linux_sys_error;
+        return linux_sys_error;
+    }
+private:
+};
+
+inline std::error_code make_linux_system_error(int code) {
+    return std::error_code(code, LinuxSystemError::get());
+}
+
 #define MAGIO_SYSTEM_ERROR \
-    (std::make_error_code((std::errc)errno))
+    (DEBUG_LOG("make error ", errno), make_linux_system_error(errno))
 
 #define MAGIO_THROW_SYSTEM_ERROR \
-    do { DEBUG_LOG("throw error"); throw std::system_error(SYSTEM_ERROR); } while(0)
+    do { DEBUG_LOG("throw error"); throw std::system_error(MAGIO_SYSTEM_ERROR); } while(0)
 
 #endif
 
