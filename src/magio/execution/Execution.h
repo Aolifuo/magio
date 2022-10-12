@@ -1,9 +1,14 @@
 #pragma once
 
 #include "magio/core/Fwd.h"
-#include "magio/net/IOService.h"
 
 namespace magio {
+
+namespace plat {
+
+class IOService;
+
+}
 
 class ExecutionContext {
     friend class AnyExecutor;
@@ -13,7 +18,7 @@ public:
     virtual void dispatch(Handler&&) = 0;
     virtual TimerID set_timeout(size_t ms, Handler&&) = 0;
     virtual void clear(TimerID) = 0;
-    virtual IOService get_service() = 0;
+    virtual plat::IOService& get_service() = 0;
     virtual ~ExecutionContext() = default;
 private:
 };
@@ -42,7 +47,7 @@ public:
         context_->clear(id);
     }
 
-    IOService get_service() {
+    plat::IOService& get_service() {
         return context_->get_service();
     }
 
