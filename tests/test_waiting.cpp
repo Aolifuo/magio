@@ -1,9 +1,9 @@
 #include "preload.h"
-#include "magio/EventLoop.h"
+#include "magio/Magico.h"
 
 
 int main() {
-    EventLoop loop;
+    Magico loop;
 
     bool flag = false;
 

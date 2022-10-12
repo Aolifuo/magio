@@ -1,5 +1,5 @@
 #include "preload.h"
-#include "magio/EventLoop.h"
+#include "magio/Magico.h"
 #include "magio/coro/CoSpawn.h"
 #include "magio/coro/Operation.h"
 
@@ -41,7 +41,7 @@ Coro<void> test() {
 }
 
 int main() {
-    EventLoop loop;
+    Magico loop;
     co_spawn(loop.get_executor(), test(), [](Expected<Unit, exception_ptr> ep) {
         if (!ep) {
             try {
