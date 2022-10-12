@@ -1,18 +1,20 @@
 #pragma once
 
 #include "magio/coro/Fwd.h"
-#include "magio/core/Pimpl.h"
-#include "magio/net/SocketAddress.h"
+#include "magio/net/Socket.h"
 
 namespace magio {
 
 class TcpStream {
     friend class TcpServer;
-    friend class TcpClient;
-
-    CLASS_PIMPL_DECLARE(TcpStream)
 
 public:
+    TcpStream(Socket&& socket, const SocketAddress& local, const SocketAddress& remote)
+        : socket_(std::move(socket))
+        , local_(local)
+        , remote_(remote)
+    { }
+
     SocketAddress local_address();
     SocketAddress remote_address();
 
@@ -20,15 +22,27 @@ public:
 
     Coro<size_t> read(char* buf, size_t len);
     Coro<size_t> write(const char* buf, size_t len);
+
+    AnyExecutor get_executor();
+private:
+    Socket socket_;
+    SocketAddress local_;
+    SocketAddress remote_;
 };
 
 class TcpServer {
-
-    CLASS_PIMPL_DECLARE(TcpServer)
-
 public:
+    TcpServer(Socket&& socket)
+        : listener(std::move(socket))
+    { }
+
     static Coro<TcpServer> bind(const char* host, uint_least16_t port);
     Coro<TcpStream> accept();
+
+    AnyExecutor get_executor();
+
+private:
+    Socket listener;
 };
 
 

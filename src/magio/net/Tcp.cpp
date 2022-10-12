@@ -3,12 +3,7 @@
 #include <memory>
 #include "magio/dev/Log.h"
 #include "magio/coro/Coro.h"
-#include "magio/plat/loop.h"
-#include "magio/plat/socket.h"
-#include "magio/plat/errors.h"
-#include "magio/plat/runtime.h"
-#include "magio/net/IOService.h"
-#include "magio/utils/ScopeGuard.h"
+#include "magio/plat/io_service.h"
 
 namespace magio {
 
@@ -31,85 +26,37 @@ void resume_from_hook(
 
 // TcpStream
 
-struct TcpStream::Impl {
-    plat::socket_type       fd;
-    plat::IOLoop*           loop;
-
-    SocketAddress           local;
-    SocketAddress           remote;
-
-    ~Impl() {
-        plat::close_socket(fd);
-    }
-};
-
-CLASS_PIMPL_IMPLEMENT(TcpStream)
-
 Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
     auto exe = co_await this_coro::executor;
-    if (auto ec = exe.get_service().open()) {
-        throw std::system_error(ec);
-    }
 
-    auto loop = exe.get_service().get_loop();
+    auto socket = Socket::create(exe, Protocol::TCP).expect();
 
-    auto fd = plat::make_socket(plat::Protocol::TCP);
-    if (plat::MAGIO_INVALID_SOCKET == fd) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
-    
-    auto fd_guard = ScopeGuard{
-        &fd, 
-        [](plat::socket_type *p) {
-            plat::close_socket(*p);
-        }
-    };
-
-    
 #ifdef __linux__
-    if (auto ec = plat::set_nonblock(fd)) {
-        throw std::system_error(ec);
-    }
 
-    ::sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = ::htons(port);
-
-    if (-1 == ::inet_pton(AF_INET, host, &addr.sin_addr)) {
-        THROW_SYSTEM_ERROR;
-    }
-
-    int connres = ::connect(fd, (sockaddr*)&addr, sizeof(addr));
-    if (-1 == connres && errno != EINPROGRESS) {
-        THROW_SYSTEM_ERROR;
-    }
+    auto address = make_address(host, port).expect();
 
     auto hook = EventHook{};
-    auto evdata = plat::EventData{
-        .fd = fd,
-        .op = plat::IOOP::Connect,
-        .data = &hook,
-        .cb = resume_from_hook
+
+    plat::IOData io;
+    io.fd = socket.handle();
+    io.ptr = &hook;
+    io.cb = resume_from_hook;
+
+    co_await Coro<> {
+        [&hook, &address, exe, pio = &io](coroutine_handle<> h) mutable {
+            hook.h = h;
+            exe.get_service().async_connect(pio, address._sockaddr);
+        }
     };
-    
-    if (0 != connres) {
-        co_await Coro<void>{
-            [&hook, &evdata, this, fd](coroutine_handle<> h) {
-                hook.h = h;
-                impl->loop_ptr->async_connect(&evdata);
-            }
-        };
-    }
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
     }
-    
-    auto io = plat::GlobalIO::get();
-    io->fd = fd;
 
-    fd_guard.release();
-    co_return {new TcpStream::Impl{impl->loop_ptr, io}};
+    co_return TcpStream{
+        std::move(socket), 
+        plat::local_address(socket.handle()),
+        address};
 #endif
 #ifdef _WIN32
     // local addr
@@ -159,76 +106,33 @@ Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
 
 Coro<size_t> TcpStream::read(char* buf, size_t len) {
     auto hook = EventHook{};
-#ifdef __linux__
-    auto evdata = plat::EventData{
-        .fd = impl->iodata->fd,
-        .io = impl->iodata,
-        .data = &hook,
-        .cb = resume_from_hook
-    };
 
-    co_await Coro<void>{
-        [this, &hook, &evdata](coroutine_handle<> h) {
-            hook.h = h;
-            impl->loop_ptr->async_receive(&evdata);
-        }
-    };
-
-    if (hook.ec) {
-        throw std::system_error(hook.ec);
-    }
-
-    auto [buf, len] = impl->iodata->input_buffer;
-#endif
-#ifdef _WIN32
     plat::IOData io;
-    io.fd = impl->fd;
+    io.fd = socket_.handle();
     io.wsa_buf.buf = buf;
     io.wsa_buf.len = len;
     io.ptr = &hook;
     io.cb = resume_from_hook;
-
+    
     co_await Coro<>{
         [this, &hook, pio = &io](coroutine_handle<> h) {
             hook.h = h;
-            impl->loop->async_receive(pio);
+            socket_.get_executor().get_service().async_receive(pio);
         }
     };
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
     }
-#endif
 
     co_return io.wsa_buf.len;
 }
 
 Coro<size_t> TcpStream::write(const char* buf, size_t len) {
     auto hook = EventHook{};
-#ifdef __linux__
-    auto evdata = plat::EventData{
-        .fd = impl->iodata->fd,
-        .io = impl->iodata,
-        .data = &hook,
-        .cb = resume_from_hook
-    };
 
-    co_await Coro<void>{
-        [this, &hook, &evdata](coroutine_handle<> h) {
-            hook.h = h;
-            impl->loop_ptr->async_send(&evdata);
-        }
-    };
-
-    if (hook.ec) {
-        throw std::system_error(hook.ec);
-    }
-
-    co_return impl->iodata->output_buffer.len;
-#endif
-#ifdef _WIN32
     plat::IOData io;
-    io.fd = impl->fd;
+    io.fd = socket_.handle();
     io.wsa_buf.buf = (char*)buf;
     io.wsa_buf.len = len;
     io.ptr = &hook;
@@ -237,7 +141,7 @@ Coro<size_t> TcpStream::write(const char* buf, size_t len) {
     co_await Coro<>{
         [this, &hook, pio = &io](coroutine_handle<> h) {
             hook.h = h;
-            impl->loop->async_send(pio);
+            socket_.get_executor().get_service().async_send(pio);
         }
     };
 
@@ -246,82 +150,39 @@ Coro<size_t> TcpStream::write(const char* buf, size_t len) {
     }
 
     co_return io.wsa_buf.len;
-#endif
 }
 
 SocketAddress TcpStream::local_address() {
-    return impl->local;
+    return local_;
 }
 
 SocketAddress TcpStream::remote_address() {
-    return impl->remote;
+    return remote_;
 }
 
+AnyExecutor TcpStream::get_executor() {
+    return socket_.get_executor();
+}
 
 // TcpServer
 
-struct TcpServer::Impl {
-    plat::socket_type   fd;
-    plat::IOLoop*       loop;
-
-    ~Impl() {
-        plat::close_socket(fd);
-    }
-};
-
-CLASS_PIMPL_IMPLEMENT(TcpServer)
-
 Coro<TcpServer> TcpServer::bind(const char* host, uint_least16_t port) {
     auto exe = co_await this_coro::executor;
-    if (auto ec = exe.get_service().open()) {
-        throw std::system_error(ec);
-    }
 
-    auto loop = exe.get_service().get_loop();
+    auto socket = Socket::create(exe, Protocol::TCP).expect();
+    auto address = make_address(host, port).expect();
+    socket.bind(address).expect();
+    socket.listen().expect();
 
-    auto fd = plat::make_socket(plat::Protocol::TCP);
-    if (plat::MAGIO_INVALID_SOCKET == fd) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
-    
-    auto fd_guard = ScopeGuard {
-        &fd, 
-        [](plat::socket_type* fd) {
-            plat::close_socket(*fd);
-        }
-    };
-
-#ifdef __linux__
-    // 非阻塞
-    if (auto ec = plat::set_nonblock(fd)) {
-        throw std::system_error(ec);
-    }
-#endif
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-
-    if (-1 == ::inet_pton(AF_INET, host, &addr.sin_addr)) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
-
-    if (-1 == ::bind(fd, (sockaddr*)&addr, sizeof(addr))) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
-
-    if (-1 == ::listen(fd, SOMAXCONN)) {
-        MAGIO_THROW_SYSTEM_ERROR;
-    }
 #ifdef __linux__
     // 端口重用和地址重用
     int opt_val = 1;
-    if (-1 == ::setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &opt_val, sizeof(opt_val))) {
-        THROW_SYSTEM_ERROR;
+    if (-1 == ::setsockopt(socket.handle(), SOL_SOCKET, SO_REUSEPORT, &opt_val, sizeof(opt_val))) {
+        MAGIO_THROW_SYSTEM_ERROR;
     }
     
-    if (-1 == ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt_val, sizeof(opt_val))) {
-        THROW_SYSTEM_ERROR;
+    if (-1 == ::setsockopt(socket.handle(), SOL_SOCKET, SO_REUSEADDR, &opt_val, sizeof(opt_val))) {
+        MAGIO_THROW_SYSTEM_ERROR;
     }
 #endif
 #ifdef _WIN32
@@ -331,44 +192,31 @@ Coro<TcpServer> TcpServer::bind(const char* host, uint_least16_t port) {
     }
 #endif
 
-    co_return {new Impl{*fd_guard.release(), loop}};
+    co_return {std::move(socket)};
 }
 
 Coro<TcpStream> TcpServer::accept() {
     auto hook = EventHook{};
 
-#ifdef __linux__
-    auto evdata = plat::EventData{
-        .data = &hook,
-        .cb = resume_from_hook
-    };
-#endif
+    plat::IOData io;
 #ifdef _WIN32
     char buf[128];
-    plat::IOData io;
 
     io.fd = plat::make_socket(plat::Protocol::TCP);
     if (plat::MAGIO_INVALID_SOCKET == io.fd) {
         MAGIO_THROW_SYSTEM_ERROR;
     }
 
-    auto fd_guard = ScopeGuard{
-        &io.fd,
-        [](plat::socket_type* p) {
-            plat::close_socket(*p);
-        }
-    };
-
     io.wsa_buf.buf = buf;
     io.wsa_buf.len = sizeof(buf);
+#endif
     io.ptr = &hook;
     io.cb = resume_from_hook;
-#endif
 
-    co_await Coro<void>{
-        [this, pio = &io, &hook](coroutine_handle<> h) {
+    co_await Coro<>{
+        [&hook, this, pio = &io](coroutine_handle<> h) mutable {
             hook.h = h;
-            impl->loop->async_accept(impl->fd, pio);
+            listener.get_executor().get_service().async_accept(listener.handle(), pio);
         }
     };
 
@@ -376,25 +224,11 @@ Coro<TcpStream> TcpServer::accept() {
         throw std::system_error(hook.ec);
     }
 
-#ifdef __linux__
-    auto fd_guard = ScopeGuard{&hook.fd, [](plat::socket_type* p) {
-        plat::close_socket(*p);
-    }};
+    co_return TcpStream{
+        Socket(listener.get_executor(), io.fd), 
+        plat::local_address(io.fd), 
+        {::inet_ntoa(io.remote.sin_addr), ::ntohs(io.remote.sin_port)}};
 
-    if (auto ec = plat::set_nonblock(hook.fd)) {
-        throw std::system_error(ec);
-    }
-
-    if (auto ec = loop_ptr->add(hook.fd)) {
-        throw std::system_error(ec);
-    }
-
-    auto iodata = plat::GlobalIO::get();
-    iodata->fd = hook.fd;
-
-    fd_guard.release();
-    co_return {new TcpStream::Impl{loop_ptr, iodata}};
-#endif
 #ifdef _WIN32
     if (auto ec = impl->loop->relate(io.fd)) {
         throw std::system_error(ec);
@@ -415,6 +249,10 @@ Coro<TcpStream> TcpServer::accept() {
         std::move(remote)
     }};
 #endif
+}
+
+AnyExecutor TcpServer::get_executor() {
+    return listener.get_executor();
 }
 
 }
