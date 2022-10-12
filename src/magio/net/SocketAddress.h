@@ -9,7 +9,7 @@
 #endif
 
 #ifdef _WIN32
-#include <WinSock2.h>
+#include <Ws2tcpip.h>
 #endif
 
 namespace magio {
