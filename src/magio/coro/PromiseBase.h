@@ -20,7 +20,7 @@ struct CoroHandler {
 
 template<>
 struct CoroHandler<void> {
-    using type = std::function<void(Expected<Unit, std::exception_ptr>)>;
+    using type = std::function<void(std::exception_ptr)>;
 };
 
 }
@@ -48,7 +48,7 @@ struct FinalSuspend {
                 promise.completion_handler(promise.eptr);
             } else {
                 if constexpr (std::is_void_v<Ret>) {
-                    promise.completion_handler(Unit{});
+                    promise.completion_handler(promise.eptr);
                 } else {
                     promise.completion_handler(promise.storage.unwrap());
                 }
