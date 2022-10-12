@@ -118,7 +118,7 @@ inline SocketAddress remote_address(SOCKET fd) {
     return {buff, ::ntohs(addr.sin_port), addr};
 }
 
-inline sokcet_type make_socket(Protocol procotol) {
+inline socket_type make_socket(Protocol procotol) {
     MAGIO_MAKE_SOCKET;
     if(procotol == Protocol::TCP) {
         return ::WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);

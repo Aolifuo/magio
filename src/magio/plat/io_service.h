@@ -186,7 +186,7 @@ private:
 
 class IOService {
 public:
-    IOService() = default;
+    IOService(std::atomic_size_t& p): count(&p) { }
 
     std::error_code open() {
         plat::WebSocket::init();
@@ -263,6 +263,10 @@ public:
         return {};
     }
 
+    void close() {
+        iocp_.close();
+    }
+
     std::error_code relate(SOCKET fd) {
         return iocp_.relate(fd);
     }
@@ -293,18 +297,18 @@ public:
         ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
 
         // 远端
-        sockaddr_in remote_addr{};
-        remote_addr.sin_family = AF_INET;
-        remote_addr.sin_port = ::htons(port);
-        if (-1 == ::inet_pton(AF_INET, host, &remote_addr.sin_addr)) {
-            io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
-            return;
-        }
+        // sockaddr_in remote_addr{};
+        // remote_addr.sin_family = AF_INET;
+        // remote_addr.sin_port = ::htons(port);
+        // if (-1 == ::inet_pton(AF_INET, host, &remote_addr.sin_addr)) {
+        //     io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
+        //     return;
+        // }
 
         // data->fd target
         bool status = connect_ex_(
             io->fd,
-            (sockaddr*)&remote_addr,
+            (sockaddr*)&addr,
             sizeof(sockaddr),
             NULL,
             0,
@@ -467,6 +471,8 @@ public:
     std::error_code poll2(size_t timeout) {
         return poll(timeout);
     }
+    
+    std::atomic_size_t*             count;
 private:
     IOCompletionPort                iocp_;
 

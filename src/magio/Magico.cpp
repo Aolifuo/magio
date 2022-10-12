@@ -10,7 +10,7 @@
 namespace magio {
 
 struct Magico::Impl: public ExecutionContext {
-    std::atomic_flag               stop_flag;
+    std::atomic_flag                stop_flag;
 
     RingQueue<Handler>              posted_tasks;
     TimingTaskManager               timed_tasks;
