@@ -32,7 +32,7 @@ Coro<void> amain() {
 }
 
 int main() {
-    Magico loop;
+    Magico loop(1);
     co_spawn(loop.get_executor(), amain(), detached);
 
     co_spawn(loop.get_executor(), foo(), 

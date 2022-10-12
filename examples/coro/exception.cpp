@@ -8,23 +8,23 @@
 using namespace std;
 using namespace magio;
 
-Coro<string> amain() {
+Coro<void> amain() {
     try {
         throw runtime_error("Error");
     } catch(const exception& e) {
         printf("Amain: %s\n", e.what());
         throw e;
     }
-    co_return "a";
+    co_return;
 }
 
 int main() {
-    Magico loop;
+    Magico loop(1);
 
-    magio::co_spawn(loop.get_executor(), amain(), [](Expected<string, exception_ptr> exp) {
+    magio::co_spawn(loop.get_executor(), amain(), [](exception_ptr eptr) {
         try {
-            if (!exp) {
-                rethrow_exception(exp.unwrap_err());
+            if (eptr) {
+                rethrow_exception(eptr);
             }
         } catch(const exception& e) {
             printf("Main: %s\n", e.what());

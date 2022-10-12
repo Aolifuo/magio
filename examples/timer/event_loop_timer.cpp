@@ -15,7 +15,7 @@ void func(magio::AnyExecutor executor, size_t times) {
 }
 
 int main() {
-    magio::Magico loop;
+    magio::Magico loop(1);
 
     loop.set_timeout(1000, [&loop]{
         func(loop.get_executor(), 1); 
