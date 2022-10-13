@@ -4,7 +4,7 @@
 
 using namespace std;
 using namespace magio;
-using namespace magio::operation;
+using namespace magio::operators;
 
 Coro<> process(TcpStream stream) {
     try {
