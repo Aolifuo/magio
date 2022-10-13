@@ -7,20 +7,17 @@
 namespace magio {
 
 struct UdpHook {
-    plat::socket_type fd;
-    coroutine_handle<> h;
-    std::error_code ec;
+    plat::socket_type   fd;
+    Waker               w;
+    std::error_code     ec;
 };
 
-void resume_from_hook2(
-    std::error_code ec, 
-    void* ptr, 
-    plat::socket_type fd)
+void resume_from_hook2(std::error_code ec, void* ptr, plat::socket_type fd)
 {
     auto phook = (UdpHook*)ptr;
     phook->fd = fd;
     phook->ec = ec;
-    phook->h.resume();
+    phook->w.try_wake();
 }
 
 // UdpSocket
@@ -45,9 +42,9 @@ Coro<std::pair<size_t, SocketAddress>> UdpSocket::read_from(char* buf, size_t le
     io.ptr = &hook;
     io.cb = resume_from_hook2;
 
-    co_await Coro<> {
-        [&hook, this, pio = &io](coroutine_handle<> h) {
-            hook.h = h;
+    co_await Awaitable {
+        [&hook, pio = &io, this](AnyExecutor exe, Waker waker) {
+            hook.w = waker;
             socket_.get_executor().get_service().async_receive_from(pio);
         }
     };
@@ -96,9 +93,9 @@ Coro<size_t> UdpSocket::write_to(const char* buf, size_t len, const SocketAddres
     io.ptr = &hook;
     io.cb = resume_from_hook2;
 
-    co_await Coro<> {
-        [&hook, this, pio = &io](coroutine_handle<> h) {
-            hook.h = h;
+    co_await Awaitable {
+        [&hook, pio = &io, this](AnyExecutor exe, Waker waker) {
+            hook.w = waker;
             socket_.get_executor().get_service().async_send_to(pio);
         }
     };
