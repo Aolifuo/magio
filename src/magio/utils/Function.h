@@ -8,7 +8,7 @@ namespace magio {
 template<typename...Ts>
 struct TypeList;
 
-namespace utils {
+namespace util {
 
 template<typename>
 struct MemFnTraits;
@@ -60,9 +60,9 @@ struct IsFunctionPointer<F *>: std::true_type {};
 template<typename...Ts>
 struct TypeList {
     template<size_t N>
-    using At = typename utils::AtImpl<N, Ts...>::type;
+    using At = typename util::AtImpl<N, Ts...>::type;
     template<typename ...Others>
-    constexpr static bool Eq = utils::EqImpl<TypeList<Ts...>, TypeList<Others...>>::value;
+    constexpr static bool Eq = util::EqImpl<TypeList<Ts...>, TypeList<Others...>>::value;
     constexpr static size_t Length = sizeof...(Ts);
 };
 
@@ -122,8 +122,8 @@ template<typename T>
 requires std::is_member_function_pointer_v<T>
 class MemFnBinder {
 public:
-    using ClassType = typename utils::MemFnTraits<T>::ClassType;
-    using FunctionType = typename utils::MemFnTraits<T>::FunctionType;
+    using ClassType = typename util::MemFnTraits<T>::ClassType;
+    using FunctionType = typename util::MemFnTraits<T>::FunctionType;
 
     MemFnBinder(T mem_fn_ptr, ClassType* obj_ptr)
         : mfp_(mem_fn_ptr), obj_(obj_ptr) {}
