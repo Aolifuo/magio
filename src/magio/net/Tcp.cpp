@@ -8,20 +8,16 @@
 namespace magio {
 
 struct EventHook {
-    plat::socket_type fd;
-    coroutine_handle<> h;
-    std::error_code ec;
+    plat::socket_type   fd;
+    Waker               w;
+    std::error_code     ec;
 };
 
-void resume_from_hook(
-    std::error_code ec, 
-    void* ptr, 
-    plat::socket_type fd)
-{
+void resume_from_hook(std::error_code ec, void* ptr, plat::socket_type fd) {
     auto phook = (EventHook*)ptr;
     phook->fd = fd;
     phook->ec = ec;
-    phook->h.resume();
+    phook->w.try_wake();
 }
 
 // TcpStream
@@ -30,7 +26,6 @@ Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
     auto exe = co_await this_coro::executor;
 
     auto socket = Socket::create(exe, Protocol::TCP).expect();
-
 #ifdef _WIN32
     auto local_address = make_address("127.0.0.1", 0).expect();
     socket.bind(local_address).expect();
@@ -48,9 +43,9 @@ Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
     io.ptr = &hook;
     io.cb = resume_from_hook;
 
-    co_await Coro<> {
-        [&hook, &remote_address, exe, pio = &io](coroutine_handle<> h) mutable {
-            hook.h = h;
+    co_await Awaitable {
+        [&hook, &remote_address, pio = &io](AnyExecutor exe, Waker waker) {
+            hook.w = waker;
             exe.get_service().async_connect(pio, remote_address._sockaddr);
         }
     };
@@ -74,10 +69,10 @@ Coro<size_t> TcpStream::read(char* buf, size_t len) {
     io.wsa_buf.len = len;
     io.ptr = &hook;
     io.cb = resume_from_hook;
-    
-    co_await Coro<>{
-        [this, &hook, pio = &io](coroutine_handle<> h) {
-            hook.h = h;
+
+    co_await Awaitable {
+        [&hook, this, pio = &io](AnyExecutor exe, Waker waker) {
+            hook.w = waker;
             socket_.get_executor().get_service().async_receive(pio);
         }
     };
@@ -99,9 +94,9 @@ Coro<size_t> TcpStream::write(const char* buf, size_t len) {
     io.ptr = &hook;
     io.cb = resume_from_hook;
 
-    co_await Coro<>{
-        [this, &hook, pio = &io](coroutine_handle<> h) {
-            hook.h = h;
+    co_await Awaitable {
+        [this, &hook, pio = &io](AnyExecutor exe, Waker waker) {
+            hook.w = waker;
             socket_.get_executor().get_service().async_send(pio);
         }
     };
@@ -172,9 +167,9 @@ Coro<TcpStream> TcpServer::accept() {
     io.ptr = &hook;
     io.cb = resume_from_hook;
 
-    co_await Coro<>{
-        [&hook, this, pio = &io](coroutine_handle<> h) mutable {
-            hook.h = h;
+    co_await Awaitable {
+        [&hook, pio = &io, this](AnyExecutor exe, Waker waker) {
+            hook.w = waker;
             listener.get_executor().get_service().async_accept(listener.handle(), pio);
         }
     };

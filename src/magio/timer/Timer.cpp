@@ -4,12 +4,10 @@
 namespace magio {
 
 Coro<void> Timer::async_wait(detail::UseCoro) {
-    co_await Coro<void> {
-        [=](coroutine_handle<> h) {
-            executor_.set_timeout(timeout_, [=]() mutable {
-                if (h) {
-                    h.resume();
-                }
+    co_await Awaitable {
+        [=](AnyExecutor exe, Waker waker) {
+            executor_.set_timeout(timeout_, [=] {
+                waker.try_wake();
             });
         }
     };
