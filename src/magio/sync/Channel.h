@@ -68,11 +68,11 @@ public:
         }
 
         MaybeUninit<std::tuple<Ts...>> ret;
-        co_await Coro<void>{
-            [&lk, &ret, p = this->shared_from_this()](coroutine_handle<> h) mutable {
-                p->consumer_.push([&ret, h](Ts...args) mutable {
+        co_await Awaitable {
+            [&lk, &ret, p = this->shared_from_this()](AnyExecutor exe, Waker waker) {
+                p->consumer_.push([&ret, waker](Ts...args) mutable {
                     ret = std::make_tuple(std::move(args)...);
-                    h.resume();
+                    waker.try_wake();
                 });
                 lk.unlock();
             }
