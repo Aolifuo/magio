@@ -38,10 +38,6 @@ public:
 
     IOService(const IOService&) = delete;
 
-    ~IOService() {
-        close();
-    }
-
     std::error_code open() {
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
@@ -54,8 +50,7 @@ public:
     }
 
     void close() {
-        // will crash ?
-        // ::io_uring_queue_exit(&ring_);
+        ::io_uring_queue_exit(&ring_);
     }
 
     void async_accept(int fd, IOData* io) {
