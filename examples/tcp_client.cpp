@@ -3,7 +3,7 @@
 
 using namespace std;
 using namespace magio;
-using namespace magio::operation;
+using namespace magio::operators;
 
 Coro<> amain(Magico& loop) {
     try {
@@ -25,8 +25,6 @@ Coro<> amain(Magico& loop) {
     } catch(const std::exception& err) {
         cout <<  err.what() << '\n';
     }
-
-    loop.stop();
 }
 
 int main() {
