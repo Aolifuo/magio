@@ -15,10 +15,6 @@ public:
 
     IOCompletionPort(const IOCompletionPort&) = delete;
 
-    ~IOCompletionPort() {
-        close();
-    }
-
     std::error_code open() {
         if (handle_) {
             return {};
