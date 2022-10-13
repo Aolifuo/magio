@@ -3,7 +3,6 @@
 using namespace std;
 using namespace magio;
 
-
 int main() {
     ThreadPool pool(8);
     
