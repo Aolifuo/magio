@@ -10,6 +10,7 @@ class IOService;
 
 }
 
+
 class ExecutionContext {
     friend class AnyExecutor;
 
@@ -18,9 +19,9 @@ public:
     virtual void dispatch(Handler&&) = 0;
     virtual TimerID set_timeout(size_t ms, Handler&&) = 0;
     virtual void clear(TimerID) = 0;
-    virtual plat::IOService& get_service() = 0;
     virtual ~ExecutionContext() = default;
-private:
+
+    virtual plat::IOService& get_service() = 0;
 };
 
 class AnyExecutor {
@@ -50,10 +51,11 @@ public:
     plat::IOService& get_service() {
         return context_->get_service();
     }
-
+    
     operator bool() const {
         return context_ != nullptr;
     }
+    
 private:
     ExecutionContext* context_ = nullptr;
 };
