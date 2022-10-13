@@ -10,7 +10,7 @@ Coro<int> factorial(std::string_view name, int num) {
 
     for (int i = 2; i <= num; ++i) {
         printf("Task %s: Compute factorial %d, now i = %d\n", name.data(), num, i);
-        co_await timeout(1000);
+        co_await sleep(1000);
         res *= i;
     }
     printf("Task %s: factorial %d = %d\n", name.data(), num, res);
