@@ -20,7 +20,7 @@ struct CoroHandler {
 
 template<>
 struct CoroHandler<void> {
-    using type = std::function<void(std::exception_ptr)>;
+    using type = std::function<void(Expected<Unit, std::exception_ptr>)>;
 };
 
 }
@@ -31,55 +31,85 @@ using CoroHandler = typename detail::CoroHandler<Ret>::type;
 template<typename Ret, typename Awaitable>
 struct PromiseTypeBase;
 
+struct PromiseNode {
+    // be stopped
+    void destroy_from_tail() {
+        if (prev_) {
+            auto cur = prev_;
+            auto prev = cur->prev_;
+            while (prev) {
+                cur->destroy();
+                cur = prev;
+                prev = cur->prev_;
+            }
+            cur->destroy();
+        }
+
+        destroy();
+    }
+
+    void destroy() {
+        MAGIO_DESTROY_CORO;
+        handle_.destroy();
+    }
+
+    void wake() {
+        handle_.resume();
+    }
+
+    std::shared_ptr<std::atomic_flag> stop_flag_;
+
+    coroutine_handle<> handle_;
+    std::exception_ptr eptr_;
+    AnyExecutor executor_;
+
+    PromiseNode* prev_ = nullptr;
+    PromiseNode* next_ = nullptr;
+};
+
 template<typename Ret, typename A>
 struct FinalSuspend {
-    FinalSuspend(bool flag, PromiseTypeBase<Ret, A>& pro)
-        : auto_destroy(flag)
-        , promise(pro)
-    {
-
-    }
+    FinalSuspend(PromiseTypeBase<Ret, A>* promise)
+        : promise(promise)
+    { }
 
     bool await_ready() noexcept { return false; }
 
     void await_suspend(coroutine_handle<> prev_h) noexcept {
-        if (promise.completion_handler) {
-            if (promise.eptr) {
-                promise.completion_handler(promise.eptr);
+        if (promise->completion_handler_) {
+            if (promise->eptr_) {
+                promise->completion_handler_(promise->eptr_);
             } else {
                 if constexpr (std::is_void_v<Ret>) {
-                    promise.completion_handler(promise.eptr);
+                    promise->completion_handler_(Unit{});
                 } else {
-                    promise.completion_handler(promise.storage.unwrap());
+                    promise->completion_handler_(promise->storage_.unwrap());
                 }
             }
         }
 
-        if (promise.previous) {
-            promise.previous.resume();
+        // wake previous
+        if (promise->prev_) {
+            promise->prev_->wake();
         }
 
-        if (auto_destroy) {
-            MAGIO_DESTROY_CORO;
-            prev_h.destroy();
-        }
+        promise->destroy();
     }
 
     void await_resume() noexcept {
         
     }
-
-    bool auto_destroy;
-    PromiseTypeBase<Ret, A>& promise;
+    
+    PromiseTypeBase<Ret, A>* promise;
 };
 
 template<typename Ret, typename Awaitable>
-struct PromiseTypeBase {
+struct PromiseTypeBase: PromiseNode {
     Awaitable get_return_object() {
         MAGIO_CREATE_CORO;
+        handle_= coroutine_handle<PromiseTypeBase>::from_promise(*this);
         return {
-            coroutine_handle<PromiseTypeBase>::from_promise(*this),
-            { }
+            coroutine_handle<PromiseTypeBase>::from_promise(*this)
         };
     }
 
@@ -88,37 +118,37 @@ struct PromiseTypeBase {
     }
 
     auto final_suspend() noexcept {
-        return FinalSuspend(auto_destroy, *this);
+        return FinalSuspend(this);
     }
 
     void return_value(Ret value) {
-        storage = std::move(value);
+        storage_ = std::move(value);
     }
 
     void unhandled_exception() {
-        eptr = std::current_exception(); 
+        eptr_ = std::current_exception(); 
     }
 
     Ret get_value() {
-        return storage.unwrap();
+        if (eptr_) {
+            std::rethrow_exception(eptr_);
+        }
+
+        return storage_.unwrap();
     }
 
-    bool auto_destroy = true;
-    std::exception_ptr eptr;
-    AnyExecutor executor;
-    coroutine_handle<> previous;
-    CoroHandler<Ret> completion_handler;
+    CoroHandler<Ret> completion_handler_;
 
-    MaybeUninit<Ret> storage;
+    MaybeUninit<Ret> storage_;
 };
 
 template<typename Awaitable>
-struct PromiseTypeBase<void, Awaitable> {
+struct PromiseTypeBase<void, Awaitable>: PromiseNode {
     Awaitable get_return_object() {
         MAGIO_CREATE_CORO;
+        handle_= coroutine_handle<PromiseTypeBase>::from_promise(*this);
         return {
-            coroutine_handle<PromiseTypeBase>::from_promise(*this),
-            { }
+            coroutine_handle<PromiseTypeBase>::from_promise(*this)
         };
     }
 
@@ -127,20 +157,22 @@ struct PromiseTypeBase<void, Awaitable> {
     }
 
     auto final_suspend() noexcept {
-        return FinalSuspend(auto_destroy, *this);
+        return FinalSuspend(this);
     }
 
     void return_void() { }
 
     void unhandled_exception() {
-        eptr = std::current_exception(); 
+        eptr_ = std::current_exception(); 
     }
 
-    bool auto_destroy = true;
-    std::exception_ptr eptr;
-    AnyExecutor executor;
-    coroutine_handle<> previous;
-    CoroHandler<void> completion_handler;
+    void get_value() {
+        if (eptr_) {
+            std::rethrow_exception(eptr_);
+        }
+    }
+
+    CoroHandler<void> completion_handler_;
 };
 
 }
