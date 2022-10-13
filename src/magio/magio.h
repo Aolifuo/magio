@@ -3,7 +3,7 @@
 #include "magio/Magico.h"
 #include "magio/ThreadPool.h"
 #include "magio/coro/CoSpawn.h"
-#include "magio/coro/Operation.h"
+#include "magio/coro/Operators.h"
 #include "magio/timer/Timer.h"
 #include "magio/workflow/Workflow.h"
 #include "magio/net/SocketAddress.h"
