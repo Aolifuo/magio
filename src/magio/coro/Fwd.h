@@ -23,7 +23,9 @@ struct Detached{};
 }
 
 template<typename>
-struct Coro;
+class Coro;
+
+class Awaitable;
 
 inline detail::UseCoro use_coro;
 
