@@ -143,12 +143,20 @@ public:
         return ok;
     }
 
-    Ok expect() {
+    Ok expect(const char* str = nullptr) {
         if (flag_) {
             return std::move(get<Ok>());
         }
 
-        throw std::system_error(std::move(get<Err>()));
+        if constexpr (std::is_same_v<Err, std::error_code>) {
+            if (str) {
+                throw std::runtime_error(str);
+            } else {
+                throw std::system_error(std::move(get<Err>()));
+            }
+        } else {
+            throw std::runtime_error(str);
+        }
     }
 
     // Error type must be the same
