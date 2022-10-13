@@ -1,6 +1,6 @@
 # magio
 
-magio是一个基于事件循环和线程池的协程库
+magio是一个跨平台(Windows、Linux)的协程网络库，接口简单易用
 
 ## Coro
 
@@ -22,9 +22,9 @@ int main() {
     co_spawn(
         loop.get_executor(),
         []() -> Coro<> {
-            auto [a, b, c] = co_await coro_join(
-                factorial("A", 2),
-                factorial("B", 3),
+            auto [a, b, c] = co_await (
+                factorial("A", 2) &&
+                factorial("B", 3) &&
                 factorial("C", 4)
             );
             printf("%d %d %d\n", a, b, c);
@@ -294,7 +294,7 @@ EOF
 
 ## Benchmark
 
-Using the Apache Benchmarking tool, 1000000 requests, 1000 concurrency, enable keepalive, the QPS/RPS result below:
+单线程模式下，使用Apache Benchmarking工具。设置1000并发量，1000000请求数，keepalive，RPS如下。
 
 | framework      |  RPS [#/sec] (mean) | Language |   Pattern |
 |----------------|--------------------:| --------: |----------:|
