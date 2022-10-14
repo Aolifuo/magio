@@ -175,6 +175,7 @@ Coro<TcpStream> TcpServer::accept() {
     };
 
     if (hook.ec) {
+        plat::close_socket(io.fd);
         throw std::system_error(hook.ec);
     }
 
