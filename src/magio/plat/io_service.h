@@ -1,7 +1,5 @@
 #pragma once
 
-#include <array>
-
 #ifdef __linux__
 #include <netinet/in.h>
 #include "liburing.h"
@@ -14,7 +12,6 @@
 
 #include "magio/core/Queue.h"
 #include "magio/plat/socket.h"
-#include "magio/plat/errors.h"
 #include "magio/utils/ScopeGuard.h"
 
 namespace magio {
@@ -120,19 +117,12 @@ public:
             std::error_code ec;
             if (IOOP::Accept == io->op) {
                 int connfd = cqe->res;
-                if (-EAGAIN == connfd) {
-                    continue;
-                }
 
                 if (0 > connfd) {
                     ec = make_linux_system_error(-2);
                 } else {
                     io->fd = connfd;
                     ec = set_nonblock(connfd);
-                }
-
-                if (ec) {
-                    close_socket(connfd);
                 }
 
                 io->cb(ec, io->ptr, connfd);
@@ -145,6 +135,7 @@ public:
                 if (bytes_read == 0) {
                     ec = make_linux_system_error(-1);
                 }
+                
                 if (!ec) {
                     io->wsa_buf.len = bytes_read;
                 }
