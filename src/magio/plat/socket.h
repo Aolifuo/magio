@@ -1,7 +1,6 @@
 #pragma once
 
 #include "magio/plat/declare.h"
-#include "magio/plat/errors.h"
 #include "magio/net/SocketAddress.h"
 #include "magio/dev/Resource.h"
 
