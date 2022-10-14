@@ -45,6 +45,33 @@ struct GetExecutor {
     AnyExecutor executor;
 };
 
+template<typename Ret>
+struct Attach {
+    Attach(Coro<Ret>& coro): coro(coro) {
+
+    }
+
+    bool await_ready() { return false; }
+
+    template<typename PT>
+    auto await_suspend(coroutine_handle<PT> prev_h) {
+        if (!prev_h.promise().next_) {
+            prev_h.promise().next_ = &coro.promise();
+            coro.promise().prev_ = &prev_h.promise();
+        }
+        prev_h.promise().wake();
+    }
+
+    auto await_resume() {
+        
+    }
+
+    Coro<Ret>& coro;
+};
+
+template<typename T>
+Attach(Coro<T>&) -> Attach<T>;
+
 inline GetExecutor executor;
 
 }
@@ -61,10 +88,7 @@ public:
             return;
         }
 
-        // the coro that not start
-        if (main_h_.promise().stop_flag_ == nullptr) {
-            main_h_.promise().destroy();
-        }
+        // TODO
     }
 
     Coro(const Coro&) = delete;
@@ -84,12 +108,8 @@ public:
     template<typename PT>
     void await_suspend(coroutine_handle<PT> prev_h) {
         main_h_.promise().executor_ = prev_h.promise().executor_;
-
         prev_h.promise().next_ = &main_h_.promise();
         main_h_.promise().prev_ = &prev_h.promise();
-
-        main_h_.promise().stop_flag_ = prev_h.promise().stop_flag_;
-
         main_h_.promise().wake();
     }
 
@@ -106,7 +126,6 @@ public:
     }
 
     void wake(AnyExecutor executor) {
-        main_h_.promise().stop_flag_ = std::make_shared<std::atomic_flag>();
         main_h_.promise().executor_ = executor;
         executor.post([main_h_ = main_h_] { main_h_.promise().wake(); });
     }

@@ -32,17 +32,14 @@ template<typename Ret, typename Awaitable>
 struct PromiseTypeBase;
 
 struct PromiseNode {
-    // be stopped
-    void destroy_from_tail() {
-        if (prev_) {
-            auto cur = prev_;
-            auto prev = cur->prev_;
-            while (prev) {
-                cur->destroy();
-                cur = prev;
-                prev = cur->prev_;
-            }
-            cur->destroy();
+    
+    void destroy_all() {
+        auto cur = this;
+        auto prev = cur->prev_;
+        while (prev) {
+            prev->destroy();
+            cur = prev;
+            prev = cur->prev_;
         }
 
         destroy();
@@ -56,8 +53,6 @@ struct PromiseNode {
     void wake() {
         handle_.resume();
     }
-
-    std::shared_ptr<std::atomic_flag> stop_flag_;
 
     coroutine_handle<> handle_;
     std::exception_ptr eptr_;
@@ -91,6 +86,9 @@ struct FinalSuspend {
         // wake previous
         if (promise->prev_) {
             promise->prev_->wake();
+
+            promise->prev_->next_ = nullptr;
+            promise->prev_ = nullptr;
         }
 
         promise->destroy();

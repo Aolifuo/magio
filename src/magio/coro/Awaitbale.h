@@ -14,11 +14,7 @@ public:
     { }
 
     void try_wake() const {
-        if (node_->stop_flag_->test()) {
-            node_->destroy_from_tail();
-        } else {
-            node_->wake();
-        }
+        node_->wake();
     }
 private:
     PromiseNode* node_ = nullptr;
