@@ -41,23 +41,23 @@ Coro<> test_seq() {
 }
 
 Coro<> test_con() {
-    auto con1 = sleep(1000) && get_num(7) && may_throw() && sleep(1000);
-    auto con2 = sleep(1000) && get_num(9) && std::move(con1);
+    auto con1 = delay(500) | delay(100) && sleep(1000) && get_num(7);
+    auto con2 = delay(1000) && get_num(9) | std::move(con1);
     auto [a, b] = co_await con2; 
     cout << a << " " << b << '\n'; 
 }
 
 Coro<> test_race() {
-    // auto race1 = delay(1000)|| delay(400) || sleep(900);
-    // auto race2 = delay(1200) || std::move(race1) || delay(700);
-    // co_await race2;
-    co_await (delay(6000) || delay(700) || delay(300));
+    auto race1 = delay(1000)|| delay(400) || sleep(900);
+    auto race2 = delay(1200) || std::move(race1) || delay(700);
+    cout << "beg\n";
+    co_await race2;
     cout << "ok\n";
 }
 
 int main() {
     Magico loop(1);
-    co_spawn(loop.get_executor(), test_race(), [](Expected<Unit, exception_ptr> exp) {
+    co_spawn(loop.get_executor(), test_con(), [](Expected<Unit, exception_ptr> exp) {
         if (!exp) {
             try {
                 rethrow_exception(exp.unwrap_err());
