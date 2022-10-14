@@ -1,6 +1,7 @@
 #pragma once
 
 #include <system_error>
+#include <cstring>
 #include "magio/dev/Log.h"
 
 #ifdef _WIN32
