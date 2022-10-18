@@ -8,6 +8,7 @@
 namespace magio {
 
 struct EventHook {
+    TimerID             id = MAGIO_INVALID_TIMERID;
     plat::socket_type   fd;
     Waker               w;
     std::error_code     ec;
@@ -17,7 +18,13 @@ void resume_from_hook(std::error_code ec, void* ptr, plat::socket_type fd) {
     auto phook = (EventHook*)ptr;
     phook->fd = fd;
     phook->ec = ec;
-    phook->w.try_wake();
+    if (phook->id != MAGIO_INVALID_TIMERID) {
+        if(phook->w.node_->executor_.cancel(phook->id)) {
+            phook->id = MAGIO_INVALID_TIMERID;
+        }
+    }
+
+    phook->w.wake();
 }
 
 // TcpStream
@@ -44,11 +51,26 @@ Coro<TcpStream> TcpStream::connect(const char* host, uint_least16_t port) {
     io.cb = resume_from_hook;
 
     co_await Awaitable {
-        [&hook, &remote_address, pio = &io](AnyExecutor exe, Waker waker) {
+        [&hook, &remote_address, pio = &io](AnyExecutor exe, Waker waker, size_t tm) {
             hook.w = waker;
             exe.get_service().async_connect(pio, remote_address._sockaddr);
+
+            // cancel io
+            if (tm != MAGIO_MAX_TIME) {
+                hook.id = exe.invoke_after([sock = pio->fd](bool exit) {
+                    if (exit) {
+                        return;
+                    }
+
+                    cancel_io(sock);
+                }, tm);
+            }
         }
     };
+
+    if (hook.id != MAGIO_INVALID_TIMERID) {
+        co_await detail::WakeAfterTimeout{};
+    }
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
@@ -69,13 +91,28 @@ Coro<size_t> TcpStream::read(char* buf, size_t len) {
     io.wsa_buf.len = len;
     io.ptr = &hook;
     io.cb = resume_from_hook;
-
+   
     co_await Awaitable {
-        [&hook, this, pio = &io](AnyExecutor exe, Waker waker) {
+        [&hook, this, pio = &io](AnyExecutor exe, Waker waker, size_t tm) {
             hook.w = waker;
             socket_.get_executor().get_service().async_receive(pio);
+
+            // cancel io
+            if (tm != MAGIO_MAX_TIME) {
+                hook.id = exe.invoke_after([sock = pio->fd](bool exit) {
+                    if (exit) {
+                        return;
+                    }
+
+                    cancel_io(sock);
+                }, tm);
+            }
         }
     };
+
+    if (hook.id != MAGIO_INVALID_TIMERID) {
+        co_await detail::WakeAfterTimeout{};
+    }
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
@@ -95,11 +132,25 @@ Coro<size_t> TcpStream::write(const char* buf, size_t len) {
     io.cb = resume_from_hook;
 
     co_await Awaitable {
-        [this, &hook, pio = &io](AnyExecutor exe, Waker waker) {
+        [this, &hook, pio = &io](AnyExecutor exe, Waker waker, size_t tm) {
             hook.w = waker;
             socket_.get_executor().get_service().async_send(pio);
+
+            if (tm != MAGIO_MAX_TIME) {
+                hook.id = exe.invoke_after([sock = pio->fd](bool exit) {
+                    if (exit) {
+                        return;
+                    }
+
+                    cancel_io(sock);
+                }, tm);
+            }
         }
     };
+
+    if (hook.id != MAGIO_INVALID_TIMERID) {
+        co_await detail::WakeAfterTimeout{};
+    }
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
@@ -168,7 +219,7 @@ Coro<TcpStream> TcpServer::accept() {
     io.cb = resume_from_hook;
 
     co_await Awaitable {
-        [&hook, pio = &io, this](AnyExecutor exe, Waker waker) {
+        [&hook, pio = &io, this](AnyExecutor exe, Waker waker, size_t _) {
             hook.w = waker;
             listener.get_executor().get_service().async_accept(listener.handle(), pio);
         }

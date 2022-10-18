@@ -7,17 +7,23 @@
 namespace magio {
 
 struct UdpHook {
+    TimerID             id = MAGIO_INVALID_TIMERID;
     plat::socket_type   fd;
     Waker               w;
     std::error_code     ec;
 };
 
-void resume_from_hook2(std::error_code ec, void* ptr, plat::socket_type fd)
-{
+void resume_from_hook2(std::error_code ec, void* ptr, plat::socket_type fd) {
     auto phook = (UdpHook*)ptr;
     phook->fd = fd;
     phook->ec = ec;
-    phook->w.try_wake();
+    if (phook->id != MAGIO_INVALID_TIMERID) {
+        if(phook->w.node_->executor_.cancel(phook->id)) {
+            phook->id = MAGIO_INVALID_TIMERID;
+        }
+    }
+
+    phook->w.wake();
 }
 
 // UdpSocket
@@ -28,6 +34,10 @@ Coro<UdpSocket> UdpSocket::bind(const char* host, uint_least16_t port) {
     auto socket = Socket::create(exe, Protocol::UDP).expect();
     auto address = make_address(host, port).expect();
     socket.bind(address).expect();
+
+#ifdef _WIN32
+    socket.get_executor().get_service().relate(socket.handle());
+#endif
 
     co_return {std::move(socket)};
 }
@@ -43,11 +53,26 @@ Coro<std::pair<size_t, SocketAddress>> UdpSocket::read_from(char* buf, size_t le
     io.cb = resume_from_hook2;
 
     co_await Awaitable {
-        [&hook, pio = &io, this](AnyExecutor exe, Waker waker) {
+        [&hook, pio = &io, this](AnyExecutor exe, Waker waker, size_t tm) {
             hook.w = waker;
             socket_.get_executor().get_service().async_receive_from(pio);
+            
+            // cancel io
+            if (tm != MAGIO_MAX_TIME) {
+                hook.id = exe.invoke_after([sock = pio->fd](bool exit) {
+                    if (exit) {
+                        return;
+                    }
+
+                    cancel_io(sock);
+                }, tm);
+            }
         }
     };
+
+    if (hook.id != MAGIO_INVALID_TIMERID) {
+        co_await detail::WakeAfterTimeout{};
+    }
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
@@ -94,11 +119,26 @@ Coro<size_t> UdpSocket::write_to(const char* buf, size_t len, const SocketAddres
     io.cb = resume_from_hook2;
 
     co_await Awaitable {
-        [&hook, pio = &io, this](AnyExecutor exe, Waker waker) {
+        [&hook, pio = &io, this](AnyExecutor exe, Waker waker, size_t tm) {
             hook.w = waker;
             socket_.get_executor().get_service().async_send_to(pio);
+
+            // cancel io
+            if (tm != MAGIO_MAX_TIME) {
+                hook.id = exe.invoke_after([sock = pio->fd](bool exit) {
+                    if (exit) {
+                        return;
+                    }
+
+                    cancel_io(sock);
+                }, tm);
+            }
         }
     };
+
+    if (hook.id != MAGIO_INVALID_TIMERID) {
+        co_await detail::WakeAfterTimeout{};
+    }
 
     if (hook.ec) {
         throw std::system_error(hook.ec);
