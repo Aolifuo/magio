@@ -1,10 +1,9 @@
 #include "magio/ThreadPool.h"
 
-#include <cstdio>
-#include <list>
 #include <thread>
 #include "magio/core/Queue.h"
-#include "magio/core/TimingTask.h"
+#include "magio/coro/Awaitbale.h"
+#include "magio/core/TimedTask.h"
 #include "magio/plat/io_service.h"
 
 namespace magio {
@@ -15,12 +14,12 @@ struct ThreadPool::Impl: public ExecutionContext {
     };
 
     State                                   state = Stop;
-    RingQueue<Handler>                      posted_tasks{64};
-    TimingTaskManager                       timed_tasks;
+    RingQueue<Waker>                        queued_wakers{64};
+    TimedTaskManager                        timed_tasks;
 
-    std::mutex                              posted_m; // protect idle
+    std::mutex                              wakers_m; // protect idle
     std::mutex                              timed_m; // protect timed
-    std::condition_variable                 posted_cv;
+    std::condition_variable                 wakers_cv;
     std::condition_variable                 timed_cv;
     std::atomic_size_t                      count = 0;
 
@@ -28,10 +27,10 @@ struct ThreadPool::Impl: public ExecutionContext {
 
     std::vector<std::thread>                threads;
 
-    void post(Handler&& handler) override;
-    void dispatch(Handler&& handler) override;
-    TimerID set_timeout(size_t ms, Handler&& handler) override;
-    void clear(TimerID id) override;
+
+    void async_wake(Waker waker) override;
+    TimerID invoke_after(TimerHandler&& handler, size_t ms) override;
+    bool cancel(TimerID id) override;
     plat::IOService& get_service() override;
     void wait();
     void join();
@@ -43,12 +42,13 @@ struct ThreadPool::Impl: public ExecutionContext {
 
     ~Impl() {
         join();
+        MAGIO_CHECK_RESOURCE;
     }
 };
 
 CLASS_PIMPL_IMPLEMENT(ThreadPool)
 
-ThreadPool::ThreadPool(size_t thread_num) {
+ThreadPool::ThreadPool(size_t thread_num, bool flag) {
     impl = new Impl;
 
     for (size_t i = 0; i < thread_num; ++i) {
@@ -59,37 +59,21 @@ ThreadPool::ThreadPool(size_t thread_num) {
     run();
 }
 
-void ThreadPool::post(Handler&& handler) {
-    impl->post(std::move(handler));
-}
-
-void ThreadPool::dispatch(Handler &&handler) {
-    impl->dispatch(std::move(handler));
-}
-
-TimerID ThreadPool::set_timeout(size_t ms, Handler&& handler) {
-    return impl->set_timeout(ms, std::move(handler));
-}
-
-void ThreadPool::clear(TimerID id) {
-    impl->clear(id);
-}
-
 void ThreadPool::run() {
     {
-        std::scoped_lock lk(impl->posted_m, impl->timed_m);
+        std::scoped_lock lk(impl->wakers_m, impl->timed_m);
         impl->state = Impl::Running;
     }
-    impl->posted_cv.notify_all();
+    impl->wakers_cv.notify_all();
     impl->timed_cv.notify_all();
 }
 
 void ThreadPool::stop() {
     {
-        std::scoped_lock lk(impl->posted_m, impl->timed_m);
+        std::scoped_lock lk(impl->wakers_m, impl->timed_m);
         impl->state = Impl::Stop;
     }
-    impl->posted_cv.notify_all();
+    impl->wakers_cv.notify_all();
     impl->timed_cv.notify_all();
 }
 
@@ -109,20 +93,16 @@ AnyExecutor ThreadPool::get_executor() const {
     return AnyExecutor(impl);
 }
 
-void ThreadPool::Impl::post(Handler&& handler) {
+void ThreadPool::Impl::async_wake(Waker waker) {
     count.fetch_add(1, std::memory_order_acquire);
     {
-        std::lock_guard lk(posted_m);
-        posted_tasks.push(std::move(handler));
+        std::lock_guard lk(wakers_m);
+        queued_wakers.emplace(waker);
     }
-    posted_cv.notify_one();
+    wakers_cv.notify_one();
 }
 
-void ThreadPool::Impl::dispatch(Handler &&handler) {
-    post(std::move(handler));
-}
-
-TimerID ThreadPool::Impl::set_timeout(size_t ms, Handler&& handler) {
+TimerID ThreadPool::Impl::invoke_after(TimerHandler&& handler, size_t ms) {
     TimerID id;
     count.fetch_add(1, std::memory_order_acquire);
     {
@@ -133,12 +113,17 @@ TimerID ThreadPool::Impl::set_timeout(size_t ms, Handler&& handler) {
     return id;
 }
 
-void ThreadPool::Impl::clear(TimerID id) {
+bool ThreadPool::Impl::cancel(TimerID id) {
+    bool flag = false;
     {
         std::lock_guard lk(timed_m);
-        timed_tasks.cancel(id);
+        flag = timed_tasks.cancel(id);
     }
-    count.fetch_sub(1, std::memory_order_release);
+    if (flag) {
+        count.fetch_sub(1, std::memory_order_release);
+        return true;
+    }
+    return false;
 }
 
 plat::IOService& ThreadPool::Impl::get_service() {
@@ -170,18 +155,18 @@ void ThreadPool::Impl::attach() {
 
 void ThreadPool::Impl::destroy() {
     {
-        std::scoped_lock lk(posted_m, timed_m);
+        std::scoped_lock lk(wakers_m, timed_m);
         state = PendingDestroy;
     }
-    posted_cv.notify_all();
+    wakers_cv.notify_all();
     timed_cv.notify_all();
 }   
 
 void ThreadPool::Impl::worker() {
     for (; ;) {
-        std::unique_lock lk(posted_m);
-        posted_cv.wait(lk, [this] {
-            return (state == Running && !posted_tasks.empty()) 
+        std::unique_lock lk(wakers_m);
+        wakers_cv.wait(lk, [this] {
+            return (state == Running && !queued_wakers.empty()) 
                 || state == PendingDestroy;
         });
 
@@ -189,11 +174,11 @@ void ThreadPool::Impl::worker() {
             return;
         }
 
-        auto task = std::move(posted_tasks.front());
-        posted_tasks.pop();
+        auto waker = queued_wakers.front();
+        queued_wakers.pop();
         lk.unlock();
 
-        task();
+        waker.wake();
         count.fetch_sub(1, std::memory_order_release);
     }
 }
@@ -213,9 +198,8 @@ void ThreadPool::Impl::time_poller() {
         for (; ;) {
             if (auto res = timed_tasks.get_expired_task(); res) {
                 lk.unlock();
-                post(res.unwrap());
+                res.unwrap()(false);
                 count.fetch_sub(1, std::memory_order_release);
-                lk.lock();
             } else {
                 break;
             }
