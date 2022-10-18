@@ -17,6 +17,10 @@ public:
 
     Channel(AnyExecutor executor): executor_(executor) {}
 
+    ~Channel() {
+        stop();
+    }
+
     void async_send(Ts...args) {
         std::unique_lock lk(m_);
         if (state_ == Stop) {
@@ -69,10 +73,10 @@ public:
 
         MaybeUninit<std::tuple<Ts...>> ret;
         co_await Awaitable {
-            [&lk, &ret, p = this->shared_from_this()](AnyExecutor exe, Waker waker) {
+            [&lk, &ret, p = this->shared_from_this()](AnyExecutor exe, Waker waker, size_t) {
                 p->consumer_.push([&ret, waker](Ts...args) mutable {
                     ret = std::make_tuple(std::move(args)...);
-                    waker.try_wake();
+                    waker.wake();
                 });
                 lk.unlock();
             }
