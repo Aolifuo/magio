@@ -1,11 +1,10 @@
 #pragma once
 
-#include <concepts>
 #include <exception>
 #include "magio/dev/Resource.h"
 #include "magio/coro/Fwd.h"
 #include "magio/coro/Config.h"
-#include "magio/core/Error.h"
+#include "magio/core/Expected.h"
 #include "magio/core/MaybeUninit.h"
 #include "magio/execution/Execution.h"
 
@@ -32,17 +31,17 @@ template<typename Ret, typename Awaitable>
 struct PromiseTypeBase;
 
 struct PromiseNode {
-    
+
     void destroy_all() {
         auto cur = this;
-        auto prev = cur->prev_;
-        while (prev) {
-            prev->destroy();
-            cur = prev;
-            prev = cur->prev_;
+        auto next = next_;
+        while (next) {
+            cur->destroy();
+            cur = next;
+            next = cur->next_;
         }
 
-        destroy();
+        cur->destroy();
     }
 
     void destroy() {
@@ -54,13 +53,18 @@ struct PromiseNode {
         handle_.resume();
     }
 
-    coroutine_handle<> handle_;
-    std::exception_ptr eptr_;
-    AnyExecutor executor_;
+    coroutine_handle<>      handle_;
+    std::exception_ptr      eptr_;
+    AnyExecutor             executor_;
 
-    PromiseNode* prev_ = nullptr;
-    PromiseNode* next_ = nullptr;
+    size_t                  timeout_ = MAGIO_MAX_TIME;
+    PromiseNode*            timeout_node_;
+
+    PromiseNode*            prev_ = nullptr;
+    PromiseNode*            next_ = nullptr;
 };
+
+
 
 template<typename Ret, typename A>
 struct FinalSuspend {
@@ -86,11 +90,8 @@ struct FinalSuspend {
         // wake previous
         if (promise->prev_) {
             promise->prev_->wake();
-
-            promise->prev_->next_ = nullptr;
-            promise->prev_ = nullptr;
         }
-
+        
         promise->destroy();
     }
 
