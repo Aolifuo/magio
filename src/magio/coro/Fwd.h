@@ -25,6 +25,7 @@ struct Detached{};
 template<typename>
 class Coro;
 
+template<typename Fn>
 class Awaitable;
 
 inline detail::UseCoro use_coro;
@@ -33,6 +34,6 @@ inline detail::UseFuture use_future;
 
 inline detail::Detached detached;
 
-
+inline constexpr size_t MAGIO_MAX_TIME = std::numeric_limits<size_t>::max(); 
 
 }
