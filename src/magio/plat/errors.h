@@ -11,7 +11,7 @@
 namespace magio {
 
 // -1 EOF
-// -2 Unkown error
+// -2 timeout cancel
 
 #ifdef _WIN32
 
@@ -26,7 +26,7 @@ public:
         case -1:
             return "EOF";
         case -2:
-            return "IO loop Not start";
+            return "timeout";
         }
 
         LPTSTR lp_buffer = nullptr;
@@ -83,7 +83,7 @@ public:
         case -1:
             return "EOF";
         case -2:
-            return "Accept error";
+            return "timeout";
         }
 
         return strerror(code);
