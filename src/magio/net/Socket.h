@@ -80,4 +80,12 @@ protected:
     plat::socket_type   fd_ = plat::MAGIO_INVALID_SOCKET;
 };
 
+inline void cancel_io(plat::socket_type sock) {
+
+#ifdef _WIN32
+    ::CancelIoEx((HANDLE)sock, NULL);
+#endif
+
+}
+
 }
