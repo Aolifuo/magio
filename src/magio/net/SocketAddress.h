@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "magio/core/Error.h"
+#include "magio/core/Expected.h"
 #include "magio/plat/errors.h"
 
 #ifdef __linux__
