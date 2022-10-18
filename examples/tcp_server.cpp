@@ -16,14 +16,14 @@ Coro<> process(TcpStream stream) {
             );
             cout << string_view(buf.data(), rdlen) << '\n';
         }
-    } catch(const std::runtime_error& err) {
+    } catch(const system_error& err) {
         cout << err.what() << '\n';
     }
 }
 
 Coro<> amain() {
     try {
-        auto server = co_await TcpServer::bind("127.0.0.1", 8000);
+        auto server = co_await TcpServer::bind("0.0.0.0", 8000);
         for (; ;) {
             auto stream = co_await server.accept();
 
@@ -33,7 +33,7 @@ Coro<> amain() {
                  << '\n';
             co_spawn(co_await this_coro::executor, process(std::move(stream)));
         }
-    } catch(const std::runtime_error& err) {
+    } catch(const runtime_error& err) {
         cout << err.what() << '\n';
     }
 }
