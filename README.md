@@ -2,185 +2,32 @@
 
 magio是一个跨平台(Windows、Linux)的协程网络库，接口简单易用
 
-## Coro
-
-```cpp
-Coro<int> factorial(std::string_view name, int num) {
-    int res = 1;
-
-    for (int i = 2; i <= num; ++i) {
-        printf("Task %s: Compute factorial %d, now i = %d\n", name.data(), num, i);
-        co_await sleep(1000);
-        res *= i;
-    }
-    printf("Task %s: factorial %d = %d\n", name.data(), num, res);
-    co_return res;
-}
-
-int main() {
-    Magico loop(1);
-    co_spawn(
-        loop.get_executor(),
-        []() -> Coro<> {
-            auto [a, b, c] = co_await (
-                factorial("A", 2) &&
-                factorial("B", 3) &&
-                factorial("C", 4)
-            );
-            printf("%d %d %d\n", a, b, c);
-        }()
-    );
-    loop.run();
-}
-```
-
-output
-
-```shell
-Task A: Compute factorial 2, now i = 2
-Task B: Compute factorial 3, now i = 2
-Task C: Compute factorial 4, now i = 2
-Task A: factorial 2 = 2
-Task B: Compute factorial 3, now i = 3
-Task C: Compute factorial 4, now i = 3
-Task B: factorial 3 = 6
-Task C: Compute factorial 4, now i = 4
-Task C: factorial 4 = 24
-24 6 2
-```
-
-## Channel
-
-```cpp
-void func1(shared_ptr<Channel<int, string>> chan) {
-    for (size_t i = 0; i < 5; ++i) {
-        chan->async_receive([](int n, string str) {
-            printf("%s receive %d %s\n", "func1", n, str.c_str());
-        });
-    }
-}
-
-Coro<void> func2(shared_ptr<Channel<int, string>> chan) {
-    for (size_t i = 0; i < 5; ++i) {    
-        auto [n, str] = co_await chan->async_receive(use_coro);
-        printf("%s receive %d %s\n", "func2", n, str.c_str());
-    }
-}
-
-int main() {
-    ThreadPool pool(8);
-
-    auto channel = make_shared<Channel<int, string>>(pool.get_executor());
-    for (size_t i = 0; i < 10; ++i) {
-        channel->async_send(i, "from main");
-    }
-    pool.post([=] { func1(channel); });
-    co_spawn(pool.get_executor(), func2(channel), detached);
-}
-```
-
-output
-
-```shell
-func1 receive 0 from main
-func1 receive 1 from main
-func1 receive 2 from main
-func1 receive 3 from main
-func1 receive 4 from main
-func2 receive 5 from main
-func2 receive 6 from main
-func2 receive 7 from main
-func2 receive 8 from main
-func2 receive 9 from main
-```
-
-## Workflow
-
-```mermaid
-graph LR;
-     a-->b
-     a-->c
-     b-->d
-     b-->f
-     c-->d
-     c-->f
-     d-->e
-     f-->e
-```
-
-```cpp
-int main() {
-    ThreadPool pool(8);
-    
-    auto a = Workflow::create_task([](ContextPtr ctx) {
-        printf("task a start!\n");
-    });
-    auto b = Workflow::create_timed_task(5000, [](ContextPtr ctx) {
-        printf("task b timeout!\n");
-    });
-    auto c = Workflow::create_timed_task(1000, [](ContextPtr ctx) {
-        printf("task c timeout!\n");
-    });
-    auto d = Workflow::create_task([](ContextPtr ctx) {
-        printf("task d start!\n");
-    });
-    auto e = Workflow::create_timed_task(2000, [](ContextPtr ctx) {
-        printf("task e timeout!\n");
-    });
-    auto f = Workflow::create_task([](ContextPtr ctx) {
-        cout << "task f start!\n";
-    });
-
-    a->successor(b, c);
-    b->successor(d, e);
-    c->successor(d, e);
-    d->successor(f);
-    e->successor(f);
-
-    Workflow::run(pool.get_executor(), a, [](exception_ptr eptr) {
-        if (eptr) {
-            try {
-                rethrow_exception(eptr);
-            } catch(const exception& e) {
-                cout << e.what() << '\n';
-            }
-        }
-    });
-}
-```
-
-output
-
-```shell
-task a start!
-task c timeout!
-task b timeout!
-task d start!
-task e timeout!
-task f start!
-```
-
 ## Udp echo
 
 ```cpp
 Coro<> amain() {
-    auto exe = co_await this_coro::executor;
-    auto socket = co_await UdpSocket::bind("127.0.0.1", 8001);
-    auto channel = make_shared<Channel<string_view, SocketAddress>>(exe);
-
-    // send
-    co_spawn(exe, [&socket, channel]() -> Coro<> {
+    try {
+        array<char, 1024> buf;
+        auto socket = co_await UdpSocket::bind("127.0.0.1", 8001);
         for (; ;) {
-            auto [str, addr] = co_await channel->async_receive(use_coro);
-            co_await socket.write_to(str.data(), str.length(), addr);
-        }
-    }());
+            // 5秒后超时取消read
+            auto read_res = co_await timeout(5000, socket.read_from(buf.data(), buf.size()));
+            if (!read_res) {
+                cout << "read timeout!\n";
+                continue;
+            }
 
-    // receive
-    array<char, 1024> buf;
-    for (; ;) {
-        auto [rdlen, addr] = co_await socket.read_from(buf.data(), buf.size());
-        channel->async_send({buf.data(), rdlen}, addr);
+            auto [len, address] = read_res.unwrap();
+            cout << string_view(buf.data(), len) << '\n';
+
+            auto write_res = co_await timeout(5000, socket.write_to(buf.data(), len, address));
+            if (!write_res) {
+                cout << "write timeout!\n";
+                continue;
+            }
+        }
+    } catch (const system_error& err) {
+        cout << err.what() << '\n';
     }
 }
 
