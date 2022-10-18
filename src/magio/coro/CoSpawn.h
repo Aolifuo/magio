@@ -6,19 +6,6 @@
 
 namespace magio {
 
-class Timer {
-public:
-    Timer(PromiseNode* node)
-        : node_(node)
-    { }
-
-    void cancel() {
-        node_->destroy();
-    }
-private:
-    PromiseNode* node_;
-};
-
 template<typename Ret>
 inline void co_spawn(AnyExecutor executor, Coro<Ret> coro, detail::Detached d = {}) {
     coro.wake(executor);
@@ -64,17 +51,6 @@ inline auto co_spawn(AnyExecutor executor, Fn fn, H handler = H{}) {
     return co_spawn(executor, [](Fn fn) -> Coro<ReturnType> {
         co_return fn();
     }(std::move(fn)), std::move(handler));
-}
-
-template<typename Ret>
-inline Timer co_spawn(AnyExecutor executor, size_t ms, Coro<Ret> coro) {
-    auto delay = sleep(ms);
-    delay.set_completion_handler(
-        [executor, coro = std::move(coro)](Expected<Unit, std::exception_ptr> exp) {
-            coro.wake(executor);
-        });
-    delay.wake(executor);
-    return {&delay.promise()};
 }
 
 }
