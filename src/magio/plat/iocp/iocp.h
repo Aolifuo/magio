@@ -1,9 +1,9 @@
 #pragma once
 
 #ifdef _WIN32
-#include <WinSock2.h>
-#include "magio/core/Error.h"
+#include "magio/core/Expected.h"
 #include "magio/plat/errors.h"
+#include <WinSock2.h>
 
 namespace magio {
 
@@ -54,12 +54,11 @@ public:
         return {};
     }
 
-    std::error_code wait(size_t ms, DWORD* pbytes, void** piodata) {
-        void* key;
+    std::error_code wait(size_t ms, DWORD* pbytes, void** piodata, void** key) {
         bool status = ::GetQueuedCompletionStatus(
             handle_,
             pbytes, 
-            (PULONG_PTR)&key, 
+            (PULONG_PTR)key, 
             (LPOVERLAPPED*)piodata, 
             (ULONG)ms);
             
@@ -70,6 +69,15 @@ public:
         }
 
         return {};
+    }
+
+    void notify_one() {
+        void* key = nullptr;
+        ::PostQueuedCompletionStatus(
+            handle_, 
+            ULONG_MAX,
+            (ULONG_PTR)key, 
+            NULL);
     }
 private:
     HANDLE handle_ = nullptr;
