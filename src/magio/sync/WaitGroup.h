@@ -9,9 +9,7 @@ class WaitGroup: public std::enable_shared_from_this<WaitGroup> {
 public:
     WaitGroup(size_t task_num)
         : wait_num_(task_num)
-    {
-
-    }
+    { }
 
     void done() {
         std::lock_guard lk(m_);
