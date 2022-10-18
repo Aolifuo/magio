@@ -23,11 +23,6 @@ namespace plat {
 
 #ifdef __linux__
 
-struct Buffer {
-    char* buf;
-    size_t len;
-};
-
 struct IOData {
     int     fd;
     IOOP    op;
