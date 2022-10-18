@@ -11,13 +11,8 @@ class Magico {
     CLASS_PIMPL_DECLARE(Magico)
     
 public:
-    Magico(size_t worker_threads);
+    Magico(size_t worker_threads = 1);
 
-    void post(Handler&& handler);
-    void dispatch(Handler&& handler);
-    TimerID set_timeout(size_t ms, Handler&& handler);
-    void clear(TimerID id);
-    bool poll();
     void run();
     void stop();
 
