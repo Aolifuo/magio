@@ -10,18 +10,17 @@ class IOService;
 
 }
 
+class Waker;
 
 class ExecutionContext {
     friend class AnyExecutor;
 
 public:
-    virtual void post(Handler&&) = 0;
-    virtual void dispatch(Handler&&) = 0;
-    virtual TimerID set_timeout(size_t ms, Handler&&) = 0;
-    virtual void clear(TimerID) = 0;
-    virtual ~ExecutionContext() = default;
-
+    virtual void async_wake(Waker) = 0;
+    virtual TimerID invoke_after(TimerHandler&&, size_t) = 0;
+    virtual bool cancel(TimerID) = 0;
     virtual plat::IOService& get_service() = 0;
+    virtual ~ExecutionContext() = default;
 };
 
 class AnyExecutor {
@@ -32,23 +31,15 @@ public:
         : context_(context) 
     {}
 
-    void post(Handler&& handler) {
-        context_->post(std::move(handler));
+    void async_wake(Waker waker) const;
+
+    TimerID invoke_after(TimerHandler&& handler, size_t ms) const;
+
+    bool cancel(TimerID id) const {
+        return context_->cancel(id);
     }
 
-    void dispatch(Handler&& handler) {
-        context_->dispatch(std::move(handler));
-    }
-
-    TimerID set_timeout(size_t ms, Handler&& handler) {
-        return context_->set_timeout(ms, std::move(handler));
-    }
-
-    void clear(TimerID id) {
-        context_->clear(id);
-    }
-
-    plat::IOService& get_service() {
+    plat::IOService& get_service() const {
         return context_->get_service();
     }
     
