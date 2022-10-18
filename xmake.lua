@@ -3,10 +3,9 @@
 -- set_config("ldflags", "-lc++")
 
 set_project("magio")
-set_version("0.0.6")
+set_version("0.0.7")
 
 add_rules("mode.debug", "mode.release")
-add_cxxflags("/EHa")
 set_languages("cxx20")
 set_warnings("all")
 add_requires("fmt")
@@ -22,6 +21,7 @@ if is_plat("linux") then
 end
 
 if is_plat("windows") then 
+    add_cxxflags("/EHa")
     add_syslinks("ws2_32")
 end
 
