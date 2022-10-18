@@ -1,59 +1,9 @@
 #pragma once
 
-#include <variant>
 #include "magio/core/MaybeUninit.h"
 #include "magio/coro/Coro.h"
 
 namespace magio {
-
-namespace util {
-
-template<typename...Ts>
-struct TypeList { };
-
-template<typename...>
-struct FlatImpl;
-
-template<typename...>
-struct Flat;
-
-template<typename...>
-struct Unique;
-
-template<typename>
-struct IsTuple: std::false_type {};
-
-template<typename>
-struct IsVariant: std::false_type {};
-
-template<typename...Ts>
-struct FlatImpl<TypeList<Ts...>> {
-    using Tuple = std::conditional_t<sizeof...(Ts) == 0, void, std::tuple<Ts...>>;
-    using Variant = std::conditional_t<sizeof...(Ts) == 0, void, std::variant<Ts...>>;
-};
-
-template<template<typename...> typename C, typename...Ts, typename...Us, typename...Ks>
-struct FlatImpl<TypeList<Ts...>, C<Us...>, Ks...>
-    : FlatImpl<TypeList<Ts..., Us...>, Ks...>{};
-
-template<typename...Ts, typename T, typename...Us>
-struct FlatImpl<TypeList<Ts...>, T, Us...>
-    : FlatImpl<TypeList<Ts..., T>, Us...> {};
-
-template<typename...Ts, typename...Us>
-struct FlatImpl<TypeList<Ts...>, void, Us...>
-    : FlatImpl<TypeList<Ts...>, Us...> {};
-
-template<typename...Ts>
-struct Flat: FlatImpl<TypeList<>, Ts...> {};
-
-template<typename...Ts>
-struct IsTuple<std::tuple<Ts...>>: std::true_type {};
-
-template<typename...Ts>
-struct IsVariant<std::variant<Ts...>>: std::false_type {};
-
-}
 
 namespace detail {
 
@@ -71,19 +21,6 @@ typename util::Flat<T, U>::Tuple tuple_return_impl(T&& t, U&& u) {
         }, u);
     } else {
         return {std::move(t), std::move(u)};
-    }
-}
-
-template<typename T, typename U>
-typename util::Flat<T, U>::Variant variant_return_impl(T&& t, U&& u) {
-    if constexpr (util::IsVariant<T>::value && util::IsVariant<U>::value) {
-
-    } else if constexpr (util::IsVariant<T>::value) {
-
-    } else if constexpr (util::IsVariant<U>::value) {
-
-    } else {
-
     }
 }
 
@@ -119,7 +56,7 @@ Coro<typename util::Flat<T, U>::Tuple> con_coro_impl(Coro<T> coro1, Coro<U> coro
     MaybeUninit<util::VoidToUnit<U>> right;
 
     co_await Awaitable {
-        [&](AnyExecutor exe, Waker waker) {
+        [&](AnyExecutor exe, Waker waker, size_t _) {
             coro1.set_completion_handler(
                 [&count, &eptr, &left, waker](Expected<util::VoidToUnit<T>, std::exception_ptr> exp) {
                     --count;
@@ -130,7 +67,7 @@ Coro<typename util::Flat<T, U>::Tuple> con_coro_impl(Coro<T> coro1, Coro<U> coro
                     }
                     
                     if (0 == count) {
-                        waker.try_wake();
+                        waker.wake();
                     }
                 });
 
@@ -144,7 +81,7 @@ Coro<typename util::Flat<T, U>::Tuple> con_coro_impl(Coro<T> coro1, Coro<U> coro
                     }
                     
                     if (0 == count) {
-                        waker.try_wake();
+                        waker.wake();
                     }
                 });
 
@@ -168,11 +105,11 @@ Coro<typename util::Flat<T, U>::Tuple> con_coro_impl(Coro<T> coro1, Coro<U> coro
     }
 }
 
-template<typename T, typename U>
-Coro<> race_coro_impl(Coro<T> coro1, Coro<U> coro2) {
-    // TODO
-    co_return;
-}
+// template<typename T, typename U>
+// Coro<> race_coro_impl(Coro<T> coro1, Coro<U> coro2) {
+//     // TODO
+//     co_return;
+// }
 
 }
 
@@ -188,10 +125,10 @@ auto operator&& (Coro<Left>&& coro1, Coro<Right>&& coro2) {
     return detail::con_coro_impl(std::move(coro1), std::move(coro2));
 }
 
-template<typename Left, typename Right>
-auto operator|| (Coro<Left>&& coro1, Coro<Right>&& coro2) {
-    return detail::race_coro_impl(std::move(coro1), std::move(coro2));
-}
+// template<typename Left, typename Right>
+// auto operator|| (Coro<Left>&& coro1, Coro<Right>&& coro2) {
+//     return detail::race_coro_impl(std::move(coro1), std::move(coro2));
+// }
 
 }
 
