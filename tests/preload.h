@@ -15,7 +15,8 @@
 #include <functional>
 
 #include "fmt/core.h"
-#include "magio/core/Error.h"
+#include "fmt/chrono.h"
+#include "magio/core/Expected.h"
 
 #define TESTCASE(...) \
     do { \
@@ -149,7 +150,7 @@ public:
     template <class Rep, class Period>
     void limit(const chrono::duration<Rep, Period>& time) {
         flag = false;
-        thread th([this, time] {
+        std::thread th([this, time] {
             std::unique_lock lk(m_);
             cv_.wait_for(lk, time);
             if (flag) {
@@ -172,3 +173,4 @@ private:
     std::condition_variable cv_;
     bool flag = false;
 };
+
