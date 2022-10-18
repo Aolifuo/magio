@@ -20,14 +20,14 @@ Coro<void> func2(shared_ptr<Channel<int, string>> chan) {
 }
 
 int main() {
-    ThreadPool pool(10);
+    ThreadPool pool(8);
 
-    auto channel = make_shared<Channel<int, string>>(pool.get_executor());
+    auto chan = make_shared<Channel<int, string>>(pool.get_executor());
     for (size_t i = 0; i < 10; ++i) {
-        channel->async_send(i, "from main");
+        chan->async_send(i, "from main");
     }
-    pool.post([=] { func1(channel); });
-    co_spawn(pool.get_executor(), func2(channel), detached);
+    co_spawn(pool.get_executor(), [chan]{ func1(chan); });
+    co_spawn(pool.get_executor(), func2(chan), detached);
     
     pool.join();
 }
