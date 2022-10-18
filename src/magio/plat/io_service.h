@@ -16,12 +16,6 @@
 
 namespace magio {
 
-namespace detail {
-
-inline socklen_t sockaddr_in_len = sizeof(sockaddr_in);
-
-}
-
 namespace plat {
 
 #ifdef __linux__
@@ -284,16 +278,6 @@ public:
         io->op = IOOP::Connect;
         ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
 
-        // 远端
-        // sockaddr_in remote_addr{};
-        // remote_addr.sin_family = AF_INET;
-        // remote_addr.sin_port = ::htons(port);
-        // if (-1 == ::inet_pton(AF_INET, host, &remote_addr.sin_addr)) {
-        //     io->cb(MAGIO_SYSTEM_ERROR, io->ptr, io->fd);
-        //     return;
-        // }
-
-        // data->fd target
         bool status = connect_ex_(
             io->fd,
             (sockaddr*)&addr,
@@ -333,6 +317,7 @@ public:
         ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
 
         DWORD flag = 0;
+        socklen_t len = sizeof(io->remote);
         int status = ::WSARecvFrom(
             io->fd, 
             &io->wsa_buf, 
@@ -340,7 +325,7 @@ public:
             NULL, 
             &flag, 
             (sockaddr*)&io->remote, 
-            &detail::sockaddr_in_len, 
+            &len, 
             (LPOVERLAPPED)&io->overlapped, 
             NULL);
         
@@ -392,9 +377,14 @@ public:
     std::error_code poll(size_t timeout) {
         DWORD bytes_transferred = 0;
         IOData* iodata = nullptr;
+        void* key = nullptr;
 
-        auto ec = iocp_.wait(timeout, &bytes_transferred, (void**)&iodata);
+        auto ec = iocp_.wait(timeout, &bytes_transferred, (void**)&iodata, (void**)&key);
         if (ec.value() == WAIT_TIMEOUT) {
+            return {};
+        }
+
+        if (bytes_transferred == ULONG_MAX) {
             return {};
         }
 
@@ -436,7 +426,7 @@ public:
         case IOOP::Receive:
             DEBUG_LOG("do receive");
             iodata->wsa_buf.len = bytes_transferred;
-            if (bytes_transferred == 0) {
+            if (!ec && bytes_transferred == 0) {
                 ec = make_win_system_error(-1);
             }
             iodata->cb(ec, iodata->ptr, iodata->fd);
@@ -453,8 +443,8 @@ public:
         return {};
     }
 
-    std::error_code poll2(size_t timeout) {
-        return poll(timeout);
+    void notify_one() {
+        iocp_.notify_one();
     }
     
     std::atomic_size_t*             count;
