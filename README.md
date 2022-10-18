@@ -152,3 +152,13 @@ EOF
 | [NodeJs](docs/benchmark.md#nodejs)            | 39292.92  | JavaScript    | eventloop |
 
 More detail see: [benchmark.md](docs/benchmark.md)
+
+使用wrk工具。设置8线程，100000连接数，持续10s, RPS如下。
+
+| framework      |  RPS [#/sec] (mean) | Language |   Pattern |
+|----------------|--------------------:| --------: |----------:|
+| [C++ asio](docs/benchmark2.md#cpp-asio)        | 164650.34  | C++           | coroutine |
+| [C++ magio](docs/benchmark2.md#cpp-magio)      | 165560.01  | C++           | coroutine |
+| [Golang](docs/benchmark2.md#golang)            | 161929.66  | Golang        | coroutine |
+
+More detail see: [benchmark.md](docs/benchmark2.md)
