@@ -2,7 +2,7 @@
 
 #include "magio/coro/PromiseBase.h"
 #include "magio/coro/Awaitbale.h"
-#include "magio/execution/Execution.h"
+#include "magio/utils/utils.h"
 
 #ifdef __cpp_impl_coroutine
 template<typename Ret, typename...Ts>
@@ -20,14 +20,25 @@ struct std::experimental::coroutine_traits<magio::Coro<Ret>, Ts...> {
 
 namespace magio {
 
-namespace util {
+namespace detail {
 
-template<typename T>
-using VoidToUnit = std::conditional_t<std::is_void_v<T>, Unit, T>;
+struct SetTimeout {
+    SetTimeout(size_t ms): ms(ms) {}
 
-}
+    bool await_ready() { return false; }
 
-namespace this_coro {
+    template<typename PT>
+    auto await_suspend(coroutine_handle<PT> prev_h) {
+        prev_h.promise().timeout_ = ms;
+        prev_h.promise().timeout_node_ = &prev_h.promise();
+        prev_h.resume();
+    }
+
+    void await_resume() {
+    }
+
+    size_t ms;
+};
 
 struct GetExecutor {
     bool await_ready() { return false; }
@@ -45,34 +56,37 @@ struct GetExecutor {
     AnyExecutor executor;
 };
 
-template<typename Ret>
-struct Attach {
-    Attach(Coro<Ret>& coro): coro(coro) {
-
-    }
-
+struct CoroYield {
     bool await_ready() { return false; }
 
     template<typename PT>
     auto await_suspend(coroutine_handle<PT> prev_h) {
-        if (!prev_h.promise().next_) {
-            prev_h.promise().next_ = &coro.promise();
-            coro.promise().prev_ = &prev_h.promise();
-        }
-        prev_h.promise().wake();
+        prev_h.promise().executor_.async_wake(&prev_h.promise());
     }
 
-    auto await_resume() {
-        
+    void await_resume() {
     }
-
-    Coro<Ret>& coro;
 };
 
-template<typename T>
-Attach(Coro<T>&) -> Attach<T>;
+struct WakeAfterTimeout {
+    bool await_ready() { return false; }
 
-inline GetExecutor executor;
+    template<typename PT>
+    auto await_suspend(coroutine_handle<PT> prev_h) {
+        prev_h.promise().timeout_node_->wake();
+    }
+
+    void await_resume() {
+    }
+};
+
+}
+
+namespace this_coro {
+
+inline detail::GetExecutor executor;
+
+inline detail::CoroYield yield;
 
 }
 
@@ -88,7 +102,9 @@ public:
             return;
         }
 
-        // TODO
+        if (!main_h_.promise().executor_) {
+            main_h_.promise().destroy();
+        }
     }
 
     Coro(const Coro&) = delete;
@@ -108,8 +124,10 @@ public:
     template<typename PT>
     void await_suspend(coroutine_handle<PT> prev_h) {
         main_h_.promise().executor_ = prev_h.promise().executor_;
-        prev_h.promise().next_ = &main_h_.promise();
         main_h_.promise().prev_ = &prev_h.promise();
+        prev_h.promise().next_ = &main_h_.promise();
+        main_h_.promise().timeout_ = prev_h.promise().timeout_; 
+        main_h_.promise().timeout_node_ = prev_h.promise().timeout_node_;
         main_h_.promise().wake();
     }
 
@@ -127,11 +145,7 @@ public:
 
     void wake(AnyExecutor executor) {
         main_h_.promise().executor_ = executor;
-        executor.post([main_h_ = main_h_] { main_h_.promise().wake(); });
-    }
-
-    void stop() {
-        main_h_.promise().stop_flag_->test_and_set();
+        executor.async_wake({&main_h_.promise()});
     }
 
     auto& promise() const {
@@ -144,13 +158,71 @@ private:
 
 inline Coro<> sleep(size_t ms) {
     co_await Awaitable{
-        [ms](AnyExecutor exe, Waker waker) {
-            exe.set_timeout(ms, [waker] {
-                waker.try_wake();
-            });
+        [ms](AnyExecutor exe, Waker waker, size_t timeout) {
+            auto id = exe.invoke_after([waker](bool exit) {
+                if (exit) {
+                    return;
+                }
+
+                waker.wake();
+            }, ms);
+
+            // cancel_after
+            if (timeout != MAGIO_MAX_TIME) {
+                exe.invoke_after([exe, id, waker](bool exit) {
+                    if (exit) {
+                        return;
+                    }
+
+                    if(exe.cancel(id)) {
+                        waker.node_->timeout_node_->wake();
+                    }
+                }, timeout);
+            }
         }
     };
 }
+
+
+template<typename Ret>
+inline Coro<MaybeUninit<util::VoidToUnit<Ret>>> timeout(size_t ms, Coro<Ret> coro) {
+    // completion flag
+    bool flag = false;
+    std::exception_ptr eptr;
+
+    MaybeUninit<util::VoidToUnit<Ret>> ret;
+
+    co_await Awaitable{
+        [&](AnyExecutor exe, Waker waker, size_t tm) {
+            tm = ms > tm ? tm : ms;
+            coro.promise().timeout_ = tm;
+            coro.promise().timeout_node_ = waker.node_;
+            coro.set_completion_handler(
+                [&flag, &eptr, &ret, waker](Expected<util::VoidToUnit<Ret>, std::exception_ptr> exp) mutable {
+                    flag = true;
+                    if (!exp) {
+                        eptr = exp.unwrap_err();
+                    } else {
+                        ret = exp.unwrap();
+                    }
+                    waker.wake();
+                });
+            coro.wake(exe);
+        }
+    };
+
+    if (eptr) {
+        std::rethrow_exception(eptr);
+    }
+
+    if (!flag) {
+        coro.promise().destroy_all();
+        co_return {};
+    }
+
+    co_return ret;
+}
+
 
 }
 
