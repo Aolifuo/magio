@@ -13,18 +13,17 @@ public:
         : node_(node)
     { }
 
-    void try_wake() const {
+    void wake() const {
         node_->wake();
     }
-private:
-    PromiseNode* node_ = nullptr;
+
+    PromiseNode*    node_ = nullptr;
 };
 
-using WakeHandler = std::function<void(AnyExecutor, Waker waker)>;
-
+template<typename Fn>
 class Awaitable {
 public:
-    Awaitable(WakeHandler&& handle)
+    Awaitable(Fn&& handle)
         : waker_handler_(std::move(handle)) 
     { }
 
@@ -34,14 +33,32 @@ public:
 
     template<typename PT>
     void await_suspend(coroutine_handle<PT> prev_h) {
-        waker_handler_(prev_h.promise().executor_, &prev_h.promise());
+        waker_handler_(prev_h.promise().executor_, &prev_h.promise(), prev_h.promise().timeout_);
     }
 
     void await_resume() {
 
     }
 private:
-    WakeHandler waker_handler_;
+    Fn waker_handler_;
 };
+
+template<>
+class Awaitable<void> {
+    Awaitable(const Awaitable&) = delete;
+
+    bool await_ready() { return false; }
+
+    void await_suspend(coroutine_handle<> prev_h) {
+        prev_h.resume();
+    }
+
+    void await_resume() {
+
+    }
+};
+
+template<typename Fn>
+Awaitable(Fn&& fn) -> Awaitable<Fn>;
 
 }
