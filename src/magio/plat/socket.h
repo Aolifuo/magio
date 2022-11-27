@@ -1,8 +1,8 @@
 #pragma once
 
-#include "magio/plat/declare.h"
+#include "magio/core/Dev.h"
 #include "magio/net/SocketAddress.h"
-#include "magio/dev/Resource.h"
+#include "magio/plat/declare.h"
 
 #ifdef __linux__
 #include <sys/socket.h>

@@ -1,7 +1,6 @@
 #include "magio/net/Tcp.h"
 
 #include <memory>
-#include "magio/dev/Log.h"
 #include "magio/coro/Coro.h"
 #include "magio/plat/io_service.h"
 

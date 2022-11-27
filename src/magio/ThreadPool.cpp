@@ -42,7 +42,6 @@ struct ThreadPool::Impl: public ExecutionContext {
 
     ~Impl() {
         join();
-        MAGIO_CHECK_RESOURCE;
     }
 };
 

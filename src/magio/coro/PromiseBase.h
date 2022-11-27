@@ -1,7 +1,7 @@
 #pragma once
 
 #include <exception>
-#include "magio/dev/Resource.h"
+#include "magio/core/Dev.h"
 #include "magio/coro/Fwd.h"
 #include "magio/coro/Config.h"
 #include "magio/core/Expected.h"
