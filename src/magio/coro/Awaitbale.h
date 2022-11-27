@@ -17,7 +17,7 @@ public:
         node_->wake();
     }
 
-    PromiseNode*    node_ = nullptr;
+    PromiseNode* node_ = nullptr;
 };
 
 template<typename Fn>
