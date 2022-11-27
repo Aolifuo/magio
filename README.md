@@ -128,7 +128,8 @@ output
 info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:30 id:89864 127.0.0.1:8000 connect 127.0.0.1:49331
 info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
 info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
-info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..Hello server..
+info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
+info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
 info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
 warn 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:20 id:89864 EOF
 ```
