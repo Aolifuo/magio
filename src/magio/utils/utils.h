@@ -11,10 +11,10 @@ template<typename...Ts>
 struct TypeList { };
 
 template<typename...>
-struct FlatImpl;
+struct TupleFlatImpl;
 
 template<typename...>
-struct Flat;
+struct TupleFlat;
 
 template<typename...>
 struct RemoveVoid;
@@ -23,24 +23,24 @@ template<typename>
 struct IsTuple: std::false_type {};
 
 template<typename...Ts>
-struct FlatImpl<TypeList<Ts...>> {
+struct TupleFlatImpl<TypeList<Ts...>> {
     using Tuple = std::conditional_t<sizeof...(Ts) == 0, void, std::tuple<Ts...>>;
 };
 
-template<template<typename...> typename C, typename...Ts, typename...Us, typename...Ks>
-struct FlatImpl<TypeList<Ts...>, C<Us...>, Ks...>
-    : FlatImpl<TypeList<Ts..., Us...>, Ks...>{};
+template<typename...Ts, typename...Us, typename...Ks>
+struct TupleFlatImpl<TypeList<Ts...>, std::tuple<Us...>, Ks...>
+    : TupleFlatImpl<TypeList<Ts..., Us...>, Ks...>{};
 
 template<typename...Ts, typename T, typename...Us>
-struct FlatImpl<TypeList<Ts...>, T, Us...>
-    : FlatImpl<TypeList<Ts..., T>, Us...> {};
+struct TupleFlatImpl<TypeList<Ts...>, T, Us...>
+    : TupleFlatImpl<TypeList<Ts..., T>, Us...> {};
 
 template<typename...Ts, typename...Us>
-struct FlatImpl<TypeList<Ts...>, void, Us...>
-    : FlatImpl<TypeList<Ts...>, Us...> {};
+struct TupleFlatImpl<TypeList<Ts...>, void, Us...>
+    : TupleFlatImpl<TypeList<Ts...>, Us...> {};
 
 template<typename...Ts>
-struct Flat: FlatImpl<TypeList<>, Ts...> {};
+struct TupleFlat: TupleFlatImpl<TypeList<>, Ts...> {};
 
 template<typename...Ts>
 struct IsTuple<std::tuple<Ts...>>: std::true_type {};

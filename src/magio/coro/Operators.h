@@ -8,7 +8,7 @@ namespace magio {
 namespace detail {
 
 template<typename T, typename U>
-typename util::Flat<T, U>::Tuple tuple_return_impl(T&& t, U&& u) {
+typename util::TupleFlat<T, U>::Tuple tuple_return_impl(T&& t, U&& u) {
     if constexpr (util::IsTuple<T>::value && util::IsTuple<U>::value) {
         return std::tuple_cat(std::move(t), std::move(u));
     } else if constexpr (util::IsTuple<T>::value) {
@@ -25,7 +25,7 @@ typename util::Flat<T, U>::Tuple tuple_return_impl(T&& t, U&& u) {
 }
 
 template<typename T, typename U>
-Coro<typename util::Flat<T, U>::Tuple> seq_coro_impl(Coro<T> coro1, Coro<U> coro2) {
+Coro<typename util::TupleFlat<T, U>::Tuple> seq_coro_impl(Coro<T> coro1, Coro<U> coro2) {
     if constexpr (std::is_void_v<T> && std::is_void_v<U>) {
         co_await coro1;
         co_await coro2;
@@ -49,7 +49,7 @@ Coro<typename util::Flat<T, U>::Tuple> seq_coro_impl(Coro<T> coro1, Coro<U> coro
 }
 
 template<typename T, typename U>
-Coro<typename util::Flat<T, U>::Tuple> con_coro_impl(Coro<T> coro1, Coro<U> coro2) {
+Coro<typename util::TupleFlat<T, U>::Tuple> con_coro_impl(Coro<T> coro1, Coro<U> coro2) {
     std::atomic_int count = 2;
     std::exception_ptr eptr;
     MaybeUninit<util::VoidToUnit<T>> left;
