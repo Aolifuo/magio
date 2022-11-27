@@ -394,8 +394,6 @@ public:
 
         switch (iodata->op) {
         case IOOP::Accept: {
-            DEBUG_LOG("do accept");
-
             LPSOCKADDR local_addr_ptr;
             LPSOCKADDR remote_addr_ptr;
             int local_addr_len = 0;
@@ -419,12 +417,10 @@ public:
             break;
         } 
         case IOOP::Connect: {
-            DEBUG_LOG("do connect");
             iodata->cb(ec, iodata->ptr, iodata->fd);
             break;
         }
         case IOOP::Receive:
-            DEBUG_LOG("do receive");
             iodata->wsa_buf.len = bytes_transferred;
             if (!ec && bytes_transferred == 0) {
                 ec = make_win_system_error(-1);
@@ -432,7 +428,6 @@ public:
             iodata->cb(ec, iodata->ptr, iodata->fd);
             break;
         case IOOP::Send:
-            DEBUG_LOG("do send");
             iodata->wsa_buf.len = bytes_transferred;
             iodata->cb(ec, iodata->ptr, iodata->fd);
             break;
