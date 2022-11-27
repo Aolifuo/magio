@@ -13,21 +13,21 @@ Coro<> amain() {
             // 5秒后超时取消read
             auto read_res = co_await timeout(5000, socket.read_from(buf.data(), buf.size()));
             if (!read_res) {
-                cout << "read timeout!\n";
+                M_WARN("read timeout!");
                 continue;
             }
 
             auto [len, address] = read_res.unwrap();
-            cout << string_view(buf.data(), len) << '\n';
+            M_INFO("{}", string_view(buf.data(), len));
 
             auto write_res = co_await timeout(5000, socket.write_to(buf.data(), len, address));
             if (!write_res) {
-                cout << "write timeout!\n";
+                M_WARN("read timeout!");
                 continue;
             }
         }
     } catch (const system_error& err) {
-        cout << err.what() << '\n';
+        M_ERROR("{}", err.what());
     }
 }
 
@@ -43,14 +43,11 @@ int main() {
 ### Client
 
 ```cpp
-Coro<> amain(Magico& loop) {
+Coro<> amain() {
     try {
         auto stream = co_await TcpStream::connect("127.0.0.1", 8000);
 
-        cout << stream.local_address().to_string()
-             << " connect "
-             << stream.remote_address().to_string()
-             << '\n';
+        M_INFO("{} connect {}", stream.local_address().to_string(), stream.remote_address().to_string());
 
         array<char, 1024> buf;
         for (int i = 0; i < 5; ++i) {
@@ -58,65 +55,11 @@ Coro<> amain(Magico& loop) {
                 stream.write("Hello server..", 14) &&
                 stream.read(buf.data(), buf.size())
             );
-            cout << string_view(buf.data(), rdlen) << '\n';
+
+            M_INFO("{}", string_view(buf.data(), rdlen));
         }
     } catch(const std::exception& err) {
-        cout <<  err.what() << '\n';
-    }
-
-}
-
-int main() {
-    Magico loop(1);
-    co_spawn(loop.get_executor(), amain(loop));
-    loop.run();
-}
-```
-
-output
-
-```shell
-127.0.0.1:49699 connect 127.0.0.1:8000
-Hello client..
-Hello client..
-Hello client..
-Hello client..
-Hello client..
-```
-
-### Server
-
-```cpp
-Coro<> process(TcpStream stream) {
-    try {
-        array<char, 1024> buf;
-        for (; ;) {
-            auto [rdlen, _] = co_await (
-                stream.read(buf.data(), buf.size()) &&
-                stream.write("Hello client..", 14)
-            );
-            cout << string_view(buf.data(), rdlen) << '\n';
-        }
-    } catch(const std::runtime_error& err) {
-        cout << err.what() << '\n';
-    }
-}
-
-Coro<> amain() {
-    try {
-        auto server = co_await TcpServer::bind("127.0.0.1", 8000);
-        for (; ;) {
-            auto stream = co_await server.accept();
-
-            cout << stream.local_address().to_string() 
-                 << " connect "
-                 << stream.remote_address().to_string()
-                 << '\n';
-
-            co_spawn(co_await this_coro::executor, process(std::move(stream)));
-        }
-    } catch(const std::runtime_error& err) {
-        cout << err.what() << '\n';
+        M_ERROR("{}", err.what());
     }
 }
 
@@ -130,13 +73,64 @@ int main() {
 output
 
 ```shell
-127.0.0.1:8000 connect 127.0.0.1:49699
-Hello server..
-Hello server..
-Hello server..
-Hello server..
-Hello server..
-EOF
+info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:13 id:88920 127.0.0.1:49331 connect 127.0.0.1:8000     
+info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
+info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
+info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
+info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
+info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
+```
+
+### Server
+
+```cpp
+Coro<> process(TcpStream stream) {
+    try {
+        array<char, 1024> buf;
+        for (; ;) {
+            auto [rdlen, _] = co_await (
+                stream.read(buf.data(), buf.size()) &&
+                stream.write("Hello client..", 14)
+            );
+
+            M_INFO("{}", string_view(buf.data(), rdlen));
+        }
+    } catch(const system_error& err) {
+        M_WARN("{}", err.what());
+    }
+}
+
+Coro<> amain() {
+    try {
+        auto server = co_await TcpServer::bind("0.0.0.0", 8000);
+        for (; ;) {
+            auto stream = co_await server.accept();
+
+            M_INFO("{} connect {}", stream.local_address().to_string(), stream.remote_address().to_string());
+
+            co_spawn(co_await this_coro::executor, process(std::move(stream)));
+        }
+    } catch(const runtime_error& err) {
+        M_ERROR("{}", err.what());
+    }
+}
+
+int main() {
+    Magico loop(1);
+    co_spawn(loop.get_executor(), amain());
+    loop.run();
+}
+```
+
+output
+
+```shell
+info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:30 id:89864 127.0.0.1:8000 connect 127.0.0.1:49331
+info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
+info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
+info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..Hello server..
+info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
+warn 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:20 id:89864 EOF
 ```
 
 ## Benchmark

@@ -12,21 +12,21 @@ Coro<> amain() {
             // 5秒后超时取消read
             auto read_res = co_await timeout(5000, socket.read_from(buf.data(), buf.size()));
             if (!read_res) {
-                cout << "read timeout!\n";
+                M_WARN("read timeout!");
                 continue;
             }
 
             auto [len, address] = read_res.unwrap();
-            cout << string_view(buf.data(), len) << '\n';
+            M_INFO("{}", string_view(buf.data(), len));
 
             auto write_res = co_await timeout(5000, socket.write_to(buf.data(), len, address));
             if (!write_res) {
-                cout << "write timeout!\n";
+                M_WARN("read timeout!");
                 continue;
             }
         }
     } catch (const system_error& err) {
-        cout << err.what() << '\n';
+        M_ERROR("{}", err.what());
     }
 }
 

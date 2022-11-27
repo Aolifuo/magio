@@ -1,4 +1,3 @@
-#include <iostream>
 #include <array>
 #include "magio/magio.h"
 
@@ -14,10 +13,11 @@ Coro<> process(TcpStream stream) {
                 stream.read(buf.data(), buf.size()) &&
                 stream.write("Hello client..", 14)
             );
-            cout << string_view(buf.data(), rdlen) << '\n';
+
+            M_INFO("{}", string_view(buf.data(), rdlen));
         }
     } catch(const system_error& err) {
-        cout << err.what() << '\n';
+        M_WARN("{}", err.what());
     }
 }
 
@@ -27,14 +27,12 @@ Coro<> amain() {
         for (; ;) {
             auto stream = co_await server.accept();
 
-            cout << stream.local_address().to_string() 
-                 << " connect "
-                 << stream.remote_address().to_string()
-                 << '\n';
+            M_INFO("{} connect {}", stream.local_address().to_string(), stream.remote_address().to_string());
+
             co_spawn(co_await this_coro::executor, process(std::move(stream)));
         }
     } catch(const runtime_error& err) {
-        cout << err.what() << '\n';
+        M_ERROR("{}", err.what());
     }
 }
 
