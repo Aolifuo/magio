@@ -2,7 +2,6 @@
 
 #include <system_error>
 #include <cstring>
-#include "magio/dev/Log.h"
 
 #ifdef _WIN32
 #include <atlconv.h>
@@ -59,13 +58,13 @@ inline std::error_code make_win_system_error(int code) {
 }
 
 #define MAGIO_SYSTEM_ERROR \
-    (DEBUG_LOG("make error ", ::GetLastError()), make_win_system_error(::GetLastError()))
+    (make_win_system_error(::GetLastError()))
 
 #define MAGIO_NO_DEBUG_SYSTEM_ERROR \
-    ((make_win_system_error(::GetLastError())))
+    (make_win_system_error(::GetLastError()))
 
 #define MAGIO_THROW_SYSTEM_ERROR \
-    do { DEBUG_LOG("throw error"); throw std::system_error(MAGIO_SYSTEM_ERROR); } while(0)
+    do { throw std::system_error(MAGIO_SYSTEM_ERROR); } while(0)
 
 
 #endif
@@ -101,10 +100,10 @@ inline std::error_code make_linux_system_error(int code) {
 }
 
 #define MAGIO_SYSTEM_ERROR \
-    (DEBUG_LOG("make error ", errno), make_linux_system_error(errno))
+    (make_linux_system_error(errno))
 
 #define MAGIO_THROW_SYSTEM_ERROR \
-    do { DEBUG_LOG("throw error"); throw std::system_error(MAGIO_SYSTEM_ERROR); } while(0)
+    do { throw std::system_error(MAGIO_SYSTEM_ERROR); } while(0)
 
 #endif
 
