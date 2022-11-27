@@ -15,7 +15,7 @@ int main() {
     co_spawn(
         loop.get_executor(),
         ticker(10, 1000, [] {
-            cout << "tick" << endl;
+            M_INFO("tick");
         })
     );
     loop.run();

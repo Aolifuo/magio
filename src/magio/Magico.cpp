@@ -1,10 +1,9 @@
 #include "magio/Magico.h"
 
-#include <cassert>
-#include <thread>
 #include "magio/core/Queue.h"
-#include "magio/coro/Awaitbale.h"
+#include "magio/core/Logger.h"
 #include "magio/core/TimedTask.h"
+#include "magio/coro/Awaitbale.h"
 #include "magio/plat/io_service.h"
 #include "magio/sync/Spin.h"
 
@@ -39,7 +38,7 @@ struct Magico::Impl: public ExecutionContext {
         : service(count) 
     {
         if (auto ec = service.open()) {
-            DEBUG_LOG(ec.message());
+            M_ERROR("{}", ec.message());
             throw std::system_error(ec);
         }
 
@@ -56,7 +55,6 @@ struct Magico::Impl: public ExecutionContext {
                 th.join();
             }
         }
-        MAGIO_CHECK_RESOURCE;
     }
 };
 
@@ -145,7 +143,7 @@ bool Magico::Impl::poll() {
 
     // io
     if (auto ec = service.poll(0)) {
-        DEBUG_LOG("main loop error", ec.message());
+        M_ERROR("main loop error: {}", ec.message());
         return false;
     }
 
@@ -155,7 +153,7 @@ bool Magico::Impl::poll() {
 void Magico::Impl::worker() {
     for (; ;) {
         if (auto ec = service.poll(plat::MAGIO_INFINITE)) {
-            DEBUG_LOG(ec.message());
+            M_ERROR("sub loop error: {}", ec.message());
             return;
         }
     }

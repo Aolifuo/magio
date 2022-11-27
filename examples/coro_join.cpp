@@ -8,11 +8,11 @@ Coro<int> factorial(std::string_view name, int num) {
     int res = 1;
 
     for (int i = 2; i <= num; ++i) {
-        printf("Task %s: Compute factorial %d, now i = %d\n", name.data(), num, i);
+        M_INFO("Task {}: Compute factorial {}, now i = {}", name, num, i);
         co_await sleep(1000);
         res *= i;
     }
-    printf("Task %s: factorial %d = %d\n", name.data(), num, res);
+    M_INFO("Task {}: factorial {} = {}", name, num, res);
     co_return res;
 }
 
@@ -26,8 +26,12 @@ int main() {
                 factorial("B", 3) &&
                 factorial("C", 4)
             );
-            printf("%d %d %d\n", a, b, c);
+            assert(a == 2);
+            assert(b == 6);
+            assert(c == 24);
         }()
     );
     loop.run();
+
+    MAGIO_CHECK_RESOURCE;
 }

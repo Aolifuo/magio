@@ -14,7 +14,7 @@ Coro<> amain() {
 
     co_await co_spawn(exe, [](SingleEvent& ev) -> Coro<> {
         co_await ev.wait();
-        cout << "after wait\n";
+        M_INFO("after wait");
     }(event), use_coro);
 }
 

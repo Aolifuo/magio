@@ -13,7 +13,7 @@ Coro<> task() {
     }
 
     auto end = chrono::steady_clock::now();
-    cout << (end - start) / SwitchTimes << endl;
+    M_INFO("{}", (end - start) / SwitchTimes);
 }
 
 int main() {

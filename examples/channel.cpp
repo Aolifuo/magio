@@ -1,4 +1,3 @@
-#include <iostream>
 #include "magio/magio.h"
 
 using namespace std;
@@ -7,7 +6,7 @@ using namespace magio;
 void func1(shared_ptr<Channel<int, string>> chan) {
     for (size_t i = 0; i < 5; ++i) {
         chan->async_receive([](int n, string str) {
-            printf("%s receive %d %s\n", "func1", n, str.c_str());
+            M_INFO("{} receive {} {}", "func1", n, str);
         });
     }
 }
@@ -15,7 +14,7 @@ void func1(shared_ptr<Channel<int, string>> chan) {
 Coro<void> func2(shared_ptr<Channel<int, string>> chan) {
     for (size_t i = 0; i < 5; ++i) {    
         auto [n, str] = co_await chan->async_receive(use_coro);
-        printf("%s receive %d %s\n", "func2", n, str.c_str());
+        M_INFO("{} receive {} {}", "func2", n, str);
     }
 }
 
