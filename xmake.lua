@@ -5,7 +5,6 @@ add_rules("mode.debug", "mode.release")
 set_languages("cxx20")
 set_warnings("all")
 add_requires("fmt")
-add_packages("fmt")
 
 if is_mode("release") then 
     set_optimize("faster")
@@ -14,14 +13,12 @@ end
 if is_plat("linux") then
     add_syslinks("pthread")
     add_requires("liburing")
-    add_packages("liburing")
 end
 
 if is_plat("windows") then 
     add_cxxflags("/EHa")
     add_syslinks("ws2_32")
 end
-
 
 target("magio")
     set_kind("static")
@@ -35,6 +32,7 @@ for _, dir in ipairs(os.files("tests/**.cpp")) do
         set_group("tests")
         add_files(dir)
         add_deps("magio")
+        add_packages("fmt", "liburing")
 end
 
 --examples
@@ -43,6 +41,7 @@ for _, dir in ipairs(os.files("examples/**.cpp")) do
         set_kind("binary")
         add_files(dir)
         add_deps("magio")
+        add_packages("fmt", "liburing")
 end
 
 --xmake project -k compile_commands
