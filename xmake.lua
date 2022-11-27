@@ -1,7 +1,3 @@
--- set_toolchains("clang")
--- set_config("cxxflags", "-stdlib=libc++ -fcoroutines-ts")
--- set_config("ldflags", "-lc++")
-
 set_project("magio")
 set_version("0.0.7")
 
@@ -9,6 +5,7 @@ add_rules("mode.debug", "mode.release")
 set_languages("cxx20")
 set_warnings("all")
 add_requires("fmt")
+add_packages("fmt")
 
 if is_mode("release") then 
     set_optimize("faster")
@@ -38,7 +35,6 @@ for _, dir in ipairs(os.files("tests/**.cpp")) do
         set_group("tests")
         add_files(dir)
         add_deps("magio")
-        add_packages("fmt")
 end
 
 --examples
