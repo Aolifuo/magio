@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include "fmt/chrono.h"
+#include "fmt/os.h"
 
 namespace magio {
 
@@ -15,7 +16,6 @@ namespace detail {
 
 constexpr size_t kSmallBufferSize = 1000;
 constexpr size_t kLargeBufferSize = 2000 * 1000;
-constexpr size_t kMaxLogLines = 1000;
 
 class _WaitGroup {
 public:
@@ -74,7 +74,6 @@ public:
 
     void clear() {
         size_ = 0;
-        lines = 0;
     }
     
     size_t size() {
@@ -84,8 +83,6 @@ public:
     std::string_view str_view() {
         return {buf_, size_};
     }
-
-    size_t lines = 0;
 
 private:
     char buf_[Size];
@@ -97,70 +94,41 @@ using LargeBuffer = StaticBuffer<kLargeBufferSize>;
 
 class LogFile {
 public:
-    LogFile(const char* prefix) {
-        prefix_ = prefix;
-        create();
-    }
+    LogFile(std::string_view prefix)
+        : prefix_(prefix) 
+    { }
 
     LogFile(const LogFile&) = delete;
     LogFile& operator=(const LogFile&) = delete;
 
     ~LogFile() {
-        close();
+        
     }
 
-    void write_to_console() {
-        is_console = true;
-    }
-
-    void write_to_file() {
-        is_console = false;
-    }
-
-    void write(std::string_view fmt, fmt::format_args args) {
-        if (is_console) {
-            fmt::vprint(fmt, args);
-            return;
-        }
-
-        std::lock_guard lk(mutex_);
-        fmt::vprint(file_, fmt, args);
-        ++current_lines_;
-        if (current_lines_ >= max_log_lines_) {
-            ++num_;
-            close();
-            create();
-            current_lines_ = 0;
-        }
-    }
-
-private:
-    bool create() {
-        std::string new_file_name 
+    void open() {
+        std::string file_name 
             = prefix_ 
-            + fmt::format("{:%Y-%m-%d_%H.%M.%S}_", std::chrono::system_clock::now()) 
-            + std::to_string(num_);
-
-        file_ = std::fopen(new_file_name.c_str(), "w");
-        return file_;
+            + fmt::format("{:%Y-%m-%d_%H.%M.%S}_", std::chrono::system_clock::now())
+            + "log";
+        out_file_ = std::make_unique<fmt::ostream>(fmt::output_file(file_name));
     }
 
     void close() {
-        if (file_ != nullptr && file_ != stdout) {
-            std::fclose(file_);
-        }
+        out_file_->close();
+        out_file_.reset();
+    }
+    
+    void write(std::string_view str) {
+        out_file_->print("{}", str);
     }
 
-    std::mutex mutex_;
+    void flush() {
+        out_file_->flush();
+    }
 
-    bool is_console = true;
-
+private:
     std::string prefix_;
-    size_t num_ = 0;
-    size_t current_lines_ = 0;
-    size_t max_log_lines_ = kMaxLogLines;
-
-    std::FILE* file_ = nullptr;
+    std::unique_ptr<fmt::ostream> out_file_;
 };
 
 
@@ -169,12 +137,11 @@ class AsyncLogger {
     using BufferVector = std::vector<BufferPtr>;
 
 public:
-    AsyncLogger(LogFile& file)
+    AsyncLogger()
         : stop_flag_(false)
         , wait_group_(1)
         , current_(std::make_unique<LargeBuffer>())
         , next_(std::make_unique<LargeBuffer>())
-        , file_(file)
     {
         std::exchange(back_thread_, std::thread(&AsyncLogger::run_in_background, this));
         wait_group_.wait();
@@ -197,7 +164,6 @@ public:
 
         if (current_->rest() > msg.length()) {
             current_->append(msg.data(), msg.length());
-            ++current_->lines;
             return;
         }
         
@@ -207,7 +173,6 @@ public:
         } 
         current_ = std::move(next_);
         current_->append(msg.data(), msg.length());
-        ++current_->lines;
 
         condvar_.notify_one();
     }
@@ -220,7 +185,9 @@ private:
         BufferPtr current_alter_buf = std::make_unique<LargeBuffer>();
         BufferPtr next_alter_buf = std::make_unique<LargeBuffer>();;
         BufferVector buffer_to_print;
+        LogFile file("magio_");
 
+        file.open();
         for (; ;) {
             buffer_to_print.clear();
 
@@ -239,13 +206,14 @@ private:
 
             // buffer_to_print.size() >= 1
             for (auto& ptr : buffer_to_print) {
-                file_.write(ptr->str_view(), fmt::make_format_args());
+                file.write(ptr->str_view());
                 ptr->clear();
             }
+            
+            file.flush();
 
             current_alter_buf = std::move(buffer_to_print.back());
             buffer_to_print.pop_back();
-
             if (!next_alter_buf) {
                 assert(!buffer_to_print.empty());
                 next_alter_buf = std::move(buffer_to_print.back());
@@ -265,8 +233,6 @@ private:
     BufferPtr current_;
     BufferPtr next_;
     BufferVector ready_;
-
-    LogFile& file_;
     
     std::thread back_thread_;
 };
@@ -282,10 +248,7 @@ enum class LogLevel {
 };
 
 class Logger {
-    Logger()
-        : file_("magio_")
-        , alog_(file_) 
-    { }
+    Logger() = default;
 
 public:
     enum LogPattern {
@@ -296,12 +259,11 @@ public:
         ThreadId    = 0b00010000
     };
 
-    static void write_to_file() {
-        ins().file_.write_to_file();
-    }
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
 
-    static void write_to_console() {
-        ins().file_.write_to_console();
+    static void init_async_logger() {
+        ins().alog_ = std::make_unique<detail::AsyncLogger>();
     }
 
     static void set_level(LogLevel level) {
@@ -314,14 +276,14 @@ public:
 
     template <typename... T>
     static void async_write(const char* file, int line, LogLevel level, fmt::format_string<T...> fmt, T&&... args) {
-        if ((int)ins().level_ > (int)level) {
+        if ((int)ins().level_ > (int)level || !ins().alog_) {
             return;
         }
 
         std::string fmt_str = build_fmt_str(file, line, level, fmt);
         local_buffer.clear();
         local_buffer.append_format(fmt_str, fmt::make_format_args(args...));
-        ins().alog_.write(local_buffer.str_view());
+        ins().alog_->write(local_buffer.str_view());
     }
 
     template <typename... T>
@@ -331,12 +293,10 @@ public:
         }
 
         std::string fmt_str = build_fmt_str(file, line, level, fmt);
-        ins().file_.write(fmt_str, fmt::make_format_args(args...));
-        
+        fmt::vprint(fmt_str, fmt::make_format_args(args...));
     }
 
 private:
-    //info 2022-11-27 11:16 f:async_logger.h l:335 114514
     static std::string build_fmt_str(const char* file, int line, LogLevel level, fmt::string_view fmt) {
         std::string fmt_str;
 
@@ -403,8 +363,7 @@ private:
     LogLevel level_ = LogLevel::Debug;
     int pattern_ = Date | Time | File | Line | ThreadId;
 
-    detail::LogFile file_;
-    detail::AsyncLogger alog_;
+    std::unique_ptr<detail::AsyncLogger> alog_;
 };
 
 #define M_DEBUG(FMT, ...) \
