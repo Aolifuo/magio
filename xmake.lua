@@ -24,6 +24,7 @@ target("magio")
     set_kind("static")
     add_files("src/magio/**.cpp")
     add_includedirs("src", {public = true})
+    add_packages("fmt")
 
 --tests
 for _, dir in ipairs(os.files("tests/**.cpp")) do
