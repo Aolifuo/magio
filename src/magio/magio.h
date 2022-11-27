@@ -11,4 +11,3 @@
 #include "magio/sync/Channel.h"
 #include "magio/sync/SingleEvent.h"
 #include "magio/sync/WaitGroup.h"
-#include "magio/dev/Resource.h"
