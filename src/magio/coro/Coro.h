@@ -98,13 +98,7 @@ public:
     { }
 
     ~Coro() {
-        if (!main_h_) {
-            return;
-        }
-
-        if (!main_h_.promise().executor_) {
-            main_h_.promise().destroy();
-        }
+        // may leak
     }
 
     Coro(const Coro&) = delete;
