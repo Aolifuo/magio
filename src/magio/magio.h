@@ -2,6 +2,7 @@
 
 #include "magio/Magico.h"
 #include "magio/ThreadPool.h"
+#include "magio/core/Logger.h"
 #include "magio/coro/CoSpawn.h"
 #include "magio/coro/Operators.h"
 #include "magio/net/SocketAddress.h"
