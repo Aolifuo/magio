@@ -11,8 +11,8 @@ if is_mode("release") then
 end
 
 if is_plat("linux") then
-    add_syslinks("pthread")
     add_requires("liburing")
+    add_syslinks("pthread")
 end
 
 if is_plat("windows") then 
