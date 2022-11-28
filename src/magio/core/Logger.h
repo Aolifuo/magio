@@ -14,8 +14,9 @@ namespace magio {
 
 namespace detail {
 
-constexpr size_t kSmallBufferSize = 1000;
-constexpr size_t kLargeBufferSize = 2000 * 1000;
+constexpr size_t kFormatBufferSize = 500;
+constexpr size_t kSmallBufferSize = 4000;
+constexpr size_t kLargeBufferSize = 4000 * 1000;
 
 class _WaitGroup {
 public:
@@ -55,9 +56,9 @@ private:
 template<size_t Size>
 class StaticBuffer {
 public:
-    size_t append(const char* ptr, size_t len) {
-        size_t cplen = std::min(rest(), len);
-        memcpy(buf_ + size_, ptr, cplen);
+    size_t append(std::string_view msg) {
+        size_t cplen = std::min(rest(), msg.length());
+        memcpy(buf_ + size_, msg.data(), cplen);
         size_ += cplen;
         return cplen;
     }
@@ -89,6 +90,7 @@ private:
     size_t size_ = 0;
 };
 
+using FormatBuffer = StaticBuffer<kFormatBufferSize>;
 using SmallBuffer = StaticBuffer<kSmallBufferSize>;
 using LargeBuffer = StaticBuffer<kLargeBufferSize>;
 
@@ -163,7 +165,7 @@ public:
         std::lock_guard lk(mutex_);
 
         if (current_->rest() > msg.length()) {
-            current_->append(msg.data(), msg.length());
+            current_->append(msg);
             return;
         }
         
@@ -172,7 +174,7 @@ public:
             next_ = std::make_unique<LargeBuffer>();
         } 
         current_ = std::move(next_);
-        current_->append(msg.data(), msg.length());
+        current_->append(msg);
 
         condvar_.notify_one();
     }
@@ -252,6 +254,7 @@ class Logger {
 
 public:
     enum LogPattern {
+        Off         = 0b00000000,
         Date        = 0b00000001,
         Time        = 0b00000010,
         File        = 0b00000100,
@@ -280,9 +283,9 @@ public:
             return;
         }
 
-        std::string fmt_str = build_fmt_str(file, line, level, fmt);
+        build_fmt_string(file, line, level, fmt);
         local_buffer.clear();
-        local_buffer.append_format(fmt_str, fmt::make_format_args(args...));
+        local_buffer.append_format(local_fmt.str_view(), fmt::make_format_args(args...));
         ins().alog_->write(local_buffer.str_view());
     }
 
@@ -292,65 +295,63 @@ public:
             return;
         }
 
-        std::string fmt_str = build_fmt_str(file, line, level, fmt);
-        fmt::vprint(fmt_str, fmt::make_format_args(args...));
+        build_fmt_string(file, line, level, fmt);
+        fmt::vprint(local_fmt.str_view(), fmt::make_format_args(args...));
     }
 
 private:
-    static std::string build_fmt_str(const char* file, int line, LogLevel level, fmt::string_view fmt) {
-        std::string fmt_str;
-
+    static void build_fmt_string(const char* file, int line, LogLevel level, fmt::string_view fmt) {
+        local_fmt.clear();
+        
         switch (level) {
         case LogLevel::Debug:
-            fmt_str.append("debug ");
+            local_fmt.append("debug ");
             break;
         case LogLevel::Info:
-            fmt_str.append("info ");
+            local_fmt.append("info ");
             break;
         case LogLevel::Warn:
-            fmt_str.append("warn ");
+            local_fmt.append("warn ");
             break;
         case LogLevel::Error:
-            fmt_str.append("error ");
+            local_fmt.append("error ");
             break;
         case LogLevel::Fatal:
-            fmt_str.append("fatal ");
+            local_fmt.append("fatal ");
             break;
         default:
             break;
         }
 
-        auto date_n_ = fmt::localtime(std::chrono::system_clock::now());
+        auto date_n_time = fmt::localtime(std::chrono::system_clock::now());
         if (ins().pattern_ & Date) {
-            fmt_str.append(fmt::format("{:%Y-%m-%d} ", date_n_));
+            local_fmt.append_format("{:%Y-%m-%d} ", fmt::make_format_args(date_n_time));
         }
 
         if (ins().pattern_ & Time) {
-            fmt_str.append(fmt::format("{:%H:%M:%S} ", date_n_));
+            local_fmt.append_format("{:%H:%M:%S} ", fmt::make_format_args(date_n_time));
         }
 
         if (ins().pattern_ & File) {
-            fmt_str.append("f:");
-            fmt_str.append(file);
-            fmt_str.append(" ");
+            local_fmt.append("f:");
+            local_fmt.append(file);
+            local_fmt.append(" ");
         }
 
         if (ins().pattern_ & Line) {
-            fmt_str.append("l:");
-            fmt_str.append(std::to_string(line));
-            fmt_str.append(" ");
+            local_fmt.append("l:");
+            local_fmt.append(std::to_string(line));
+            local_fmt.append(" ");
         }
 
         if (ins().pattern_ & ThreadId) {
-            fmt_str.append("id:");
-            fmt_str.append(detail::CurrentThread::get_id());
-            fmt_str.append(" ");
+            local_fmt.append("id:");
+            local_fmt.append(detail::CurrentThread::get_id());
+            local_fmt.append(" ");
         }
 
-        fmt_str.append(fmt.data(), fmt.size());
-        fmt_str.append("\n");
-
-        return fmt_str;
+        local_fmt.append({fmt.data(), fmt.size()});
+        local_fmt.append("\n");
     }
 
     static Logger& ins() {
@@ -358,6 +359,7 @@ private:
         return logger;
     }
 
+    inline static thread_local detail::FormatBuffer local_fmt;
     inline static thread_local detail::SmallBuffer local_buffer;
     
     LogLevel level_ = LogLevel::Debug;
@@ -377,7 +379,6 @@ private:
 #define M_FATAL(FMT, ...) \
     do { ::magio::Logger::write(__FILE__, __LINE__, ::magio::LogLevel::Fatal, FMT, __VA_ARGS__); std::terminate(); } while(0)
 
-
 #define ASYNC_DEBUG(FMT, ...) \
     do { ::magio::Logger::async_write(__FILE__, __LINE__, ::magio::LogLevel::Debug, FMT, __VA_ARGS__); } while(0)
 #define ASYNC_INFO(FMT, ...) \
@@ -386,4 +387,5 @@ private:
     do { ::magio::Logger::async_write(__FILE__, __LINE__, ::magio::LogLevel::Warn, FMT, __VA_ARGS__); } while(0)
 #define ASYNC_ERROR(FMT, ...) \
     do { ::magio::Logger::async_write(__FILE__, __LINE__, ::magio::LogLevel::Error, FMT, __VA_ARGS__); } while(0)
+
 }
