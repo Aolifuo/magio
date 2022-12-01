@@ -242,6 +242,8 @@ private:
 }
 
 enum class LogLevel {
+    Off,
+    Trace,
     Debug,
     Info,
     Warn,
@@ -255,11 +257,12 @@ class Logger {
 public:
     enum LogPattern {
         Off         = 0b00000000,
-        Date        = 0b00000001,
-        Time        = 0b00000010,
-        File        = 0b00000100,
-        Line        = 0b00001000,
-        ThreadId    = 0b00010000
+        Level       = 0b00000001,
+        Date        = 0b00000010,
+        Time        = 0b00000100,
+        File        = 0b00001000,
+        Line        = 0b00010000,
+        ThreadId    = 0b00100000
     };
 
     Logger(const Logger&) = delete;
@@ -363,11 +366,13 @@ private:
     inline static thread_local detail::SmallBuffer local_buffer;
     
     LogLevel level_ = LogLevel::Debug;
-    int pattern_ = Date | Time | File | Line | ThreadId;
+    int pattern_ = Level | Date | Time | File | Line | ThreadId;
 
     std::unique_ptr<detail::AsyncLogger> alog_;
 };
 
+#define M_TRACE(FMT, ...) \
+    do { ::magio::Logger::write(__FILE__, __LINE__, ::magio::LogLevel::Trace, FMT, __VA_ARGS__); } while(0)
 #define M_DEBUG(FMT, ...) \
     do { ::magio::Logger::write(__FILE__, __LINE__, ::magio::LogLevel::Debug, FMT, __VA_ARGS__); } while(0)
 #define M_INFO(FMT, ...) \
