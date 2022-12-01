@@ -1,6 +1,6 @@
 # magio
 
-magio是一个跨平台(Windows、Linux)的协程网络库，接口简单易用
+magio是一个基于C++20实现的协程网络库，支持Windows和Linux（Todo）平台。
 
 ## Udp echo
 
