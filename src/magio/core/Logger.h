@@ -18,9 +18,9 @@ constexpr size_t kFormatBufferSize = 500;
 constexpr size_t kSmallBufferSize = 4000;
 constexpr size_t kLargeBufferSize = 4000 * 1000;
 
-class _WaitGroup {
+class WaitGroup {
 public:
-    _WaitGroup(size_t n): wait_n_(n) 
+    WaitGroup(size_t n): wait_n_(n) 
     { }
 
     void wait() {
@@ -46,7 +46,11 @@ private:
 class CurrentThread {
 public:
     static std::string_view get_id() {
-        static thread_local std::string id = (std::ostringstream{} << std::this_thread::get_id()).str();
+        static thread_local std::string id = [] {
+            std::ostringstream ss;
+            ss << std::this_thread::get_id();
+            return std::string(ss.str());
+        }();
         return id;
     }
 
@@ -112,6 +116,7 @@ public:
             = prefix_ 
             + fmt::format("{:%Y-%m-%d_%H.%M.%S}_", std::chrono::system_clock::now())
             + "log";
+
         out_file_ = std::make_unique<fmt::ostream>(fmt::output_file(file_name));
     }
 
@@ -133,7 +138,6 @@ private:
     std::unique_ptr<fmt::ostream> out_file_;
 };
 
-
 class AsyncLogger {
     using BufferPtr = std::unique_ptr<LargeBuffer>;
     using BufferVector = std::vector<BufferPtr>;
@@ -145,7 +149,7 @@ public:
         , current_(std::make_unique<LargeBuffer>())
         , next_(std::make_unique<LargeBuffer>())
     {
-        std::exchange(back_thread_, std::thread(&AsyncLogger::run_in_background, this));
+        back_thread_ = std::thread(&AsyncLogger::run_in_background, this);
         wait_group_.wait();
     }
 
@@ -230,7 +234,7 @@ private:
     bool stop_flag_;
     std::mutex mutex_;
     std::condition_variable condvar_;
-    _WaitGroup wait_group_;
+    WaitGroup wait_group_;
 
     BufferPtr current_;
     BufferPtr next_;
@@ -268,8 +272,8 @@ public:
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
 
-    static void init_async_logger() {
-        ins().alog_ = std::make_unique<detail::AsyncLogger>();
+    static void set_output(void(* fn)(std::string_view, fmt::format_args) = nullptr) {
+        ins().output_fn_ = fn;
     }
 
     static void set_level(LogLevel level) {
@@ -281,49 +285,54 @@ public:
     }
 
     template <typename... T>
-    static void async_write(const char* file, int line, LogLevel level, fmt::format_string<T...> fmt, T&&... args) {
-        if ((int)ins().level_ > (int)level || !ins().alog_) {
-            return;
-        }
-
-        build_fmt_string(file, line, level, fmt);
-        local_buffer.clear();
-        local_buffer.append_format(local_fmt.str_view(), fmt::make_format_args(args...));
-        ins().alog_->write(local_buffer.str_view());
-    }
-
-    template <typename... T>
     static void write(const char* file, int line, LogLevel level, fmt::format_string<T...> fmt, T&&... args) {
         if ((int)ins().level_ > (int)level) {
             return;
         }
 
         build_fmt_string(file, line, level, fmt);
-        fmt::vprint(local_fmt.str_view(), fmt::make_format_args(args...));
+        ins().output_fn_(local_fmt.str_view(), fmt::make_format_args(args...));
     }
 
+    static void default_output(std::string_view fmt, fmt::format_args args) {
+        fmt::vprint(fmt, args);
+    }
+
+    static void async_output(std::string_view fmt, fmt::format_args args) {
+        static detail::AsyncLogger async_logger;
+
+        local_buffer.clear();
+        local_buffer.append_format(fmt, args);
+        async_logger.write(local_buffer.str_view());
+    }
 private:
+
     static void build_fmt_string(const char* file, int line, LogLevel level, fmt::string_view fmt) {
         local_fmt.clear();
         
-        switch (level) {
-        case LogLevel::Debug:
-            local_fmt.append("debug ");
-            break;
-        case LogLevel::Info:
-            local_fmt.append("info ");
-            break;
-        case LogLevel::Warn:
-            local_fmt.append("warn ");
-            break;
-        case LogLevel::Error:
-            local_fmt.append("error ");
-            break;
-        case LogLevel::Fatal:
-            local_fmt.append("fatal ");
-            break;
-        default:
-            break;
+        if (ins().pattern_ & Level) {
+            switch (level) {
+            case LogLevel::Trace:
+                local_fmt.append("trace ");
+                break;
+            case LogLevel::Debug:
+                local_fmt.append("debug ");
+                break;
+            case LogLevel::Info:
+                local_fmt.append("info ");
+                break;
+            case LogLevel::Warn:
+                local_fmt.append("warn ");
+                break;
+            case LogLevel::Error:
+                local_fmt.append("error ");
+                break;
+            case LogLevel::Fatal:
+                local_fmt.append("fatal ");
+                break;
+            default:
+                break;
+            }
         }
 
         auto date_n_time = fmt::localtime(std::chrono::system_clock::now());
@@ -367,6 +376,7 @@ private:
     
     LogLevel level_ = LogLevel::Debug;
     int pattern_ = Level | Date | Time | File | Line | ThreadId;
+    void(* output_fn_)(std::string_view, fmt::format_args) = default_output;
 
     std::unique_ptr<detail::AsyncLogger> alog_;
 };
@@ -383,14 +393,5 @@ private:
     do { ::magio::Logger::write(__FILE__, __LINE__, ::magio::LogLevel::Error, FMT, __VA_ARGS__); } while(0)
 #define M_FATAL(FMT, ...) \
     do { ::magio::Logger::write(__FILE__, __LINE__, ::magio::LogLevel::Fatal, FMT, __VA_ARGS__); std::terminate(); } while(0)
-
-#define ASYNC_DEBUG(FMT, ...) \
-    do { ::magio::Logger::async_write(__FILE__, __LINE__, ::magio::LogLevel::Debug, FMT, __VA_ARGS__); } while(0)
-#define ASYNC_INFO(FMT, ...) \
-    do { ::magio::Logger::async_write(__FILE__, __LINE__, ::magio::LogLevel::Info, FMT, __VA_ARGS__); } while(0)
-#define ASYNC_WARN(FMT, ...) \
-    do { ::magio::Logger::async_write(__FILE__, __LINE__, ::magio::LogLevel::Warn, FMT, __VA_ARGS__); } while(0)
-#define ASYNC_ERROR(FMT, ...) \
-    do { ::magio::Logger::async_write(__FILE__, __LINE__, ::magio::LogLevel::Error, FMT, __VA_ARGS__); } while(0)
 
 }
