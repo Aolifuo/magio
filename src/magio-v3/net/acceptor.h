@@ -1,0 +1,35 @@
+#ifndef MAGIO_NET_ACCEPTOR_H_
+#define MAGIO_NET_ACCEPTOR_H_
+
+#include "magio-v3/core/noncopyable.h"
+#include "magio-v3/net/socket.h"
+
+namespace magio {
+
+namespace net {
+
+class Acceptor: Noncopyable {
+public:
+    Acceptor();
+
+    Acceptor(Acceptor&& other) noexcept;
+
+    Acceptor& operator=(Acceptor&& other) noexcept;
+
+    void bind_and_listen(const EndPoint& ep, Transport tp, std::error_code& ec);
+
+    void set_option(int op, SmallBytes bytes, std::error_code& ec);
+
+    SmallBytes get_option(int op, std::error_code& ec);
+
+    Coro<std::pair<Socket, EndPoint>> accept(std::error_code& ec);
+
+private:
+    Socket listener_;
+};
+
+}
+
+}
+
+#endif

@@ -31,7 +31,6 @@ template<typename Ret, typename Awaitable>
 struct PromiseTypeBase;
 
 struct PromiseNode {
-
     void destroy_all() {
         auto cur = this;
         auto next = next_;
@@ -63,8 +62,6 @@ struct PromiseNode {
     PromiseNode*            prev_ = nullptr;
     PromiseNode*            next_ = nullptr;
 };
-
-
 
 template<typename Ret, typename A>
 struct FinalSuspend {
@@ -137,7 +134,6 @@ struct PromiseTypeBase: PromiseNode {
     }
 
     CoroHandler<Ret> completion_handler_;
-
     MaybeUninit<Ret> storage_;
 };
 

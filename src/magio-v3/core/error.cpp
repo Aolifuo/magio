@@ -1,0 +1,37 @@
+#include "magio-v3/core/error.h"
+
+#ifdef _WIN32
+#include <atlconv.h>
+#endif
+
+namespace magio {
+
+std::string SocketSystemError::message(int code) const {
+    LPTSTR pbuf = nullptr;
+
+    DWORD size = FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER 
+        | FORMAT_MESSAGE_FROM_SYSTEM 
+        | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        code,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPTSTR)&pbuf,
+        0,
+        NULL
+    );
+
+    if (0 == size) {
+        return "Unknown error";
+    }
+
+    std::string result(pbuf, size);
+    LocalFree(pbuf);
+    return result;
+}
+
+std::error_code make_socket_error_code(int code) {
+    return {code, SocketSystemError::get()};
+}
+
+}
