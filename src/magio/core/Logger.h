@@ -378,7 +378,6 @@ private:
     int pattern_ = Level | Date | Time | File | Line | ThreadId;
     void(* output_fn_)(std::string_view, fmt::format_args) = default_output;
 
-    std::unique_ptr<detail::AsyncLogger> alog_;
 };
 
 #define M_TRACE(FMT, ...) \

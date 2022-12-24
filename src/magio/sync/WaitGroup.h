@@ -5,7 +5,7 @@
 
 namespace magio {
 
-class WaitGroup: public std::enable_shared_from_this<WaitGroup> {
+class WaitGroup {
 public:
     WaitGroup(size_t task_num)
         : wait_num_(task_num)
@@ -25,8 +25,8 @@ public:
 
     void wait() {
         std::unique_lock lk(m_);
-        cv_.wait(lk, [p = shared_from_this()] {
-            return p->wait_num_ == 0;
+        cv_.wait(lk, [this] {
+            return wait_num_ == 0;
         });
     }
 private:

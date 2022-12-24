@@ -15,3 +15,5 @@ xmake.lua
 
 .xmake/
 .cache/
+
+dev
