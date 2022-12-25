@@ -1,8 +1,11 @@
-# magio
+# Magio
 
-magio是一个基于C++20实现的协程网络库，支持Windows和Linux（Todo）平台。
+Magio是一个基于C++20实现的协程网络库，包含异步文件IO，网络IO（Tcp、Udp）等。
+支持Windows和Linux（magioV3）平台。
 
-## Udp echo
+## Magio V2
+
+### Udp echo
 
 ```cpp
 Coro<> amain() {
@@ -38,9 +41,7 @@ int main() {
 }
 ```
 
-## Tcp echo
-
-### Client
+### Tcp client
 
 ```cpp
 Coro<> amain() {
@@ -81,7 +82,7 @@ info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
 info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
 ```
 
-### Server
+### Tcp server
 
 ```cpp
 Coro<> process(TcpStream stream) {
@@ -134,7 +135,37 @@ info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
 warn 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:20 id:89864 EOF
 ```
 
+## Magio V3
+
+### Copy file
+
+```cpp
+Coro<> copyfile() {
+    std::error_code ec;
+    auto file1 = File::open("from", File::ReadOnly);
+    auto file2 = File::open("to", File::WriteOnly | File::Create);
+
+    char buf[1024]{};
+    for (; ;) {
+        size_t rd = co_await file1.read(buf, sizeof(buf), ec);
+        if (rd == 0) {
+            break;
+        }
+        co_await file2.write(buf, rd, ec);
+    }
+    this_context::stop();
+}
+
+int main() {
+    CoroContext ctx(make_unique<net::IoUring>(10));
+    this_context::spawn(copyfile());
+    ctx.start();
+}
+```
+
 ## Benchmark
+
+以下为V2的性能
 
 单线程模式下，使用Apache Benchmarking工具。设置1000并发量，1000000请求数，keepalive，RPS如下。
 
@@ -157,3 +188,5 @@ More detail see: [benchmark.md](docs/benchmark.md)
 | [Golang](docs/benchmark2.md#golang)            | 161929.66  | Golang        | coroutine |
 
 More detail see: [benchmark2.md](docs/benchmark2.md)
+
+V3 TODO
