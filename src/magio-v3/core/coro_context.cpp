@@ -1,23 +1,28 @@
 #include "magio-v3/core/coro_context.h"
 
 #include "magio-v3/core/logger.h"
+#ifdef _WIN32
+#include "magio-v3/net/iocp.h"
+#define IOSERVICE std::make_unique<::magio::net::IoCompletionPort>()
+#elif defined (__linux__)
+#include "magio-v3/net/io_uring.h"
+#define IOSERVICE std::make_unique<::magio::net::IoUring>(100)
+#endif
 
 namespace magio {
 
-CoroContext::CoroContext()
+CoroContext::CoroContext(bool enable_io)
     : thread_id_(CurrentThread::get_id()) 
 {
     if (LocalContext != nullptr) {
         M_FATAL("{}", "This thread already has a context");
     }
 
-    LocalContext = this;
-}
+    if (enable_io) {
+        p_io_service_ = IOSERVICE;
+    }
 
-CoroContext::CoroContext(std::unique_ptr<IoService> service)
-    : CoroContext()
-{
-    p_io_service_ = std::move(service);
+    LocalContext = this;
 }
 
 void CoroContext::start() {

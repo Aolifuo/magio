@@ -15,9 +15,7 @@ public:
         Running, Sleeping, Stopping, 
     };
 
-    CoroContext();
-
-    CoroContext(std::unique_ptr<IoService> service);
+    CoroContext(bool enable_io);
 
     void start() override;
 
