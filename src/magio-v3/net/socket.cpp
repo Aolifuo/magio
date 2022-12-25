@@ -10,6 +10,7 @@
 #elif defined(__linux__)
 #include <unistd.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #endif
 
@@ -201,7 +202,6 @@ Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
 }
 
 Coro<size_t> Socket::write_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec) {
-    WAIT_TIMEOUT;
     magio::detail::ResumeHandle rhandle;
     IoContext ioc;
     ioc.handle = handle_;
