@@ -33,18 +33,18 @@ IoUring::~IoUring() {
     }
 }
 
-void IoUring::read_file(IoContext &ioc) {
+void IoUring::read_file(IoContext &ioc, size_t offset) {
     ioc.op = Operation::ReadFile;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_read(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
+    ::io_uring_prep_read(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
     ::io_uring_sqe_set_data(sqe, &ioc);
     ::io_uring_submit(p_io_uring_);
 }
 
-void IoUring::write_file(IoContext &ioc) {
+void IoUring::write_file(IoContext &ioc, size_t offset) {
     ioc.op = Operation::WriteFile;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_write(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
+    ::io_uring_prep_write(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
     ::io_uring_sqe_set_data(sqe, &ioc);
     ::io_uring_submit(p_io_uring_);
 }
@@ -53,8 +53,7 @@ void IoUring::connect(IoContext &ioc) {
     ioc.op = Operation::Connect;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_connect(
-        sqe, ioc.handle, (sockaddr*)&ioc.remote_addr, 
-        ioc.remote_addr.sin_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6)
+        sqe, ioc.handle, (sockaddr*)&ioc.remote_addr, ioc.addr_len
     );
     ::io_uring_sqe_set_data(sqe, &ioc);
     ::io_uring_submit(p_io_uring_);

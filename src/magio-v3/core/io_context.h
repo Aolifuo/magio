@@ -6,7 +6,7 @@
 
 #ifdef _WIN32
 #include <WinSock2.h>
-#include <ws2ipdef.h>
+#include <Ws2tcpip.h>
 #elif defined(__linux__)
 #include <netinet/in.h>
 #endif
@@ -37,6 +37,7 @@ struct IoContext {
         sockaddr_in remote_addr;
         sockaddr_in6 remote_addr6;
     };
+    socklen_t addr_len;
     WSABUF buf;
     void* ptr;
     void(*cb)(std::error_code, void*);
@@ -47,6 +48,7 @@ struct IoContext {
         sockaddr_in remote_addr;
         sockaddr_in6 remote_addr6;
     };
+    socklen_t addr_len;
     IoBuf buf;
     void* ptr;
     void(*cb)(std::error_code, void*);

@@ -16,9 +16,9 @@ public:
 
     ~IoUring();
 
-    void read_file(IoContext& ioc) override;
+    void read_file(IoContext& ioc, size_t offset) override;
 
-    void write_file(IoContext& ioc) override;
+    void write_file(IoContext& ioc, size_t offset) override;
 
     void connect(IoContext& ioc) override;
 

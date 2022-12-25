@@ -28,7 +28,9 @@ public:
 
     template<typename T>
     SmallBytes(const T& elem) {
-        size_ = std::min(sizeof(elem), sizeof(buf_));
+        size_t len1 = sizeof elem;
+        size_t len2 = sizeof buf_;
+        size_ = len1 > len2 ? len2 : len1;
         std::memcpy(buf_, &elem, size_);
     }
 
@@ -86,9 +88,9 @@ public:
 
     Coro<size_t> read(char* buf, size_t len, std::error_code& ec);
 
-    // Coro<size_t> wirte_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec);
+    Coro<size_t> write_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec);
 
-    // Coro<std::pair<size_t, EndPoint>> receive_from(char* msg, size_t len, std::error_code& ec);
+    Coro<std::pair<size_t, EndPoint>> receive_from(char* msg, size_t len, std::error_code& ec);
 
     void close();
 

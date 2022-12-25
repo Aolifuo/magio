@@ -315,7 +315,6 @@ public:
     void async_receive_from(IOData* io) {
         io->op = IOOP::Receive;
         ZeroMemory(&io->overlapped, sizeof(OVERLAPPED));
-
         DWORD flag = 0;
         socklen_t len = sizeof(io->remote);
         int status = ::WSARecvFrom(

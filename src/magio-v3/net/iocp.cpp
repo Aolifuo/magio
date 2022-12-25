@@ -112,6 +112,48 @@ IoCompletionPort::~IoCompletionPort() {
     }
 }
 
+void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
+    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
+    ioc.op = Operation::ReadFile;
+    LARGE_INTEGER large;
+    large.QuadPart = offset;
+    ioc.overlapped.Offset = large.LowPart;
+    ioc.overlapped.OffsetHigh = large.HighPart;
+
+    BOOL status = ReadFile(
+        (HANDLE)ioc.handle, 
+        ioc.buf.buf, 
+        ioc.buf.len, 
+        NULL, 
+        &ioc.overlapped
+    );
+    
+    if (!status && ERROR_IO_PENDING != ::GetLastError()) {
+        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+    }
+}
+
+void IoCompletionPort::write_file(IoContext &ioc, size_t offset) {
+    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
+    ioc.op = Operation::WriteFile;
+    ioc.overlapped.Offset = ::SetFilePointer(
+        (HANDLE)ioc.handle, 0, 
+        NULL, FILE_END
+    );
+
+    BOOL status = WriteFile(
+        (HANDLE)ioc.handle, 
+        ioc.buf.buf, 
+        ioc.buf.len, 
+        NULL, 
+        &ioc.overlapped
+    );
+    
+    if (!status && ERROR_IO_PENDING != ::GetLastError()) {
+        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+    }
+}
+
 void IoCompletionPort::connect(IoContext& ioc) {
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::Connect;
@@ -119,7 +161,7 @@ void IoCompletionPort::connect(IoContext& ioc) {
     bool status = data_->connect(
         ioc.handle,
         (sockaddr*)&ioc.remote_addr,
-        ioc.remote_addr.sin_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6),
+        ioc.addr_len,
         NULL,
         0,
         NULL,
@@ -207,10 +249,6 @@ void IoCompletionPort::send_to(IoContext &ioc) {
     ioc.op = Operation::Send;
 
     DWORD flag = 0;
-    socklen_t len = ioc.remote_addr.sin_family == AF_INET
-        ? sizeof(sockaddr_in) 
-        : sizeof(sockaddr_in6);
-
     int status = ::WSASendTo(
         ioc.handle,
         &ioc.buf, 
@@ -218,7 +256,7 @@ void IoCompletionPort::send_to(IoContext &ioc) {
         NULL, 
         flag, 
         (const sockaddr *)&ioc.remote_addr, 
-        len, 
+        ioc.addr_len, 
         (LPOVERLAPPED)&ioc.overlapped,
         NULL
     );
@@ -233,18 +271,14 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
     ioc.op = Operation::Receive;
 
     DWORD flag = 0;
-    socklen_t len = ioc.remote_addr.sin_family == AF_INET
-        ? sizeof(sockaddr_in) 
-        : sizeof(sockaddr_in6);
-
     int status = ::WSARecvFrom(
         ioc.handle, 
         &ioc.buf, 
         1,
         NULL, 
-        &flag, 
+        &flag,
         (sockaddr*)&ioc.remote_addr, 
-        &len, 
+        &ioc.addr_len, 
         (LPOVERLAPPED)&ioc.overlapped, 
         NULL
     );
@@ -265,8 +299,8 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
         data_->handle,
         &bytes_transferred, 
         (PULONG_PTR)&key, 
-        (LPOVERLAPPED*)&ioc, 
-        (ULONG)wait_time
+        (LPOVERLAPPED*)&ioc,
+        wait_time
     );
 
     if (!status) {
@@ -288,8 +322,16 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
 
     // handle 
     switch(ioc->op) {
-    case Operation::Accept: {
-        M_TRACE("{}", "one accept");
+    case Operation::ReadFile: {
+        ioc->buf.len = bytes_transferred;
+    }
+        break;
+    case Operation::WriteFile: {
+        ioc->buf.len = bytes_transferred;
+    }
+        break;
+    case
+     Operation::Accept: {
         LPSOCKADDR local_addr_ptr;
         LPSOCKADDR remote_addr_ptr;
         int local_addr_len = 0;
@@ -307,6 +349,7 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
         );
 
         std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
+        ioc->addr_len = remote_addr_len;
     }
         break;
     case Operation::Connect: {

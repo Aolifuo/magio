@@ -19,9 +19,9 @@ class IoService {
 public:
     virtual ~IoService() = default;
 
-    virtual void read_file(IoContext& iof) = 0;
+    virtual void read_file(IoContext& ioc, size_t offset) = 0;
 
-    virtual void write_file(IoContext& iof) = 0;
+    virtual void write_file(IoContext& ioc, size_t offset) = 0;
 
     virtual void connect(IoContext& ioc) = 0;
 

@@ -14,6 +14,10 @@ public:
 
     ~IoCompletionPort();
 
+    void read_file(IoContext& ioc, size_t offset) override;
+
+    void write_file(IoContext& ioc, size_t offset) override;
+
     void connect(IoContext& ioc) override;
 
     void accept(Socket& listener, IoContext& ioc) override;
@@ -26,7 +30,7 @@ public:
 
     void receive_from(IoContext& ioc) override;
     
-    void relate(void* sock_handle, std::error_code& ec) override;
+    void relate(void* handle, std::error_code& ec) override;
 
     int poll(bool block, std::error_code& ec) override;
 

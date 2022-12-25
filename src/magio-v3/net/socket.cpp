@@ -6,7 +6,7 @@
 #include "magio-v3/core/detail/completion_callback.h"
 
 #ifdef _WIN32
-#include <ws2ipdef.h>
+#include <Ws2tcpip.h>
 #elif defined(__linux__)
 #include <unistd.h>
 #include <netinet/in.h>
@@ -33,7 +33,7 @@ Socket::Handle open_socket(Ip ip, Transport tp, std::error_code& ec) {
         break;
     case Transport::Udp:
         handle = ::WSASocketW(
-            AF_INET, SOCK_DGRAM, IPPROTO_UDP,
+            af, SOCK_DGRAM, IPPROTO_UDP,
             0, 0, WSA_FLAG_OVERLAPPED
         );
         break;
@@ -111,7 +111,10 @@ void Socket::bind(const EndPoint& ep, std::error_code &ec) {
         address.is_v4() ? sizeof(sockaddr_in) : sizeof(sockaddr_in6)
     )) {
         ec = SOCKET_ERROR_CODE;
+        return;
     }
+
+    this_context::get_service().relate((void*)handle_, ec);
 }
 
 void Socket::set_option(int op, SmallBytes bytes, std::error_code& ec) {
@@ -136,22 +139,14 @@ SmallBytes Socket::get_option(int op, std::error_code &ec) {
 Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
     IpAddress address = ep.address();
 
-    this_context::get_service().relate((void*)handle_, ec);
-    if (ec) {
-        co_return;
-    }
-
     magio::detail::ResumeHandle rhandle;
     IoContext ioc;
     ioc.handle = handle_;
     ioc.ptr = &rhandle;
     ioc.cb = magio::detail::completion_callback;
 
-    std::memcpy(
-        &ioc.remote_addr,
-        address.addr_in_,
-        address.is_v4() ? sizeof(sockaddr_in) : sizeof(sockaddr_in6)
-    );
+    ioc.addr_len = address.is_v4() ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
+    std::memcpy(&ioc.remote_addr, address.addr_in_, ioc.addr_len);
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
@@ -203,6 +198,81 @@ Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
     }
 
     co_return ioc.buf.len;
+}
+
+Coro<size_t> Socket::write_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec) {
+    WAIT_TIMEOUT;
+    magio::detail::ResumeHandle rhandle;
+    IoContext ioc;
+    ioc.handle = handle_;
+    ioc.buf.buf = (char*)msg;
+    ioc.buf.len = len;
+    ioc.addr_len = ep.address().is_v4() ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
+    ioc.ptr = &rhandle;
+    ioc.cb = magio::detail::completion_callback;
+
+    std::memcpy(&ioc.remote_addr, ep.address().addr_in_, ioc.addr_len);
+
+    co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
+        rhandle.handle = h;
+        this_context::get_service().send_to(ioc);
+    });
+
+    ec = rhandle.ec;
+    if (ec) {
+        co_return {};
+    }
+
+    co_return ioc.buf.len;
+}
+
+Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* msg, size_t len, std::error_code& ec) {
+    magio::detail::ResumeHandle rhandle;
+    IoContext ioc;
+    ioc.handle = handle_;
+    ioc.buf.buf = msg;
+    ioc.buf.len = len;
+    ioc.addr_len = sizeof(sockaddr_in6);
+    ioc.ptr = &rhandle;
+    ioc.cb = magio::detail::completion_callback;
+
+    co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
+        rhandle.handle = h;
+        this_context::get_service().receive_from(ioc);
+    });
+
+    ec = rhandle.ec;
+    if (ec) {
+        co_return {};
+    }
+
+    char buf[32];
+    IpAddress address;
+    EndPoint peer;
+
+    ::inet_ntop(
+        ioc.remote_addr.sin_family, &ioc.remote_addr, 
+        buf, sizeof(buf)
+    );
+    std::memcpy(address.addr_in_, &ioc.remote_addr, ioc.addr_len);
+
+    address.ip_ = buf;
+    if (ioc.remote_addr.sin_family == AF_INET) {
+        address.level_ = Ip::v4;
+        peer = EndPoint(
+            address, ::ntohs(ioc.remote_addr.sin_port)
+        );
+    } else {
+        address.level_ = Ip::v6;
+        peer = EndPoint(
+            address, ::ntohs(ioc.remote_addr6.sin6_port)
+        );
+    }
+
+    co_return {
+        ioc.buf.len, 
+        peer
+    };
 }
 
 void Socket::close() {

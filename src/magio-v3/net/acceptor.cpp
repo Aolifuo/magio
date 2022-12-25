@@ -4,12 +4,11 @@
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/net/address.h"
 #include "magio-v3/core/detail/completion_callback.h"
-#include <arpa/inet.h>
 
 #ifdef _WIN32
 #include <Ws2tcpip.h>
 #elif defined (__linux__)
-#include <arpa/inet.h>  
+#include <arpa/inet.h>
 #endif
 
 namespace magio {
@@ -35,11 +34,6 @@ void Acceptor::bind_and_listen(const EndPoint &ep, Transport tp, std::error_code
     }
 
     listener_.bind(ep, ec);
-    if (ec) {
-        return;
-    }
-
-    this_context::get_service().relate((void*)listener_.handle(), ec);
     if (ec) {
         return;
     }
