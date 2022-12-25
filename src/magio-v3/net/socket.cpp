@@ -2,13 +2,14 @@
 
 #include "magio-v3/core/error.h"
 #include "magio-v3/core/coro_context.h"
-#include "magio-v3/net/io_context.h"
-#include "magio-v3/net/detail/completion_callback.h"
+#include "magio-v3/core/io_context.h"
+#include "magio-v3/core/detail/completion_callback.h"
 
 #ifdef _WIN32
 #include <ws2ipdef.h>
 #elif defined(__linux__)
 #include <unistd.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #endif
 
@@ -122,7 +123,7 @@ void Socket::set_option(int op, SmallBytes bytes, std::error_code& ec) {
 
 SmallBytes Socket::get_option(int op, std::error_code &ec) {
     char buf[16];
-    int len = sizeof(buf);
+    socklen_t len = sizeof(buf);
     int r = ::getsockopt(handle_, SOL_SOCKET, op, buf, &len);
     if (-1 == r) {
         ec = SOCKET_ERROR_CODE;
@@ -134,23 +135,17 @@ SmallBytes Socket::get_option(int op, std::error_code &ec) {
 
 Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
     IpAddress address = ep.address();
-    if (handle_ == -1) {
-        open(address.ip(), Transport::Tcp, ec);
-        if (ec) {
-            co_return;
-        }
-    }
 
     this_context::get_service().relate((void*)handle_, ec);
     if (ec) {
         co_return;
     }
 
-    detail::ResumeHandle rhandle;
+    magio::detail::ResumeHandle rhandle;
     IoContext ioc;
-    ioc.socket_handle = handle_;
+    ioc.handle = handle_;
     ioc.ptr = &rhandle;
-    ioc.cb = detail::completion_callback;
+    ioc.cb = magio::detail::completion_callback;
 
     std::memcpy(
         &ioc.remote_addr,
@@ -167,13 +162,13 @@ Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
 }
 
 Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
-    detail::ResumeHandle rhandle;
+    magio::detail::ResumeHandle rhandle;
     IoContext ioc;
-    ioc.socket_handle = handle_;
+    ioc.handle = handle_;
     ioc.buf.buf = buf;
     ioc.buf.len = len;
     ioc.ptr = &rhandle;
-    ioc.cb = detail::completion_callback;
+    ioc.cb = magio::detail::completion_callback;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
@@ -189,13 +184,13 @@ Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
 }
 
 Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
-    detail::ResumeHandle rhandle;
+    magio::detail::ResumeHandle rhandle;
     IoContext ioc;
-    ioc.socket_handle = handle_;
+    ioc.handle = handle_;
     ioc.buf.buf = (char*)msg;
     ioc.buf.len = len;
     ioc.ptr = &rhandle;
-    ioc.cb = detail::completion_callback;
+    ioc.cb = magio::detail::completion_callback;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;

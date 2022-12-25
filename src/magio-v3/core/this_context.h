@@ -42,7 +42,7 @@ using TimerTask = std::function<void(bool)>;
 template<typename T>
 using CoroCompletionHandler = typename detail::CoroCompletionHandler<T>::type;
 
-inline CoroContext* LocalContext = nullptr;
+inline thread_local CoroContext* LocalContext = nullptr;
 
 inline detail::UseCoro use_core;
 

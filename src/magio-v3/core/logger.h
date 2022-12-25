@@ -9,13 +9,13 @@
 namespace magio {
 
 enum class LogLevel {
-    Off,
     Trace,
     Debug,
     Info,
     Warn,
     Error,
-    Fatal
+    Fatal,
+    Off
 };
 
 class Logger {

@@ -1,26 +1,30 @@
+-- set_toolchains("clang")
+-- set_config("cxxflags", "-stdlib=libc++")
+-- set_config("ldflags", "-stdlib=libc++")
+--set_config("cxx", "clang-cl")
+
 set_project("magio")
 set_version("0.0.7")
 
---set_config("cxx", "clang-cl")
 add_rules("mode.debug", "mode.release")
 set_languages("cxx20")
 set_warnings("all")
-add_requires("fmt")
-add_packages("fmt")
 
 if is_mode("release") then 
     set_optimize("faster")
 end
 
 if is_plat("linux") then
-    add_requires("liburing")
     add_syslinks("pthread")
-    add_packages("liburing")
+    add_requires("liburing", "fmt")
+    add_packages("liburing", "fmt")
 end
 
 if is_plat("windows") then 
     add_cxxflags("/EHa")
     add_syslinks("ws2_32")
+    add_requires("fmt")
+    add_packages("fmt")
 end
 
 target("magio")

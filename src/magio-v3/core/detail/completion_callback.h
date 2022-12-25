@@ -1,10 +1,10 @@
-#ifndef MAGIO_NET_DETAIL_COMPLETION_CALLBACK_H_
-#define MAGIO_NET_DETAIL_COMPLETION_CALLBACK_H_
+#ifndef MAGIO_CORE_DETAIL_COMPLETION_CALLBACK_H_
+#define MAGIO_CORE_DETAIL_COMPLETION_CALLBACK_H_
 
 #include <system_error>
-#include <coroutine>
+#include "magio-v3/core/coroutine.h"
 
-namespace magio::net::detail {
+namespace magio::detail {
 
 struct ResumeHandle {
     std::error_code ec;

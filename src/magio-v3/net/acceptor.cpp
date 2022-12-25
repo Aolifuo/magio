@@ -1,12 +1,15 @@
 #include "magio-v3/net/acceptor.h"
 
 #include "magio-v3/core/coro_context.h"
-#include "magio-v3/net/io_context.h"
+#include "magio-v3/core/io_context.h"
 #include "magio-v3/net/address.h"
-#include "magio-v3/net/detail/completion_callback.h"
+#include "magio-v3/core/detail/completion_callback.h"
+#include <arpa/inet.h>
 
 #ifdef _WIN32
 #include <Ws2tcpip.h>
+#elif defined (__linux__)
+#include <arpa/inet.h>  
 #endif
 
 namespace magio {
@@ -58,11 +61,11 @@ SmallBytes Acceptor::get_option(int op, std::error_code &ec) {
 Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
     char buf[128];
     IoContext ioc;
-    detail::ResumeHandle handle;
+    magio::detail::ResumeHandle handle;
     ioc.buf.buf = buf;
     ioc.buf.len = sizeof(buf);
     ioc.ptr = &handle;
-    ioc.cb = detail::completion_callback;
+    ioc.cb = magio::detail::completion_callback;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         handle.handle = h;
@@ -71,27 +74,27 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
     
     ec = handle.ec;
     if (ec) {
-        detail::close_socket(ioc.socket_handle);
+        detail::close_socket(ioc.handle);
         co_return {};
     }
 
-    this_context::get_service().relate((void*)ioc.socket_handle, ec);
+    this_context::get_service().relate((void*)ioc.handle, ec);
     if (ec) {
-        detail::close_socket(ioc.socket_handle);
+        detail::close_socket(ioc.handle);
         co_return {};
     }
 
     EndPoint ep;
     Ip ipv;
     Transport trans = listener_.transport();
-// windows get remote address
-#ifdef _WIN32
-    ZeroMemory(buf, sizeof(buf));
+
+    std::memset(buf, 0, sizeof(buf));
     ::inet_ntop(ioc.remote_addr.sin_family, &ioc.remote_addr, buf, sizeof(buf));
+
     if (ioc.remote_addr.sin_family == AF_INET) {
         ipv = Ip::v4;
         ep = EndPoint(
-            IpAddress(ioc.remote_addr, buf, Ip::v4), 
+            IpAddress(ioc.remote_addr, buf, Ip::v4),
             ::ntohs(ioc.remote_addr.sin_port)
         );
     } else {
@@ -101,10 +104,9 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
             ::ntohs(ioc.remote_addr6.sin6_port)
         );
     }
-#endif
 
     co_return {
-        Socket(ioc.socket_handle, ipv, trans), 
+        Socket(ioc.handle, ipv, trans), 
         ep
     };
 }

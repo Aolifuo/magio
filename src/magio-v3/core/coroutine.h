@@ -1,7 +1,7 @@
 #ifndef MAGIO_CORE_COROUTINE_H_
 #define MAGIO_CORE_COROUTINE_H_
 
-#if __has_include(<coroutine>)
+#ifdef __cpp_impl_coroutine
 #include <coroutine>
 #else
 #include <experimental/coroutine>

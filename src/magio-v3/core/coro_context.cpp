@@ -4,8 +4,6 @@
 
 namespace magio {
 
-constexpr size_t kIoPollTime = 114514;
-
 CoroContext::CoroContext()
     : thread_id_(CurrentThread::get_id()) 
 {
@@ -80,12 +78,12 @@ void CoroContext::handle_io_poller() {
         return;
     }
 
-    size_t timeout = 0;
+    bool block = false;
     bool stop_flag = false;
     for (; !stop_flag && state_ != Stopping;) {
         std::error_code ec;
-        int status = p_io_service_->poll(timeout, ec);
-        timeout = 0;
+        int status = p_io_service_->poll(block, ec);
+        block = false;
         if (status == -1) {
             // error
             M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.value());
@@ -102,7 +100,7 @@ void CoroContext::handle_io_poller() {
                 stop_flag = true;
             } else {
                 // try to sleep
-                timeout = kIoPollTime;
+                block = true;
             }
         } else if (status == 1) {
             // io completion

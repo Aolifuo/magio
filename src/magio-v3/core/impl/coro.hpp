@@ -87,8 +87,8 @@ namespace this_coro {
 
 template<typename Rep, typename Per>
 inline Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur) {
-    co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        this_context::expires_after(dur, [h](bool flag) {
+    co_await GetCoroutineHandle([&](std::coroutine_handle<> h)  {
+        this_context::expires_after(dur, [h](bool flag) mutable {
             if (flag) {
                 h.resume();
             }
@@ -98,7 +98,7 @@ inline Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur) {
 
 inline Coro<> sleep_until(const TimerClock::time_point& tp) {
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        this_context::expires_until(tp, [h](bool flag) {
+        this_context::expires_until(tp, [h](bool flag) mutable {
             if (flag) {
                 h.resume();
             }

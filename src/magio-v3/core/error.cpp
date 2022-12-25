@@ -7,6 +7,7 @@
 namespace magio {
 
 std::string SocketSystemError::message(int code) const {
+#ifdef _WIN32
     LPTSTR pbuf = nullptr;
 
     DWORD size = FormatMessage(
@@ -28,6 +29,9 @@ std::string SocketSystemError::message(int code) const {
     std::string result(pbuf, size);
     LocalFree(pbuf);
     return result;
+#elif defined (__linux__)
+    return std::strerror(code);
+#endif
 }
 
 std::error_code make_socket_error_code(int code) {

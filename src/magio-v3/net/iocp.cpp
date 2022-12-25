@@ -3,8 +3,8 @@
 
 #include "magio-v3/core/error.h"
 #include "magio-v3/core/logger.h"
+#include "magio-v3/core/io_context.h"
 #include "magio-v3/net/socket.h"
-#include "magio-v3/net/io_context.h"
 
 #include <MSWSock.h>
 #include <Ws2tcpip.h> // for socklen_t
@@ -108,6 +108,7 @@ IoCompletionPort::~IoCompletionPort() {
         ::WSACleanup();
         ::CloseHandle(data_->handle);
         delete data_;
+        data_ = nullptr;
     }
 }
 
@@ -116,9 +117,9 @@ void IoCompletionPort::connect(IoContext& ioc) {
     ioc.op = Operation::Connect;
 
     bool status = data_->connect(
-        ioc.socket_handle,
+        ioc.handle,
         (sockaddr*)&ioc.remote_addr,
-        sizeof(sockaddr),
+        ioc.remote_addr.sin_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6),
         NULL,
         0,
         NULL,
@@ -141,11 +142,11 @@ void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
         ioc.cb(ec, ioc.ptr);
         return;
     }
-    ioc.socket_handle = sock_handle;
+    ioc.handle = sock_handle;
 
     bool status = data_->accept(
         listener.handle(),
-        ioc.socket_handle,
+        ioc.handle,
         ioc.buf.buf,
         0,
         sizeof(sockaddr_in6) + 16, // ipv4 ipv6
@@ -167,7 +168,7 @@ void IoCompletionPort::send(IoContext &ioc) {
 
     DWORD flag = 0;
     int status = ::WSASend(
-        ioc.socket_handle, 
+        ioc.handle, 
         &ioc.buf, 
         1, 
         NULL, 
@@ -187,7 +188,7 @@ void IoCompletionPort::receive(IoContext &ioc) {
 
     DWORD flag = 0;
     int status = ::WSARecv(
-        ioc.socket_handle, 
+        ioc.handle, 
         (LPWSABUF)&ioc.buf, 
         1, 
         NULL,
@@ -211,7 +212,7 @@ void IoCompletionPort::send_to(IoContext &ioc) {
         : sizeof(sockaddr_in6);
 
     int status = ::WSASendTo(
-        ioc.socket_handle,
+        ioc.handle,
         &ioc.buf, 
         1, 
         NULL, 
@@ -237,7 +238,7 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
         : sizeof(sockaddr_in6);
 
     int status = ::WSARecvFrom(
-        ioc.socket_handle, 
+        ioc.handle, 
         &ioc.buf, 
         1,
         NULL, 
@@ -253,18 +254,19 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
     }
 }
 
-int IoCompletionPort::poll(size_t ms, std::error_code &ec) {
+int IoCompletionPort::poll(bool block, std::error_code &ec) {
     DWORD bytes_transferred = 0;
     IoContext* ioc = nullptr;
     void* key = nullptr;
     std::error_code inner_ec;
 
+    ULONG wait_time = block ? ULONG_MAX : 0;
     bool status = ::GetQueuedCompletionStatus(
         data_->handle,
         &bytes_transferred, 
         (PULONG_PTR)&key, 
         (LPOVERLAPPED*)&ioc, 
-        (ULONG)ms
+        (ULONG)wait_time
     );
 
     if (!status) {
@@ -304,11 +306,7 @@ int IoCompletionPort::poll(size_t ms, std::error_code &ec) {
             &remote_addr_len
         );
 
-        if (remote_addr_ptr->sa_family == AF_INET) {
-            ioc->remote_addr = *((sockaddr_in*)remote_addr_ptr);
-        } else {
-            ioc->remote_addr6 = *((sockaddr_in6*)remote_addr_ptr);
-        }
+        std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
     }
         break;
     case Operation::Connect: {

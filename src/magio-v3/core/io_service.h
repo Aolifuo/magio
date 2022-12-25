@@ -11,30 +11,34 @@ class Socket;
 
 class IpAddress;
 
-struct IoContext;
-
 }
+
+struct IoContext;
 
 class IoService {
 public:
     virtual ~IoService() = default;
 
-    virtual void connect(net::IoContext& ioc) = 0;
+    virtual void read_file(IoContext& iof) = 0;
 
-    virtual void accept(net::Socket& listener, net::IoContext& ioc) = 0;
+    virtual void write_file(IoContext& iof) = 0;
 
-    virtual void send(net::IoContext& ioc) = 0;
+    virtual void connect(IoContext& ioc) = 0;
 
-    virtual void receive(net::IoContext& ioc) = 0;
+    virtual void accept(net::Socket& listener, IoContext& ioc) = 0;
 
-    virtual void send_to(net::IoContext& ioc) = 0;
+    virtual void send(IoContext& ioc) = 0;
 
-    virtual void receive_from(net::IoContext& ioc) = 0;
+    virtual void receive(IoContext& ioc) = 0;
+
+    virtual void send_to(IoContext& ioc) = 0;
+
+    virtual void receive_from(IoContext& ioc) = 0;
 
     virtual void relate(void* handle, std::error_code& ec) = 0;
 
     // -1->big error, 0->wait timeout; 1->io; 2->wake up
-    virtual int poll(size_t ms, std::error_code& ec) = 0;
+    virtual int poll(bool block, std::error_code& ec) = 0;
 
     virtual void wake_up() = 0;
 };

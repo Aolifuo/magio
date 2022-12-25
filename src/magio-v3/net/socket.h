@@ -1,7 +1,8 @@
 #ifndef MAGIO_NET_SOCKET_H_
 #define MAGIO_NET_SOCKET_H_
 
-#include "magio-v3/core/io_service.h"
+#include <cstring>
+
 #include "magio-v3/core/noncopyable.h"
 #include "magio-v3/net/address.h"
 
