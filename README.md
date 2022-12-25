@@ -3,141 +3,9 @@
 Magio是一个基于C++20实现的协程网络库，包含异步文件IO，网络IO（Tcp、Udp）等。
 支持Windows和Linux（magioV3）平台。
 
-## Magio V2
-
-### Udp echo
-
-```cpp
-Coro<> amain() {
-    try {
-        array<char, 1024> buf;
-        auto socket = co_await UdpSocket::bind("127.0.0.1", 8001);
-        for (; ;) {
-            // 5秒后超时取消read
-            auto read_res = co_await timeout(5000, socket.read_from(buf.data(), buf.size()));
-            if (!read_res) {
-                M_WARN("read timeout!");
-                continue;
-            }
-
-            auto [len, address] = read_res.unwrap();
-            M_INFO("{}", string_view(buf.data(), len));
-
-            auto write_res = co_await timeout(5000, socket.write_to(buf.data(), len, address));
-            if (!write_res) {
-                M_WARN("read timeout!");
-                continue;
-            }
-        }
-    } catch (const system_error& err) {
-        M_ERROR("{}", err.what());
-    }
-}
-
-int main() {
-    Magico loop(1);
-    co_spawn(loop.get_executor(), amain());
-    loop.run();
-}
-```
-
-### Tcp client
-
-```cpp
-Coro<> amain() {
-    try {
-        auto stream = co_await TcpStream::connect("127.0.0.1", 8000);
-
-        M_INFO("{} connect {}", stream.local_address().to_string(), stream.remote_address().to_string());
-
-        array<char, 1024> buf;
-        for (int i = 0; i < 5; ++i) {
-            auto [_, rdlen] = co_await (
-                stream.write("Hello server..", 14) &&
-                stream.read(buf.data(), buf.size())
-            );
-
-            M_INFO("{}", string_view(buf.data(), rdlen));
-        }
-    } catch(const std::exception& err) {
-        M_ERROR("{}", err.what());
-    }
-}
-
-int main() {
-    Magico loop(1);
-    co_spawn(loop.get_executor(), amain());
-    loop.run();
-}
-```
-
-output
-
-```shell
-info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:13 id:88920 127.0.0.1:49331 connect 127.0.0.1:8000     
-info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
-info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
-info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
-info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
-info 2022-11-27 12:35:58 f:examples\tcp_client.cpp l:22 id:88920 Hello client..
-```
-
-### Tcp server
-
-```cpp
-Coro<> process(TcpStream stream) {
-    try {
-        array<char, 1024> buf;
-        for (; ;) {
-            auto [rdlen, _] = co_await (
-                stream.read(buf.data(), buf.size()) &&
-                stream.write("Hello client..", 14)
-            );
-
-            M_INFO("{}", string_view(buf.data(), rdlen));
-        }
-    } catch(const system_error& err) {
-        M_WARN("{}", err.what());
-    }
-}
-
-Coro<> amain() {
-    try {
-        auto server = co_await TcpServer::bind("0.0.0.0", 8000);
-        for (; ;) {
-            auto stream = co_await server.accept();
-
-            M_INFO("{} connect {}", stream.local_address().to_string(), stream.remote_address().to_string());
-
-            co_spawn(co_await this_coro::executor, process(std::move(stream)));
-        }
-    } catch(const runtime_error& err) {
-        M_ERROR("{}", err.what());
-    }
-}
-
-int main() {
-    Magico loop(1);
-    co_spawn(loop.get_executor(), amain());
-    loop.run();
-}
-```
-
-output
-
-```shell
-info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:30 id:89864 127.0.0.1:8000 connect 127.0.0.1:49331
-info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
-info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
-info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
-info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
-info 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:17 id:89864 Hello server..
-warn 2022-11-27 12:35:58 f:examples\tcp_server.cpp l:20 id:89864 EOF
-```
-
 ## Magio V3
 
-### Ipv6 Tcp server
+### Tcp server
 
 ```cpp
 Coro<> handle_connection(net::Socket sock) {
@@ -145,8 +13,8 @@ Coro<> handle_connection(net::Socket sock) {
     char buf[1024];
     for (; ;) {
         size_t rd = co_await sock.read(buf, sizeof(buf), ec);
-        if (ec) {
-            M_ERROR("{}", ec.message());
+        if (ec || rd == 0) {
+            M_ERROR("{}", ec ? ec.message() : "EOF");
             break;
         }
         M_INFO("receive: {}", string_view(buf, rd));
@@ -182,9 +50,97 @@ Coro<> server() {
 }
 
 int main() {
-    CoroContext ctx(make_unique<net::IoUring>(10));
+    CoroContext ctx(true);
     this_context::spawn(server());
     ctx.start();
+}
+```
+
+### Tcp Client
+
+```cpp
+Coro<> client() {
+    std::error_code ec;
+    net::EndPoint local(net::make_address("::1", ec), 0);
+    net::EndPoint peer(net::make_address("::1", ec), 1234);
+    if (ec) {
+        M_FATAL("{}", ec.message());
+    }
+
+    net::Socket socket;
+    socket.open(net::Ip::v6, net::Transport::Tcp, ec);
+    socket.bind(local, ec);
+    if (ec) {
+        M_FATAL("{}", ec.message());
+    }
+
+    co_await socket.connect(peer, ec);
+    if (ec) {
+        M_FATAL("{}", ec.message());
+    }
+ 
+    char buf[1024];
+    for (int i = 0; i < 5; ++i) {
+        co_await socket.write("hello server", 12, ec);
+        if (ec) {
+            M_ERROR("{}", ec.message());
+            break;
+        }
+        size_t rd = co_await socket.read(buf, sizeof(buf), ec);
+        if (ec) {
+            M_ERROR("{}", ec.message());
+            break;
+        }
+        M_INFO("{}", string_view(buf, rd));
+    }
+    this_context::stop();
+}
+
+int main() {
+    CoroContext ctx(true);
+    this_context::spawn(client());
+    ctx.start();
+}
+```
+
+### Udp echo
+
+```cpp
+Coro<> amain() {
+    error_code ec;
+    net::Socket socket;
+    socket.open(net::Ip::v6, net::Transport::Udp, ec);
+    if (ec) {
+        M_FATAL("{}", ec.message());
+    }
+
+    net::EndPoint local(net::make_address("::1", ec), 1234);
+    socket.bind(local, ec);
+    if (ec) {
+        M_FATAL("{}", ec.message());
+    }
+
+    char buf[1024]{};
+    for (; ; ec.clear()) {
+        auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf), ec);
+        if (ec) {
+            M_ERROR("{}", ec.message());
+            continue;
+        }
+
+        M_INFO("from [{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
+        co_await socket.write_to("Hello", 5, peer, ec);
+        if (ec) {
+            M_ERROR("{}", ec.message());
+            continue;
+        }
+    }
+}
+
+int main() {
+    CoroContext ctx(true);
+    this_context::spawn(amain());
+    ctx.start();    
 }
 ```
 
