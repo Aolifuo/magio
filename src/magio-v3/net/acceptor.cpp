@@ -72,12 +72,6 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
         co_return {};
     }
 
-    this_context::get_service().relate((void*)ioc.handle, ec);
-    if (ec) {
-        detail::close_socket(ioc.handle);
-        co_return {};
-    }
-
     EndPoint ep;
     Ip ipv;
     Transport trans = listener_.transport();

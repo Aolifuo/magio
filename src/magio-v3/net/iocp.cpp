@@ -288,84 +288,90 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
     }
 }
 
+// invoke all
 int IoCompletionPort::poll(bool block, std::error_code &ec) {
-    DWORD bytes_transferred = 0;
-    IoContext* ioc = nullptr;
-    void* key = nullptr;
-    std::error_code inner_ec;
-
     ULONG wait_time = block ? ULONG_MAX : 0;
-    bool status = ::GetQueuedCompletionStatus(
-        data_->handle,
-        &bytes_transferred, 
-        (PULONG_PTR)&key, 
-        (LPOVERLAPPED*)&ioc,
-        wait_time
-    );
+    for (int i = 0; i < 1024; ++i) {
+        std::error_code inner_ec;
+        DWORD bytes_transferred = 0;
+        IoContext* ioc = nullptr;
+        void* key = nullptr;
 
-    if (!status) {
-        if (WAIT_TIMEOUT == ::GetLastError()) {
-            return 0;
-        }
-        inner_ec = SOCKET_ERROR_CODE;
-    }
-
-    if (!ioc) {
-        ec = SOCKET_ERROR_CODE;
-        return -1;
-    }
-
-    // wake up
-    if (ULONG_MAX == bytes_transferred) {
-        return 2;
-    }
-
-    // handle 
-    switch(ioc->op) {
-    case Operation::ReadFile: {
-        ioc->buf.len = bytes_transferred;
-    }
-        break;
-    case Operation::WriteFile: {
-        ioc->buf.len = bytes_transferred;
-    }
-        break;
-    case
-     Operation::Accept: {
-        LPSOCKADDR local_addr_ptr;
-        LPSOCKADDR remote_addr_ptr;
-        int local_addr_len = 0;
-        int remote_addr_len = 0;
-
-        data_->get_sock_addr(
-            ioc->buf.buf,
-            0,
-            sizeof(sockaddr_in6) + 16,
-            sizeof(sockaddr_in6) + 16,
-            &local_addr_ptr,
-            &local_addr_len,
-            &remote_addr_ptr,
-            &remote_addr_len
+        bool status = ::GetQueuedCompletionStatus(
+            data_->handle,
+            &bytes_transferred, 
+            (PULONG_PTR)&key, 
+            (LPOVERLAPPED*)&ioc,
+            wait_time
         );
+        wait_time = 0;
 
-        std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
-        ioc->addr_len = remote_addr_len;
-    }
-        break;
-    case Operation::Connect: {
-    }
-        break;
-    case Operation::Send: {
-        ioc->buf.len = bytes_transferred;
-    }
-        break;
-    case Operation::Receive: {
-        ioc->buf.len = bytes_transferred;
-    }
-        break;
+        if (!status) {
+            if (WAIT_TIMEOUT == ::GetLastError()) {
+                return 0;
+            }
+            inner_ec = SOCKET_ERROR_CODE;
+        }
+        
+        if (ULONG_MAX == bytes_transferred) {
+            // be waked up
+            return 2;
+        } else if (!ioc) {
+            ec = SOCKET_ERROR_CODE;
+            return -1;
+        }       
+
+        switch(ioc->op) {
+        case Operation::WakeUp: {
+            // Never
+        }
+            break;
+        case Operation::ReadFile: {
+            ioc->buf.len = bytes_transferred;
+        }
+            break;
+        case Operation::WriteFile: {
+            ioc->buf.len = bytes_transferred;
+        }
+            break;
+        case
+        Operation::Accept: {
+            LPSOCKADDR local_addr_ptr;
+            LPSOCKADDR remote_addr_ptr;
+            int local_addr_len = 0;
+            int remote_addr_len = 0;
+
+            data_->get_sock_addr(
+                ioc->buf.buf,
+                0,
+                sizeof(sockaddr_in6) + 16,
+                sizeof(sockaddr_in6) + 16,
+                &local_addr_ptr,
+                &local_addr_len,
+                &remote_addr_ptr,
+                &remote_addr_len
+            );
+
+            std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
+            ioc->addr_len = remote_addr_len;
+        }
+            break;
+        case Operation::Connect: {
+        }
+            break;
+        case Operation::Send: {
+            ioc->buf.len = bytes_transferred;
+        }
+            break;
+        case Operation::Receive: {
+            ioc->buf.len = bytes_transferred;
+        }
+            break;
+        }
+
+        ioc->cb(inner_ec, ioc->ptr);
     }
 
-    ioc->cb(inner_ec, ioc->ptr);
     return 1;
 }
 
@@ -382,15 +388,14 @@ void IoCompletionPort::relate(void* sock_handle, std::error_code& ec) {
     }
 }
 
-// void IoCompletionPort::wake_up() {
-//     void* key = nullptr;
-//     ::PostQueuedCompletionStatus(
-//         data_->handle, 
-//         ULONG_MAX,
-//         (ULONG_PTR)key, 
-//         NULL
-//     );
-// }
+void IoCompletionPort::wake_up() {
+    ::PostQueuedCompletionStatus(
+        data_->handle, 
+        ULONG_MAX,
+        0, 
+        NULL
+    );
+}
 
 }
 

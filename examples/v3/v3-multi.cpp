@@ -40,12 +40,13 @@ Coro<> server(MultithreadedContexts& ctxs) {
         if (ec) {
             M_ERROR("{}", ec.message());
         }
-        M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
+        // M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
         ctxs.next_context().spawn(handle_connection(std::move(socket)));
     }
 }
 
 int main() {
+    Logger::set_level(LogLevel::Fatal);
     CoroContext ctx(50);
     MultithreadedContexts threaded_ctxs(4, 50);
     this_context::spawn(server(threaded_ctxs));

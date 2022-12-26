@@ -87,14 +87,20 @@ Socket::~Socket() {
 }
 
 Socket::Socket(Socket&& other) noexcept
-    : handle_(other.handle_)
+    : is_related_(other.is_related_)
+    , handle_(other.handle_)
+    , ip_(other.ip_)
+    , transport_(other.transport_)
 {
-    other.handle_ = -1;
+    other.reset();
 }
 
 Socket& Socket::operator=(Socket&& other) noexcept {
+    is_related_ = other.is_related_;
     handle_ = other.handle_;
-    other.handle_ = -1;
+    ip_ = other.ip_;
+    transport_ = other.transport_;
+    other.reset();
     return *this;
 }
 
@@ -137,6 +143,7 @@ SmallBytes Socket::get_option(int op, std::error_code &ec) {
 }
 
 Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
+    check_relation();
     auto& address = ep.address();
 
     ResumeHandle rhandle;
@@ -157,6 +164,7 @@ Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
 }
 
 Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
+    check_relation();
     ResumeHandle rhandle;
     IoContext ioc;
     ioc.handle = handle_;
@@ -165,7 +173,6 @@ Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
     ioc.ptr = &rhandle;
     ioc.cb = completion_callback;
 
-    std::printf("1\n");
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
         this_context::get_service().receive(ioc);
@@ -180,6 +187,7 @@ Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
 }
 
 Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
+    check_relation();
     ResumeHandle rhandle;
     IoContext ioc;
     ioc.handle = handle_;
@@ -202,6 +210,7 @@ Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
 }
 
 Coro<size_t> Socket::write_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec) {
+    check_relation();
     IoContext ioc;
 
     ioc.handle = handle_;
@@ -239,6 +248,7 @@ Coro<size_t> Socket::write_to(const char* msg, size_t len, const EndPoint& ep, s
 }
 
 Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* msg, size_t len, std::error_code& ec) {
+    check_relation();
     char buf[32];
     IpAddress address;
     EndPoint peer;
@@ -309,13 +319,28 @@ void Socket::cancel() {
 void Socket::close() {
     if (handle_ != -1) {
         detail::close_socket(handle_);
-        handle_ = -1;
+        reset();
     }
 }
 
 void Socket::shutdown(Shutdown type) {
     if (handle_ != - 1) {
         ::shutdown(handle_, (int)type);
+    }
+}
+
+void Socket::reset() {
+    is_related_ = false;
+    handle_ = -1;
+    ip_ = Ip::v4;
+    transport_ = Transport::Tcp;
+}
+
+void Socket::check_relation() {
+    if (handle_ != -1 && !is_related_) {
+        std::error_code ec;
+        this_context::get_service().relate((void*)handle_, ec);
+        is_related_ = true;
     }
 }
 

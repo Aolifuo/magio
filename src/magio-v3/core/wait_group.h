@@ -1,7 +1,8 @@
-#pragma once
+#ifndef MAGIO_CORE_WAIT_GROUP_H_
+#define MAGIO_CORE_WAIT_GROUP_H_
 
 #include <mutex>
-#include <memory>
+#include <condition_variable>
 
 namespace magio {
 
@@ -36,3 +37,5 @@ private:
 };
 
 }
+
+#endif

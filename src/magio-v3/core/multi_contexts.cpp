@@ -8,6 +8,7 @@ namespace magio {
 
 MultithreadedContexts::MultithreadedContexts(size_t num, size_t every)
     : every_entries_(every)
+    , wg_(num)
     , contexts_(num)
 {
     if (!LocalContext) {
@@ -44,6 +45,7 @@ void MultithreadedContexts::start_all() {
     for (size_t i = 0; i < contexts_.size(); ++i) {
         threads_.emplace_back(&MultithreadedContexts::run_in_background, this, i);
     }
+    wg_.wait();
 }
 
 CoroContext& MultithreadedContexts::next_context() {
@@ -54,6 +56,7 @@ CoroContext& MultithreadedContexts::next_context() {
 
 void MultithreadedContexts::run_in_background(size_t id) {
     contexts_[id] = std::make_unique<CoroContext>(every_entries_);
+    wg_.done();
     contexts_[id]->start();
     M_TRACE("{}", "One thread exits from multi contexts");
 }

@@ -63,23 +63,25 @@ struct ResumeHandle {
     std::coroutine_handle<> handle;
 };
 
-struct ResumeWithMsg {
-    std::error_code ec;
-    msghdr msg;
-    std::coroutine_handle<> handle;
-};
-
 inline void completion_callback(std::error_code ec, void* ptr) {
     auto* h = static_cast<ResumeHandle*>(ptr);
     h->ec = ec;
     h->handle.resume();
 }
 
+#ifdef __linux__
+struct ResumeWithMsg {
+    std::error_code ec;
+    msghdr msg;
+    std::coroutine_handle<> handle;
+};
+
 inline void completion_callback_with_msg(std::error_code ec, void* ptr) {
     auto* h = static_cast<ResumeWithMsg*>(ptr);
     h->ec = ec;
     h->handle.resume();
 }
+#endif
 
 }
 

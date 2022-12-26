@@ -15,7 +15,7 @@ namespace magio {
 SingleEvent::SingleEvent() {
     handle_ =
 #ifdef _WIN32
-
+    nullptr;
 #elif defined (__linux__)
     ::eventfd(0, 0);
 #endif

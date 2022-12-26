@@ -1,6 +1,7 @@
 #ifndef MAGIO_CORE_MULTI_CONTEXT_H_
 #define MAGIO_CORE_MULTI_CONTEXT_H_
 
+#include "magio-v3/core/wait_group.h"
 #include "magio-v3/core/coro_context.h"
 
 namespace magio {
@@ -29,6 +30,7 @@ private:
     size_t every_entries_ = 0;
     size_t next_idx_ = 0;
     size_t thread_id_ = 0;
+    WaitGroup wg_;
     std::vector<std::unique_ptr<CoroContext>> contexts_;
     std::vector<std::thread> threads_;
 };

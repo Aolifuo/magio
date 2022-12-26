@@ -117,6 +117,11 @@ private:
 
     void close();
 
+    void reset();
+
+    void check_relation();
+
+    bool is_related_ = false;
     Handle handle_ = -1;
     Ip ip_ = Ip::v4;
     Transport transport_ = Transport::Tcp;

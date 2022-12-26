@@ -24,12 +24,12 @@ public:
     void execute(Task&& task) override;
 
     template<typename T>
-    Coro<T> spawn(Coro<T> coro) {
+    void spawn(Coro<T> coro) {
         wake_in_context(coro.handle());
     }
 
     template<typename T>
-    Coro<T> spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler) {
+    void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler) {
         coro.set_callback(std::move(handler));
         wake_in_context(coro.handle());
     }
