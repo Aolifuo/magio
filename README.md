@@ -50,7 +50,7 @@ Coro<> server() {
 }
 
 int main() {
-    CoroContext ctx(true);
+    CoroContext ctx(100);
     this_context::spawn(server());
     ctx.start();
 }
@@ -97,7 +97,7 @@ Coro<> client() {
 }
 
 int main() {
-    CoroContext ctx(true);
+    CoroContext ctx(100);
     this_context::spawn(client());
     ctx.start();
 }
@@ -138,7 +138,7 @@ Coro<> amain() {
 }
 
 int main() {
-    CoroContext ctx(true);
+    CoroContext ctx(100);
     this_context::spawn(amain());
     ctx.start();    
 }
@@ -164,7 +164,7 @@ Coro<> copyfile() {
 }
 
 int main() {
-    CoroContext ctx(true);
+    CoroContext ctx(100);
     this_context::spawn(copyfile());
     ctx.start();
 }
