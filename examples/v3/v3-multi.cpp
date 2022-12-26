@@ -40,7 +40,7 @@ Coro<> server(MultithreadedContexts& ctxs) {
         if (ec) {
             M_ERROR("{}", ec.message());
         }
-        // M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
+        M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
         ctxs.next_context().spawn(handle_connection(std::move(socket)));
     }
 }
