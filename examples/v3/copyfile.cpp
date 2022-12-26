@@ -21,7 +21,7 @@ Coro<> copyfile() {
 }
 
 int main() {
-    CoroContext ctx(true);
+    CoroContext ctx(100);
     this_context::spawn(copyfile());
     ctx.start();
 }
