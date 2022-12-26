@@ -6,7 +6,9 @@
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/net/socket.h"
 
+#include <unistd.h>
 #include <netinet/in.h>
+#include <sys/eventfd.h>
 
 #include "liburing.h"
 
@@ -23,12 +25,28 @@ IoUring::IoUring(unsigned entries) {
         delete p_io_uring_;
         M_FATAL("failed to create io uring: {}", SOCKET_ERROR_CODE.message());
     }
+
+    wake_up_ctx_ = new IoContext;
+    wake_up_ctx_->op = Operation::WakeUp;
+    wake_up_ctx_->handle = ::eventfd(EFD_NONBLOCK, 0);
+    wake_up_ctx_->ptr = (void*)1;
+    wake_up_ctx_->cb = [](std::error_code ec, void* p) {
+        if (ec) {
+            M_SYS_ERROR("wake up error: {}", ec.message());
+        }
+    };
+    std::memset(&wake_up_ctx_->remote_addr, 1, sizeof(void*));
+
+    prep_wake_up();
 }
 
 IoUring::~IoUring() {
     if (p_io_uring_) {
+        ::close(wake_up_ctx_->handle);
         ::io_uring_queue_exit(p_io_uring_);
+        delete wake_up_ctx_;
         delete p_io_uring_;
+        wake_up_ctx_ = nullptr;
         p_io_uring_ = nullptr;
     }
 }
@@ -38,7 +56,6 @@ void IoUring::read_file(IoContext &ioc, size_t offset) {
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_read(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
     ::io_uring_sqe_set_data(sqe, &ioc);
-    ::io_uring_submit(p_io_uring_);
 }
 
 void IoUring::write_file(IoContext &ioc, size_t offset) {
@@ -46,7 +63,6 @@ void IoUring::write_file(IoContext &ioc, size_t offset) {
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_write(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
     ::io_uring_sqe_set_data(sqe, &ioc);
-    ::io_uring_submit(p_io_uring_);
 }
 
 void IoUring::connect(IoContext &ioc) {
@@ -56,7 +72,6 @@ void IoUring::connect(IoContext &ioc) {
         sqe, ioc.handle, (sockaddr*)&ioc.remote_addr, ioc.addr_len
     );
     ::io_uring_sqe_set_data(sqe, &ioc);
-    ::io_uring_submit(p_io_uring_);
 }
 
 void IoUring::accept(Socket &listener, IoContext &ioc) {
@@ -67,7 +82,6 @@ void IoUring::accept(Socket &listener, IoContext &ioc) {
         (socklen_t*)ioc.buf.buf, 0
     );
     ::io_uring_sqe_set_data(sqe, &ioc);
-    ::io_uring_submit(p_io_uring_);
 }
 
 void IoUring::send(IoContext &ioc) {
@@ -75,7 +89,6 @@ void IoUring::send(IoContext &ioc) {
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_send(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
     ::io_uring_sqe_set_data(sqe, &ioc);
-    ::io_uring_submit(p_io_uring_);
 }
 
 void IoUring::receive(IoContext &ioc) {
@@ -83,81 +96,102 @@ void IoUring::receive(IoContext &ioc) {
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_recv(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
     ::io_uring_sqe_set_data(sqe, &ioc);
-    ::io_uring_submit(p_io_uring_);
 }
 
 void IoUring::send_to(IoContext &ioc) {
-
+    ioc.op = Operation::Send;
+    io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
+    auto p = (ResumeWithMsg*)ioc.ptr;
+    ::io_uring_prep_sendmsg(sqe, ioc.handle, &p->msg, 0);
+    ::io_uring_sqe_set_data(sqe, &ioc);
 }
 
 void IoUring::receive_from(IoContext &ioc) {
-
+    ioc.op = Operation::Receive;
+    io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
+    auto p = (ResumeWithMsg*)ioc.ptr;
+    ::io_uring_prep_recvmsg(sqe, ioc.handle, &p->msg, 0);
+    ::io_uring_sqe_set_data(sqe, &ioc);
 }
 
+// invoke all completion
 int IoUring::poll(bool block, std::error_code &ec) {
-    std::error_code inner_ec;
-    io_uring_cqe* cqe = nullptr;
     int r;
 
-    r = ::io_uring_wait_cqe_nr(p_io_uring_, &cqe, block);
+    r = ::io_uring_submit_and_wait(p_io_uring_, block);
     if (-EAGAIN == r) {
+        // non block and no completion
         return 0;
-    } else if (0 != r) {
+    } else if (-EINTR == r) {
+        return 2;
+    } else if (r < 0) {
         ec = make_socket_error_code(-r);
-        M_SYS_ERROR("io_uring_wait_cqe error: {}", ec.message());
         return -1;
     }
-    
-    IoContext* ioc = (IoContext*)::io_uring_cqe_get_data(cqe);
-    if (cqe->res < 0) {
-        inner_ec = make_socket_error_code(-cqe->res);
-    }
-    switch (ioc->op) {
-    case Operation::ReadFile: {
-        int bytes_read = cqe->res;
-        ioc->buf.len = bytes_read;
-    }
-        break;
-    case Operation::WriteFile: {
-        int bytes_write = cqe->res;
-        ioc->buf.len = bytes_write;
-    }
-        break;
-    case Operation::Accept: {
-        ioc->handle = cqe->res;
-        ::getpeername(
-            ioc->handle, 
-            (sockaddr*)&ioc->remote_addr,
-            (socklen_t*)ioc->buf.buf
-        );
-    }
-        break;
-    case Operation::Connect: {
-    }
-        break;
-    case Operation::Receive: {
-        int bytes_read = cqe->res;
-        ioc->buf.len = bytes_read;
-    }
-        break;
-    case Operation::Send: {
-        int bytes_write = cqe->res;
-        ioc->buf.len = bytes_write;
-    }
-        break;
-    }
 
-    ::io_uring_cqe_seen(p_io_uring_, cqe);
-    ioc->cb(inner_ec, ioc->ptr);
+    unsigned count = ::io_uring_peek_batch_cqe(p_io_uring_, cqes, sizeof(cqes));
+    for (unsigned i = 0; i < count; ++i) {
+        std::error_code inner_ec;
+        void* data = ::io_uring_cqe_get_data(cqes[i]);
+        IoContext* ioc = (IoContext*)data;
+        if (cqes[i]->res < 0) {
+            inner_ec = make_socket_error_code(-cqes[i]->res);
+        } else {
+            switch (ioc->op) {
+            case Operation::WakeUp: {
+                // be waked up
+                prep_wake_up();
+            }
+                break;
+            case Operation::ReadFile: {
+                ioc->buf.len = cqes[i]->res;
+            }
+                break;
+            case Operation::WriteFile: {
+                ioc->buf.len = cqes[i]->res;
+            }
+                break;
+            case Operation::Accept: {
+                ioc->handle = cqes[i]->res;
+                ::getpeername(
+                    ioc->handle, 
+                    (sockaddr*)&ioc->remote_addr,
+                    (socklen_t*)ioc->buf.buf
+                );
+            }
+                break;
+            case Operation::Connect: {
+            }
+                break;
+            case Operation::Receive: {
+                ioc->buf.len = cqes[i]->res;
+            }
+                break;
+            case Operation::Send: {
+                ioc->buf.len = cqes[i]->res;
+            }
+                break;
+            }
+        }
+        ioc->cb(inner_ec, ioc->ptr);
+    }
+    ::io_uring_cq_advance(p_io_uring_, count);
+
     return 1;
+}
+
+void IoUring::wake_up() {
+    ::write(wake_up_ctx_->handle, &wake_up_ctx_->remote_addr, sizeof(void*));
+}
+
+void IoUring::prep_wake_up() {
+    io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
+    ::io_uring_prep_read(sqe, wake_up_ctx_->handle, &wake_up_ctx_->ptr, sizeof(void*), 0);
+    ::io_uring_sqe_set_data(sqe, wake_up_ctx_);
 }
 
 void IoUring::relate(void *sock_handle, std::error_code &ec) {
     return;
-}
-
-void IoUring::wake_up() { // ?
-
 }
 
 }

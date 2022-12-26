@@ -6,9 +6,13 @@
 
 struct io_uring;
 
+struct io_uring_cqe;
+
 namespace magio {
 
 namespace net {
+
+constexpr size_t kCQEs = 1024;
 
 class IoUring: Noncopyable, public IoService {
 public:
@@ -39,6 +43,10 @@ public:
     void wake_up() override;
 
 private:
+    void prep_wake_up();
+
+    IoContext* wake_up_ctx_;
+    io_uring_cqe* cqes[kCQEs];
     io_uring* p_io_uring_ = nullptr;
 };
 

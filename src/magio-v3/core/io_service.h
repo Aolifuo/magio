@@ -37,7 +37,7 @@ public:
 
     virtual void relate(void* handle, std::error_code& ec) = 0;
 
-    // -1->big error, 0->wait timeout; 1->io; 2->wake up
+    // -1->big error, 0->wait timeout; 1->io; 2->continue
     virtual int poll(bool block, std::error_code& ec) = 0;
 
     virtual void wake_up() = 0;

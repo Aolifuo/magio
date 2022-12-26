@@ -35,7 +35,7 @@ Coro<> amain() {
 }
 
 int main() {
-    CoroContext ctx(true);
+    CoroContext ctx(100);
     this_context::spawn(amain());
     ctx.start();    
 }

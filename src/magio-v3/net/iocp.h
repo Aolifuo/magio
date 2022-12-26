@@ -34,8 +34,6 @@ public:
 
     int poll(bool block, std::error_code& ec) override;
 
-    void wake_up() override;
-
 private:
     struct Data;
     Data* data_;

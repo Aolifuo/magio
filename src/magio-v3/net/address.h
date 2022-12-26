@@ -59,7 +59,7 @@ public:
 
     EndPoint(IpAddress addr, PortType port);
 
-    IpAddress address() const {
+    const IpAddress& address() const {
         return address_;
     }
 

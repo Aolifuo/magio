@@ -105,6 +105,7 @@ private:
 
 template<typename Return>
 class Coro {
+    friend class CoroContext;
     friend void this_context::spawn(Coro<Return> coro, CoroCompletionHandler<Return> &&handler);
 
 public:
@@ -162,6 +163,7 @@ private:
 
 template<>
 class Coro<void> {
+    friend class CoroContext;
     friend void this_context::spawn(Coro<> coro, CoroCompletionHandler<void> &&handler);
 
 public:

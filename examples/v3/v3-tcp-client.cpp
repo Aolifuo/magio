@@ -42,7 +42,7 @@ Coro<> client() {
 }
 
 int main() {
-    CoroContext ctx(true);
+    CoroContext ctx(100);
     this_context::spawn(client());
     ctx.start();
 }

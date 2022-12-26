@@ -2,7 +2,9 @@
 #ifndef MAGIO_CORE_IO_CONTEXT_H_
 #define MAGIO_CORE_IO_CONTEXT_H_
 
-#include "magio-v3/core/error.h"
+#include <system_error>
+
+#include "magio-v3/core/coroutine.h"
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -14,6 +16,7 @@
 namespace magio {
 
 enum class Operation {
+    WakeUp,
     ReadFile,
     WriteFile,
     Accept,
@@ -24,8 +27,8 @@ enum class Operation {
 
 // for linux
 struct IoBuf {
-    size_t len;
     char* buf;
+    size_t len;
 };
 
 struct IoContext {
@@ -53,8 +56,30 @@ struct IoContext {
     void* ptr;
     void(*cb)(std::error_code, void*);
 #endif
-
 };
+
+struct ResumeHandle {
+    std::error_code ec;
+    std::coroutine_handle<> handle;
+};
+
+struct ResumeWithMsg {
+    std::error_code ec;
+    msghdr msg;
+    std::coroutine_handle<> handle;
+};
+
+inline void completion_callback(std::error_code ec, void* ptr) {
+    auto* h = static_cast<ResumeHandle*>(ptr);
+    h->ec = ec;
+    h->handle.resume();
+}
+
+inline void completion_callback_with_msg(std::error_code ec, void* ptr) {
+    auto* h = static_cast<ResumeWithMsg*>(ptr);
+    h->ec = ec;
+    h->handle.resume();
+}
 
 }
 

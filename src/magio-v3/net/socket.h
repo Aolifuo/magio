@@ -92,7 +92,7 @@ public:
 
     Coro<std::pair<size_t, EndPoint>> receive_from(char* msg, size_t len, std::error_code& ec);
 
-    void close();
+    void cancel();
 
     void shutdown(Shutdown type);
 
@@ -114,6 +114,8 @@ public:
 
 private:
     Socket(Handle handle, Ip ip, Transport tp);
+
+    void close();
 
     Handle handle_ = -1;
     Ip ip_ = Ip::v4;

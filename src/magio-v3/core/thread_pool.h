@@ -29,9 +29,9 @@ public:
 
     ~ThreadPool();
 
-    void start() override;
+    void start();
 
-    void stop() override;
+    void stop();
 
     void wait();
 

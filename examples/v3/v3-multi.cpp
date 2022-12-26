@@ -22,7 +22,7 @@ Coro<> handle_connection(net::Socket sock) {
     }
 }
 
-Coro<> server() {
+Coro<> server(MultithreadedContexts& ctxs) {
     std::error_code ec;
     net::EndPoint local(net::make_address("::1", ec), 1234);
     if (ec) {
@@ -41,12 +41,14 @@ Coro<> server() {
             M_ERROR("{}", ec.message());
         }
         M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
-        this_context::spawn(handle_connection(std::move(socket)));
+        ctxs.next_context().spawn(handle_connection(std::move(socket)));
     }
 }
 
 int main() {
-    CoroContext ctx(100);
-    this_context::spawn(server());
+    CoroContext ctx(50);
+    MultithreadedContexts threaded_ctxs(4, 50);
+    this_context::spawn(server(threaded_ctxs));
+    threaded_ctxs.start_all();
     ctx.start();
 }

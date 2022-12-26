@@ -382,15 +382,15 @@ void IoCompletionPort::relate(void* sock_handle, std::error_code& ec) {
     }
 }
 
-void IoCompletionPort::wake_up() {
-    void* key = nullptr;
-    ::PostQueuedCompletionStatus(
-        data_->handle, 
-        ULONG_MAX,
-        (ULONG_PTR)key, 
-        NULL
-    );
-}
+// void IoCompletionPort::wake_up() {
+//     void* key = nullptr;
+//     ::PostQueuedCompletionStatus(
+//         data_->handle, 
+//         ULONG_MAX,
+//         (ULONG_PTR)key, 
+//         NULL
+//     );
+// }
 
 }
 

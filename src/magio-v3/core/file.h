@@ -35,6 +35,10 @@ public:
 
     Coro<size_t> write(const char* msg, size_t len, std::error_code& ec);
 
+    void sync_all();
+
+    void sync_data();
+
     operator bool() const {
         return data_ != nullptr;
     }

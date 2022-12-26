@@ -2,8 +2,8 @@
 
 #include "magio-v3/core/coro_context.h"
 #include "magio-v3/core/io_context.h"
+#include "magio-v3/core/error.h"
 #include "magio-v3/net/address.h"
-#include "magio-v3/core/detail/completion_callback.h"
 
 #ifdef _WIN32
 #include <Ws2tcpip.h>
@@ -27,7 +27,7 @@ Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
 }
 
 void Acceptor::bind_and_listen(const EndPoint &ep, Transport tp, std::error_code& ec) {
-    IpAddress address = ep.address();
+    auto& address = ep.address();
     listener_.open(address.ip(), tp, ec);
     if (ec) {
         return;
@@ -55,11 +55,11 @@ SmallBytes Acceptor::get_option(int op, std::error_code &ec) {
 Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
     char buf[128];
     IoContext ioc;
-    magio::detail::ResumeHandle handle;
+    ResumeHandle handle;
     ioc.buf.buf = buf;
     ioc.buf.len = sizeof(buf);
     ioc.ptr = &handle;
-    ioc.cb = magio::detail::completion_callback;
+    ioc.cb = completion_callback;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         handle.handle = h;

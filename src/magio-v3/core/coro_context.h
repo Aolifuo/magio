@@ -12,16 +12,27 @@ namespace magio {
 class CoroContext: Noncopyable, public Executor {
 public:
     enum State {
-        Running, Sleeping, Stopping, 
+        Running, Stopping, 
     };
 
-    CoroContext(bool enable_io);
+    CoroContext(size_t entries = 0);
 
-    void start() override;
+    void start();
 
-    void stop() override;
+    void stop();
 
     void execute(Task&& task) override;
+
+    template<typename T>
+    Coro<T> spawn(Coro<T> coro) {
+        wake_in_context(coro.handle());
+    }
+
+    template<typename T>
+    Coro<T> spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler) {
+        coro.set_callback(std::move(handler));
+        wake_in_context(coro.handle());
+    }
 
     template<typename Rep, typename Per>
     TimerHandle expires_after(const std::chrono::duration<Rep, Per>& dur, TimerTask&& task) {
@@ -37,16 +48,16 @@ public:
     IoService& get_service() const;
 
 private:
-    void handle_io_poller();
-
     void wake_up();
+
+    void handle_io_poller();
 
     bool assert_in_context_thread();
 
     std::mutex mutex_;
 
     State state_ = Stopping;
-    unsigned thread_id_;
+    size_t thread_id_;
     std::vector<std::coroutine_handle<>> pending_handles_;
     TimerQueue timer_queue_;
     std::unique_ptr<IoService> p_io_service_;

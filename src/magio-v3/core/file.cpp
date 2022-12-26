@@ -3,7 +3,6 @@
 #include "magio-v3/core/logger.h"
 #include "magio-v3/core/coro_context.h"
 #include "magio-v3/core/io_context.h"
-#include "magio-v3/core/detail/completion_callback.h"
 
 #ifdef _WIN32
 
@@ -120,6 +119,14 @@ File File::open(const char *path, int mode, int x) {
     return {new Data{handle}};
 }
 
+void File::sync_all() {
+    
+}
+
+void File::sync_data() {
+    
+}
+
 #elif defined (__linux__)
 File File::open(const char *path, int mode, int x) {
     int flag = 0;
@@ -159,16 +166,25 @@ File File::open(const char *path, int mode, int x) {
     Data* p = new Data{fd};
     return {p};
 }
+
+void File::sync_all() {
+    ::fsync(data_->handle);
+}
+
+void File::sync_data() {
+    ::fdatasync(data_->handle);
+}
+
 #endif
 
 Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
-    detail::ResumeHandle rhandle;
+    ResumeHandle rhandle;
     IoContext ioc;
     ioc.handle = decltype(IoContext::handle)(data_->handle);
     ioc.buf.buf = buf;
     ioc.buf.len = len;
     ioc.ptr = &rhandle;
-    ioc.cb = detail::completion_callback;
+    ioc.cb = completion_callback;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
@@ -184,13 +200,13 @@ Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
 }
 
 Coro<size_t> File::write(const char *msg, size_t len, std::error_code &ec) {
-    detail::ResumeHandle rhandle;
+    ResumeHandle rhandle;
     IoContext ioc;
     ioc.handle = decltype(IoContext::handle)(data_->handle);
     ioc.buf.buf = (char*)msg;
     ioc.buf.len = len;
     ioc.ptr = &rhandle;
-    ioc.cb = detail::completion_callback;
+    ioc.cb = completion_callback;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
