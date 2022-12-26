@@ -17,3 +17,4 @@ xmake.lua
 .cache/
 
 dev
+test.js
