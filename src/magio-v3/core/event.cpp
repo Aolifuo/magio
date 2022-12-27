@@ -32,6 +32,7 @@ SingleEvent::~SingleEvent() {
 }
 
 Coro<void> SingleEvent::send(std::error_code& ec) {
+    uint64_t msg = 1;
 #ifdef _WIN32
 
 #elif defined(__linux__)
