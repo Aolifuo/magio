@@ -3,7 +3,7 @@
 using namespace magio;
 using namespace std;
 
-constexpr size_t SwitchTimes = 114514;
+constexpr size_t SwitchTimes = 1e7;
 
 Coro<> task() {
     auto start = chrono::steady_clock::now();
@@ -17,7 +17,7 @@ Coro<> task() {
 }
 
 int main() {
-    ThreadPool loop(8);
+    Magico loop;
     co_spawn(loop.get_executor(), task());
     loop.run();
 }
