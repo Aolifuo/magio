@@ -18,6 +18,10 @@ CoroContext::CoroContext(size_t entries)
         M_FATAL("{}", "This thread already has a context");
     }
 
+    if (entries == 0) {
+        M_FATAL("{}", "Entries cannot be zero");
+    }
+
     p_io_service_ = IOSERVICE(entries);
 
     LocalContext = this;
@@ -37,7 +41,6 @@ void CoroContext::start() {
     std::vector<TimerTask> timer_tasks;
 
     for (; state_ != Stopping;) {
-        // wake handle
         {
             std::lock_guard lk(mutex_);
             handles.swap(pending_handles_);
@@ -48,14 +51,14 @@ void CoroContext::start() {
         }
         // TODO shrink
         handles.clear();
-        // invoke timer
+
         timer_queue_.get_expired(timer_tasks);
         for (auto& task : timer_tasks) {
             task(true);
         }
         // TODO shrink
         timer_tasks.clear();
-        // IO
+
         handle_io_poller();
     }
 }
@@ -86,6 +89,7 @@ void CoroContext::handle_io_poller() {
     if (!is_pending_empty || !timer_queue_.empty() || state_ == Stopping) {
         block = false;
     }
+
     int status = p_io_service_->poll(block, ec);
     if (-1 == status) {
         M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.value());

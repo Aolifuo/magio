@@ -15,7 +15,7 @@ public:
         Running, Stopping, 
     };
 
-    CoroContext(size_t entries = 0);
+    CoroContext(size_t entries);
 
     void start();
 
