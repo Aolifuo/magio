@@ -1,6 +1,5 @@
 #include "magio-v3/core/thread_pool.h"
 
-#include "magio-v3/core/coro.h"
 #include "magio-v3/core/logger.h"
 
 namespace magio {
@@ -8,13 +7,14 @@ namespace magio {
 ThreadPool::ThreadPool(size_t thread_num)
     : threads_(thread_num) 
 {
+    if (!LocalContext) {
+        M_FATAL("{}", "This thread is missing a context");
+    }
+
     if (thread_num < 1) {
         M_FATAL("{}", "worker threads cannot less than 1");
     }
 
-    if (!LocalContext) {
-        M_FATAL("{}", "This thread is missing a context");
-    }
 }
 
 ThreadPool::~ThreadPool() {

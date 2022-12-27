@@ -1,12 +1,10 @@
 #ifndef MAGIO_CORE_THREAD_POOL_H_
 #define MAGIO_CORE_THREAD_POOL_H_
 
-#include <deque>
-#include <mutex>
 #include <thread>
 #include <condition_variable>
 
-#include "magio-v3/core/coro.h"
+#include "magio-v3/core/coro_context.h"
 #include "magio-v3/core/execution.h"
 #include "magio-v3/core/noncopyable.h"
 
@@ -50,24 +48,35 @@ public:
     template<typename Func, typename...Args>
     Coro<std::invoke_result_t<Func, Args...>> spawn_blocking(Func&& func, Args&&...args) {
         using ReturnType = std::invoke_result_t<Func, Args...>;
-    
-        std::optional<ReturnType> result;
+
+        CoroContext* ctx = LocalContext;
+        std::optional<VoidToUnit<ReturnType>> result;
         co_await GetCoroutineHandle(
             [&](std::coroutine_handle<> h) mutable {
                 execute([
-                    &result, h,
+                    &result, h, ctx,
                     func = std::forward<Func>(func), 
                     tuple = std::make_tuple(std::forward<Args>(args)...)
                 ]() mutable {
-                    result.emplace(std::apply([&func](auto&&...args) {
-                        return func(args...);
-                    }, tuple));
-                    this_context::wake_in_context(h);
+                    if constexpr (std::is_void_v<ReturnType>) {
+                        std::apply([&func](auto&&...args) {
+                            return func(args...);
+                        }, tuple);
+                    } else {
+                        result.emplace(std::apply([&func](auto&&...args) {
+                            return func(args...);
+                        }, tuple));
+                    }
+                    ctx->wake_in_context(h);
                 });
             }
         );
 
-        co_return std::move(result.value());
+        if constexpr (std::is_void_v<ReturnType>) {
+            co_return;
+        } else {
+            co_return std::move(result.value());
+        }
     }
 
 private:
