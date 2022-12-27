@@ -170,7 +170,7 @@ int main() {
 }
 ```
 
-### fork join sort
+### Fork join sort
 
 ```cpp
 template<typename Iter, typename Pred>
@@ -204,7 +204,7 @@ Coro<> amain(ThreadPool& pool) {
     }
     
     auto bg = TimerClock::now();
-    co_await fork_join_sort(pool, vec.begin(), vec.end(), greater<>(), 3);
+    co_await fork_join_sort(pool, vec.begin(), vec.end(), less<>(), 3);
     auto dif = TimerClock::now() - bg;
     M_INFO("{}", dif);
 
