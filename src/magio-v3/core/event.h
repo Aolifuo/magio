@@ -9,6 +9,12 @@ namespace magio {
 template<typename>
 class Coro;
 
+struct IoContext;
+
+class CoroContext;
+
+// only for linux, TODO win
+// 1:1 coroutine, thread safe
 class SingleEvent: Noncopyable {
 public:
     using Handle =
@@ -21,11 +27,14 @@ public:
 
     ~SingleEvent();
 
+    // never wait
     Coro<void> send(std::error_code& ec);
 
     Coro<void> receive(std::error_code& ec);
 
 private:
+    CoroContext* ctx_;
+
     Handle handle_;
 };
 
