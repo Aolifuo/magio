@@ -115,10 +115,7 @@ IoCompletionPort::~IoCompletionPort() {
 void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::ReadFile;
-    LARGE_INTEGER large;
-    large.QuadPart = offset;
-    ioc.overlapped.Offset = large.LowPart;
-    ioc.overlapped.OffsetHigh = large.HighPart;
+    ioc.overlapped.Offset = offset;
 
     BOOL status = ReadFile(
         (HANDLE)ioc.handle, 
@@ -136,10 +133,7 @@ void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
 void IoCompletionPort::write_file(IoContext &ioc, size_t offset) {
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::WriteFile;
-    ioc.overlapped.Offset = ::SetFilePointer(
-        (HANDLE)ioc.handle, 0, 
-        NULL, FILE_END
-    );
+    ioc.overlapped.Offset = offset;
 
     BOOL status = WriteFile(
         (HANDLE)ioc.handle, 
