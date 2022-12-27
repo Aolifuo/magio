@@ -3,7 +3,7 @@
 
 #include "magio-v3/core/logger.h"
 #include "magio-v3/core/file.h"
-#include "magio-v3/core/event.h"
+#include "magio-v3/core/channel.h"
 #include "magio-v3/core/multi_contexts.h"
 #include "magio-v3/core/thread_pool.h"
 #include "magio-v3/net/acceptor.h"
