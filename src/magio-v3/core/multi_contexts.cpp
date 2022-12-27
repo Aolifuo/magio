@@ -14,6 +14,12 @@ MultithreadedContexts::MultithreadedContexts(size_t num, size_t every)
     if (!LocalContext) {
         M_FATAL("{}", "There is no context in this thread");
     }
+
+    if (num == 0) {
+        M_FATAL("{}", "num == 0");
+    }
+
+    base_ctx_ = LocalContext;
     thread_id_ = CurrentThread::get_id();
 }
 
@@ -46,12 +52,18 @@ void MultithreadedContexts::start_all() {
         threads_.emplace_back(&MultithreadedContexts::run_in_background, this, i);
     }
     wg_.wait();
+
+    base_ctx_->start();
 }
 
 CoroContext& MultithreadedContexts::next_context() {
     size_t old = next_idx_;
     next_idx_ = (next_idx_ + 1) % contexts_.size();
     return *contexts_[old];
+}
+
+CoroContext& MultithreadedContexts::get(size_t i) {
+    return *contexts_[i % contexts_.size()];
 }
 
 void MultithreadedContexts::run_in_background(size_t id) {

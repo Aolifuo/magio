@@ -17,14 +17,19 @@ public:
 
     ~MultithreadedContexts();
 
+    // include base ctx
     void start_all();
 
     CoroContext& next_context();
+
+    CoroContext& get(size_t i);
 
 private:
     void run_in_background(size_t id);
 
     bool assert_in_self_thread();
+    
+    CoroContext* base_ctx_;
 
     State state_ = Stopping;
     size_t every_entries_ = 0;
