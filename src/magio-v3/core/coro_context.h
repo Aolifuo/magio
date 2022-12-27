@@ -45,14 +45,14 @@ public:
 
     void wake_in_context(std::coroutine_handle<>);
 
+    bool assert_in_context_thread();
+
     IoService& get_service() const;
 
 private:
     void wake_up();
 
     void handle_io_poller();
-
-    bool assert_in_context_thread();
 
     std::mutex mutex_;
 

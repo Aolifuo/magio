@@ -51,5 +51,4 @@ int main() {
     MultithreadedContexts threaded_ctxs(4, 50);
     this_context::spawn(server(threaded_ctxs));
     threaded_ctxs.start_all();
-    ctx.start();
 }

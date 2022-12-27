@@ -179,10 +179,7 @@ Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
     });
 
     ec = rhandle.ec;
-    if (ec) {
-        co_return {};
-    }
-    
+
     co_return ioc.buf.len;
 }
 
@@ -202,9 +199,6 @@ Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
     });
 
     ec = rhandle.ec;
-    if (ec) {
-        co_return {};
-    }
 
     co_return ioc.buf.len;
 }
@@ -240,9 +234,6 @@ Coro<size_t> Socket::write_to(const char* msg, size_t len, const EndPoint& ep, s
     });
 
     ec = rhandle.ec;
-    if (ec) {
-        co_return {};
-    }
 
     co_return ioc.buf.len;
 }
@@ -281,7 +272,7 @@ Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* msg, size_t len, st
 
     ec = rhandle.ec;
     if (ec) {
-        co_return {};
+        co_return {ioc.buf.len, {}};
     }
 
     ioc.addr_len = ioc.remote_addr.sin_family
@@ -313,7 +304,13 @@ Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* msg, size_t len, st
 }
 
 void Socket::cancel() {
+    if (-1 != handle_) {
+#ifdef _WIN32
+        ::CancelIo((void*)handle_);
+#elif defined(__linux__)
 
+#endif        
+    }
 }
 
 void Socket::close() {
