@@ -136,6 +136,7 @@ int IoUring::poll(bool block, std::error_code &ec) {
         IoContext* ioc = (IoContext*)data;
         if (cqes[i]->res < 0) {
             inner_ec = make_socket_error_code(-cqes[i]->res);
+            ioc->buf.len = 0;
         } else {
             switch (ioc->op) {
             case Operation::WakeUp: {
