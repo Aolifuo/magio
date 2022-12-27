@@ -1,6 +1,6 @@
--- set_toolchains("clang")
--- set_config("cxxflags", "-stdlib=libc++")
--- set_config("ldflags", "-stdlib=libc++")
+set_toolchains("clang")
+set_config("cxxflags", "-stdlib=libc++")
+set_config("ldflags", "-stdlib=libc++")
 --set_config("cxx", "clang-cl")
 
 set_project("magio")
@@ -16,16 +16,17 @@ end
 
 if is_plat("linux") then
     add_syslinks("pthread")
-    add_requires("liburing", "fmt")
-    add_packages("liburing", "fmt")
+    add_requires("liburing")
+    add_packages("liburing")
 end
 
 if is_plat("windows") then 
-    add_cxxflags("/EHa")
+    --add_cxxflags("/EHa")
     add_syslinks("ws2_32")
-    add_requires("fmt")
-    add_packages("fmt")
 end
+
+add_requires("fmt")
+add_packages("fmt")
 
 target("magio")
     set_kind("static")
@@ -71,3 +72,8 @@ for _, dir in ipairs(os.files("dev/**.cpp")) do
 end
 
 --xmake project -k compile_commands
+--TODO
+--singelevent
+--dns resolver
+--mutex condvar
+--channel
