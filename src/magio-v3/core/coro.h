@@ -10,6 +10,12 @@
 
 namespace magio {
 
+namespace detail {
+
+inline thread_local size_t CoroId = 0;
+
+}
+
 template<typename = void>
 class Coro;
 
@@ -120,6 +126,7 @@ public:
 
     struct promise_type {
         Coro get_return_object() {
+            id = ++detail::CoroId;
             return {CoroutineHandle::from_promise(*this)};
         }
 
@@ -139,6 +146,7 @@ public:
             eptr = std::current_exception();
         }
 
+        size_t id;
         std::coroutine_handle<> prev_handle;
         std::exception_ptr eptr;
         std::optional<Return> value;
@@ -178,6 +186,7 @@ public:
 
     struct promise_type {
         Coro get_return_object() {
+            id = ++detail::CoroId;
             return {CoroutineHandle::from_promise(*this)};
         }
 
@@ -195,6 +204,7 @@ public:
             eptr = std::current_exception();
         }
         
+        size_t id;
         std::coroutine_handle<> prev_handle;
         std::exception_ptr eptr;
         CoroCompletionHandler<void> callback;
@@ -240,12 +250,35 @@ public:
     void await_resume() { }
 };
 
+class GetId {
+public:
+    bool await_ready() { 
+        return false; 
+    }
+
+    template<typename PH>
+    void await_suspend(std::coroutine_handle<PH> prev_h) {
+        id_ = prev_h.promise().id;
+    }
+
+    size_t await_resume() { 
+        return id_;
+    }
+
+private:
+    size_t id_ = 0;
+};
+
 inline Yield yield;
+
+inline GetId get_id;
 
 template<typename Rep, typename Per>
 inline Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur);
 
 inline Coro<> sleep_until(const TimerClock::time_point& tp);
+
+
 
 }
 
