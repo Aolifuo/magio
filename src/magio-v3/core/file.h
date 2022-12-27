@@ -73,7 +73,7 @@ public:
 
     Coro<size_t> read(char* buf, size_t len, std::error_code& ec);
 
-    Coro<size_t> write(char* buf, size_t len, std::error_code& ec);
+    Coro<size_t> write(const char* buf, size_t len, std::error_code& ec);
 
     void sync_all();
 
