@@ -259,7 +259,7 @@ Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
     co_return rd;
 }
 
-Coro<size_t> File::write(char *buf, size_t len, std::error_code &ec) {
+Coro<size_t> File::write(const char *buf, size_t len, std::error_code &ec) {
     size_t wl = co_await file_.write_at(0, buf, len, ec);
     co_return wl;
 }
