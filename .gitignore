@@ -13,8 +13,10 @@ CTestTestfile.cmake
 _deps
 xmake.lua
 
+.vs/
 .xmake/
 .cache/
+vsxmake2022/
 
 dev
 test.js
