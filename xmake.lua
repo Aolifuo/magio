@@ -1,10 +1,9 @@
 set_toolchains("clang")
 set_config("cxxflags", "-stdlib=libc++")
 set_config("ldflags", "-stdlib=libc++")
---set_config("cxx", "clang-cl")
 
 set_project("magio")
-set_version("0.0.7")
+set_version("0.0.8")
 
 add_rules("mode.debug", "mode.release")
 set_languages("cxx20")
@@ -28,10 +27,10 @@ end
 add_requires("fmt")
 add_packages("fmt")
 
-target("magio")
-    set_kind("static")
-    add_files("src/magio/**.cpp")
-    add_includedirs("src", {public = true})
+-- target("magio")
+--     set_kind("static")
+--     add_files("src/magio/**.cpp")
+--     add_includedirs("src", {public = true})
 
 target("magio-v3")
     set_kind("static")
@@ -39,21 +38,21 @@ target("magio-v3")
     add_includedirs("src", {public = true})
 
 -- v2 tests
-for _, dir in ipairs(os.files("tests/v2/**.cpp")) do
-    target(path.basename(dir))
-        set_kind("binary")
-        set_group("tests")
-        add_files(dir)
-        add_deps("magio")
-end
+-- for _, dir in ipairs(os.files("tests/v2/**.cpp")) do
+--     target(path.basename(dir))
+--         set_kind("binary")
+--         set_group("tests")
+--         add_files(dir)
+--         add_deps("magio")
+-- end
 
 -- v2 examples
-for _, dir in ipairs(os.files("examples/v2/*.cpp")) do
-    target(path.basename(dir))
-        set_kind("binary")
-        add_files(dir)
-        add_deps("magio")
-end
+-- for _, dir in ipairs(os.files("examples/v2/*.cpp")) do
+--     target(path.basename(dir))
+--         set_kind("binary")
+--         add_files(dir)
+--         add_deps("magio")
+-- end
 
 -- v3 examples
 for _, dir in ipairs(os.files("examples/v3/*.cpp")) do
