@@ -18,7 +18,9 @@ RandomAccessFile::RandomAccessFile() {
     reset();
 }
 
-RandomAccessFile::RandomAccessFile(const char *path, int mode, int x) {
+RandomAccessFile::RandomAccessFile(const char *path, int mode, int x)
+    : RandomAccessFile() 
+{
     open(path, mode, x);
 }
 
@@ -159,20 +161,20 @@ void RandomAccessFile::open(const char *path, int mode, int x) {
 
 void RandomAccessFile::close() {
     if (handle_ != (Handle)-1) {
+        reset();
 #ifdef _WIN32
         ::CloseHandle(handle_);
 #elif defined (__linux__)
         ::close(handle_);
 #endif
     }
-    reset();
 }
 
 void RandomAccessFile::sync_all() {
 #ifdef _WIN32
     
 #elif defined (__linux__)
-    ::fsync(data_->handle);
+    ::fsync(handle_);
 #endif
 }
 
@@ -180,7 +182,7 @@ void RandomAccessFile::sync_data() {
 #ifdef _WIN32
 
 #elif defined (__linux__)
-    ::fdatasync(data_->handle);
+    ::fdatasync(handle_);
 #endif
 }
 
