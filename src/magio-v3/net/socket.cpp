@@ -107,6 +107,8 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 void Socket::open(Ip ip, Transport tp, std::error_code &ec) {
     close();
     handle_ = detail::open_socket(ip, tp, ec);
+    ip_ = ip;
+    transport_ = tp;
 }
 
 void Socket::bind(const EndPoint& ep, std::error_code &ec) {
