@@ -14,49 +14,41 @@
 
 namespace magio {
 
-struct RandomAccessFile::Data {
-#ifdef _WIN32
-    HANDLE handle;
-#elif defined (__linux__)
-    int handle;
-#endif
-    // only for win
-    bool enable_app = false;
-    size_t size = 0;
-};
+RandomAccessFile::RandomAccessFile() {
+    reset();
+}
 
-RandomAccessFile::RandomAccessFile(Data* p) {
-    data_ = p;
+RandomAccessFile::RandomAccessFile(const char *path, int mode, int x) {
+    open(path, mode, x);
 }
 
 RandomAccessFile::~RandomAccessFile() {
-    if (data_) {
-#ifdef _WIN32
-        ::CloseHandle(data_->handle);
-#elif defined (__linux__)
-        ::close(data_->handle);
-#endif
-        delete data_;
-        data_ = nullptr;
-    }
+    close();
 }
 
-RandomAccessFile::RandomAccessFile(RandomAccessFile&& other) noexcept {
-    data_ = other.data_;
-    other.data_ = nullptr;
+RandomAccessFile::RandomAccessFile(RandomAccessFile&& other) noexcept
+    : handle_(other.handle_)
+    , enable_app_(other.enable_app_)
+    , size_(other.size_) 
+{
+    other.reset();
 }
 
 RandomAccessFile& RandomAccessFile::operator=(RandomAccessFile&& other) noexcept {
-    data_ = other.data_;
-    other.data_ = nullptr;
+    handle_ = other.handle_;
+    enable_app_ = other.enable_app_;
+    size_ = other.size_;
+    other.reset();
     return *this;
 }
 
+void RandomAccessFile::open(const char *path, int mode, int x) {
+    close();
+
 #ifdef _WIN32
-RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
     int first = mode & 0b000111;
     if (!(first)) {
-        return {};
+        return;
     }
 
     DWORD desired_access = 0;
@@ -71,7 +63,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
         desired_access = GENERIC_READ | GENERIC_WRITE;
         break;
     default:
-        return {};
+        return;
     }
 
     // OPEN_EXISTING must exit
@@ -106,7 +98,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
     );
 
     if (INVALID_HANDLE_VALUE == handle) {
-        return {};
+        return;
     }
 
     std::error_code ec;
@@ -114,7 +106,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
     if (ec) {
         M_SYS_ERROR("cannot add file handle to iocp: {}", ec.value());
         ::CloseHandle(handle);
-        return {};
+        return;
     }
 
     size_t size = 0;
@@ -122,23 +114,15 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
     ::GetFileSizeEx(handle, &large_int);
     size = large_int.QuadPart;
 
-    return {new Data{handle, enable_app, size}};
-}
-
-void RandomAccessFile::sync_all() {
-    
-}
-
-void RandomAccessFile::sync_data() {
-    
-}
+    handle_ = handle;
+    enable_app_ = enable_app;
+    size_ = size;
 
 #elif defined (__linux__)
-RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
     int flag = 0;
     int first = mode & 0b000111;
     if (!(first)) {
-        return {};
+        return;
     }
     switch (first) {
     case ReadOnly:
@@ -151,7 +135,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
         flag = O_RDWR;
         break;
     default:
-        return {};
+        return;
     }
 
     if (mode & Create) {
@@ -166,27 +150,44 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
 
     int fd = ::open(path, flag, x);
     if (-1 == fd) {
-        return {};
+        return;
     }
 
-    Data* p = new Data{fd};
-    return {p};
+    handle_ = fd;
+#endif
+}
+
+void RandomAccessFile::close() {
+    if (handle_ != (Handle)-1) {
+#ifdef _WIN32
+        ::CloseHandle(handle_);
+#elif defined (__linux__)
+        ::close(handle_);
+#endif
+    }
+    reset();
 }
 
 void RandomAccessFile::sync_all() {
+#ifdef _WIN32
+    
+#elif defined (__linux__)
     ::fsync(data_->handle);
+#endif
 }
 
 void RandomAccessFile::sync_data() {
-    ::fdatasync(data_->handle);
-}
+#ifdef _WIN32
 
+#elif defined (__linux__)
+    ::fdatasync(data_->handle);
 #endif
+}
 
 Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
     IoContext ioc;
-    ioc.handle = decltype(IoContext::handle)(data_->handle);
+    ioc.handle = decltype(IoContext::handle)(handle_);
     ioc.buf.buf = buf;
     ioc.buf.len = len;
     ioc.ptr = &rhandle;
@@ -205,14 +206,14 @@ Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std
 Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
     IoContext ioc;
-    ioc.handle = decltype(IoContext::handle)(data_->handle);
+    ioc.handle = decltype(IoContext::handle)(handle_);
     ioc.buf.buf = (char*)msg;
     ioc.buf.len = len;
     ioc.ptr = &rhandle;
     ioc.cb = completion_callback;
 
-    if (data_->enable_app) {
-        offset = data_->size;
+    if (enable_app_) {
+        offset = size_;
     }
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
@@ -221,9 +222,15 @@ Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t l
     });
 
     ec = rhandle.ec;
-    data_->size += ioc.buf.len;
+    size_ += ioc.buf.len;
 
     co_return ioc.buf.len;
+}
+
+void RandomAccessFile::reset() {
+    handle_ = (Handle)-1;
+    enable_app_ = false;
+    size_ = 0;
 }
 
 File::File() {
@@ -232,6 +239,10 @@ File::File() {
 
 File::File(RandomAccessFile file)
     : file_(std::move(file))
+{ }
+
+File::File(const char *path, int mode, int x)
+    : file_(RandomAccessFile(path, (RandomAccessFile::Openmode)mode, x)) 
 { }
 
 File::File(File&& other) noexcept
@@ -245,12 +256,13 @@ File& File::operator=(File&& other) noexcept {
     return *this;
 }
 
-File File::open(const char *path, int mode, int x) {
-    auto rafile = RandomAccessFile::open(path, (RandomAccessFile::Openmode)mode, x);
-    if (!rafile) {
-        return {};
-    }
-    return {std::move(rafile)};
+void File::open(const char *path, int mode, int x) {
+    file_.open(path, mode, x);
+    read_offset_ = 0;
+}
+
+void File::close() {
+    file_.close();
 }
 
 Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {

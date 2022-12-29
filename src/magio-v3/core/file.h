@@ -11,6 +11,13 @@ class Coro;
 
 class RandomAccessFile: Noncopyable {
 public:
+    using Handle =
+#ifdef  _WIN32
+    void*;
+#elif defined (__linux__)
+    int;
+#endif
+
     enum Openmode {
         ReadOnly  = 0b000001, 
         WriteOnly = 0b000010,
@@ -21,15 +28,19 @@ public:
         Append    = 0b100000
     };
 
-    RandomAccessFile() = default;
+    RandomAccessFile();
+
+    RandomAccessFile(const char* path, int mode, int x = 0744);
 
     ~RandomAccessFile();
 
     RandomAccessFile(RandomAccessFile&& other) noexcept;
 
-    RandomAccessFile& operator=(RandomAccessFile&& other) noexcept; 
+    RandomAccessFile& operator=(RandomAccessFile&& other) noexcept;
 
-    static RandomAccessFile open(const char* path, int mode, int x = 0744);
+    void open(const char* path, int mode, int x = 0744);
+
+    void close();
 
     Coro<size_t> read_at(size_t offset, char* buf, size_t len, std::error_code& ec);
 
@@ -40,15 +51,16 @@ public:
     void sync_data();
 
     operator bool() const {
-        return data_ != nullptr;
+        return handle_ != (Handle)-1;
     }
 
 private:
-    struct Data;
+    void reset();
 
-    RandomAccessFile(Data* p);
-
-    Data* data_ = nullptr;
+    Handle handle_;
+    // only for win
+    bool enable_app_ = false;
+    size_t size_ = 0;
 };
 
 class File: Noncopyable {
@@ -65,11 +77,15 @@ public:
 
     File();
 
+    File(const char* path, int mode, int x = 0744);
+
     File(File&& other) noexcept;
 
     File& operator=(File&& other) noexcept;
 
-    static File open(const char* path, int mode, int x = 0744);
+    void open(const char* path, int mode, int x = 0744);
+
+    void close();
 
     Coro<size_t> read(char* buf, size_t len, std::error_code& ec);
 
