@@ -35,7 +35,7 @@ public:
     }
 
     template<typename T>
-    T get() {
+    T& get() {
         return *reinterpret_cast<T*>(buf_);
     }
 
@@ -100,6 +100,8 @@ public:
         return handle_;
     }
 
+    void close();
+
     Ip ip() const {
         return ip_;
     }
@@ -114,8 +116,6 @@ public:
 
 private:
     Socket(Handle handle, Ip ip, Transport tp);
-
-    void close();
 
     void reset();
 
