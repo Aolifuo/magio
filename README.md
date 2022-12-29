@@ -149,22 +149,22 @@ int main() {
 ```cpp
 Coro<> copyfile() {
     std::error_code ec;
-    auto file1 = File::open("from", File::ReadOnly);
-    auto file2 = File::open("to", File::WriteOnly | File::Create);
+    File from("from", File::ReadOnly);
+    File to("to", File::WriteOnly | File::Create);
 
     char buf[1024]{};
     for (; ;) {
-        size_t rd = co_await file1.read(buf, sizeof(buf), ec);
+        size_t rd = co_await from.read(buf, sizeof(buf), ec);
         if (rd == 0) {
             break;
         }
-        co_await file2.write(buf, rd, ec);
+        co_await to.write(buf, rd, ec);
     }
     this_context::stop();
 }
 
 int main() {
-    CoroContext ctx(128);
+    CoroContext ctx(100);
     this_context::spawn(copyfile());
     ctx.start();
 }
