@@ -15,30 +15,40 @@ public:
         std::optional<T> value;
     };
 
-    Channel() = default;
+    Channel(size_t n = 0) {
+        cache_ = n;
+    }
 
     Coro<void> send(T elem) {
         // cq
-        Entry entry{
-            .ctx = LocalContext,
-            .value = std::move(elem)
-        };
+        auto entry = std::make_unique<Entry>(
+            Entry{
+                .ctx = LocalContext,
+                .value = std::move(elem)
+            }
+        );
 
         co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-            entry.handle = h;
-            Entry* p = nullptr;
+            entry->handle = h;
+            std::unique_ptr<Entry> p;
+            bool flag = false;
             {
                 std::lock_guard lk(mutex_);
                 if (sq_.empty()) {
-                    cq_.push_back(&entry);
+                    if (cq_.size() < cache_) {
+                        flag = true;
+                        entry->ctx = nullptr; // resume now
+                    }
+                    cq_.push_back(std::move(entry));
                 } else {
-                    p = sq_.front();
+                    p = std::move(sq_.front());
                     sq_.pop_front();
                 }
             }
             if (p) {
-                p->value.swap(entry.value);
                 p->ctx->wake_in_context(p->handle);
+                h.resume();
+            } else if (flag) {
                 h.resume();
             }
         });
@@ -46,36 +56,42 @@ public:
 
     Coro<T> receive() {
         // sq
-        Entry entry{
-            .ctx = LocalContext,
-        };
+        auto entry = std::make_unique<Entry>(
+            Entry{
+                .ctx = LocalContext
+            }
+        );
 
+        std::optional<T> result;
         co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-            entry.handle = h;
-            Entry* p = nullptr;
+            entry->handle = h;
+            std::unique_ptr<Entry> p;
             {
                 std::lock_guard lk(mutex_);
                 if (cq_.empty()) {
-                    sq_.push_back(&entry);
+                    sq_.push_back(std::move(entry));
                 } else {
-                    p = cq_.front();
+                    p = std::move(cq_.front());
                     cq_.pop_front();
                 }
             }
             if (p) {
-                entry.value.swap(p->value);
-                p->ctx->wake_in_context(p->handle);
+                result.swap(p->value);
+                if (p->ctx) {
+                    p->ctx->wake_in_context(p->handle);
+                }
                 h.resume();
             }
         });
 
-        co_return std::move(entry.value.value());
+        co_return std::move(result.value());
     }
 
 private:
     std::mutex mutex_;
-    std::deque<Entry*> sq_;
-    std::deque<Entry*> cq_;
+    size_t cache_;
+    std::deque<std::unique_ptr<Entry>> sq_;
+    std::deque<std::unique_ptr<Entry>> cq_;
 };
 
 }
