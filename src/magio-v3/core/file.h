@@ -59,8 +59,8 @@ private:
 
     Handle handle_;
     // only for win
-    bool enable_app_ = false;
-    size_t size_ = 0;
+    bool enable_app_;
+    size_t size_;
 };
 
 class File: Noncopyable {
