@@ -11,10 +11,6 @@ namespace detail {
 template<typename...Ts>
 struct TypeList { };
 
-// tuple type type void type void void type
-// tuple 0   1     2    3    4    5    6
-// tuple 0   1     x    2    x    x    3
-
 template<typename, size_t, typename...>
 struct FindNonVoidPlace;
 

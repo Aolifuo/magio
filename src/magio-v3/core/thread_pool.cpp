@@ -7,14 +7,9 @@ namespace magio {
 ThreadPool::ThreadPool(size_t thread_num)
     : threads_(thread_num) 
 {
-    if (!LocalContext) {
-        M_FATAL("{}", "This thread is missing a context");
-    }
-
     if (thread_num < 1) {
         M_FATAL("{}", "worker threads cannot less than 1");
     }
-
 }
 
 ThreadPool::~ThreadPool() {
