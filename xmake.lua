@@ -20,7 +20,6 @@ if is_plat("linux") then
 end
 
 if is_plat("windows") then 
-    --add_cxxflags("/EHa")
     add_syslinks("ws2_32")
 end
 
