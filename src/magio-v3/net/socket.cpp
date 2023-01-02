@@ -165,7 +165,23 @@ Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
     ec = rhandle.ec;
 }
 
-Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
+void Socket::connect(const EndPoint &ep, std::function<void (std::error_code)> &&completion_cb) {
+    using Cb = std::function<void (std::error_code)>;
+    check_relation();
+    auto ioc = new IoContext;
+    ioc->handle = handle_;
+    ioc->ptr = new Cb(std::move(completion_cb));
+    ioc->addr_len = ep.address().is_v4() ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
+    std::memcpy(&ioc->remote_addr, ep.address().addr_in_, ioc->addr_len);
+    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+        auto cb = (Cb*)ptr;
+        delete ioc;
+        delete cb;
+    };
+    this_context::get_service().connect(*ioc);
+}
+
+Coro<size_t> Socket::receive(char* buf, size_t len, std::error_code &ec) {
     check_relation();
     ResumeHandle rhandle;
     IoContext ioc;
@@ -185,7 +201,24 @@ Coro<size_t> Socket::read(char* buf, size_t len, std::error_code &ec) {
     co_return ioc.buf.len;
 }
 
-Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
+void Socket::receive(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = std::function<void (std::error_code, size_t)>;
+    check_relation();
+    auto ioc = new IoContext;
+    ioc->handle = handle_;
+    ioc->buf.buf = buf;
+    ioc->buf.len = len;
+    ioc->ptr = new Cb(std::move(completion_cb));
+    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+        auto cb = (Cb*)ptr;
+        (*cb)(ec, ioc->buf.len);
+        delete ioc;
+        delete cb;
+    };
+    this_context::get_service().receive(*ioc);
+}
+
+Coro<size_t> Socket::send(const char* msg, size_t len, std::error_code &ec) {
     check_relation();
     ResumeHandle rhandle;
     IoContext ioc;
@@ -205,7 +238,24 @@ Coro<size_t> Socket::write(const char* msg, size_t len, std::error_code &ec) {
     co_return ioc.buf.len;
 }
 
-Coro<size_t> Socket::write_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec) {
+void Socket::send(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = std::function<void (std::error_code, size_t)>;
+    check_relation();
+    auto ioc = new IoContext;
+    ioc->handle = handle_;
+    ioc->buf.buf = (char*)msg;
+    ioc->buf.len = len;
+    ioc->ptr = new Cb(std::move(completion_cb));
+    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+        auto cb = (Cb*)ptr;
+        (*cb)(ec, ioc->buf.len);
+        delete ioc;
+        delete cb;
+    };
+    this_context::get_service().send(*ioc);
+}
+
+Coro<size_t> Socket::send_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec) {
     check_relation();
     IoContext ioc;
 
@@ -238,6 +288,10 @@ Coro<size_t> Socket::write_to(const char* msg, size_t len, const EndPoint& ep, s
     ec = rhandle.ec;
 
     co_return ioc.buf.len;
+}
+
+void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::function<void (std::error_code, size_t)> &&completion_cb) {
+
 }
 
 Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* msg, size_t len, std::error_code& ec) {
@@ -303,6 +357,10 @@ Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* msg, size_t len, st
         ioc.buf.len, 
         peer
     };
+}
+
+void Socket::receive_from(char *msg, size_t len, std::function<void (std::error_code, size_t, EndPoint)>) {
+    
 }
 
 void Socket::cancel() {

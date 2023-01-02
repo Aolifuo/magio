@@ -26,9 +26,9 @@ Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
     return *this;
 }
 
-void Acceptor::bind_and_listen(const EndPoint &ep, Transport tp, std::error_code& ec) {
+void Acceptor::bind_and_listen(const EndPoint &ep, std::error_code& ec) {
     auto& address = ep.address();
-    listener_.open(address.ip(), tp, ec);
+    listener_.open(address.ip(), Transport::Tcp, ec);
     if (ec) {
         return;
     }
@@ -74,7 +74,6 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
 
     EndPoint ep;
     Ip ipv;
-    Transport trans = listener_.transport();
 
     std::memset(buf, 0, sizeof(buf));
     ::inet_ntop(ioc.remote_addr.sin_family, &ioc.remote_addr, buf, sizeof(buf));
@@ -94,9 +93,50 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
     }
 
     co_return {
-        Socket(ioc.handle, ipv, trans), 
+        Socket(ioc.handle, ipv, Transport::Tcp), 
         ep
     };
+}
+
+void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&completion_cb) {
+    using Cb = std::function<void (std::error_code, Socket, EndPoint)>;
+    auto* ioc = new IoContext;
+    ioc->buf.buf = new char[128];
+    ioc->buf.len = 128;
+    ioc->ptr = new Cb(std::move(completion_cb));
+    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+        auto cb = (Cb*)ptr;
+        if (ec) {
+           (*cb)(ec, {}, {});
+        } else {
+            EndPoint ep;
+            Ip ipv;
+
+            std::memset(ioc->buf.buf, 0, 128);
+            ::inet_ntop(ioc->remote_addr.sin_family, &ioc->remote_addr, ioc->buf.buf, 128);
+
+            if (ioc->remote_addr.sin_family == AF_INET) {
+                ipv = Ip::v4;
+                ep = EndPoint(
+                    IpAddress(ioc->remote_addr, ioc->buf.buf, Ip::v4),
+                    ::ntohs(ioc->remote_addr.sin_port)
+                );
+            } else {
+                ipv = Ip::v6;
+                ep = EndPoint(
+                    IpAddress(ioc->remote_addr6, ioc->buf.buf, Ip::v6),
+                    ::ntohs(ioc->remote_addr6.sin6_port)
+                );
+            }
+            (*cb)(ec, Socket(ioc->handle, ipv, Transport::Tcp), ep);
+        }
+
+        delete ioc->buf.buf;
+        delete ioc;
+        delete cb;
+    };
+
+    this_context::get_service().accept(listener_, *ioc);
 }
 
 }

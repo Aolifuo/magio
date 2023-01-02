@@ -2,6 +2,7 @@
 #define MAGIO_NET_SOCKET_H_
 
 #include <cstring>
+#include <functional>
 
 #include "magio-v3/core/noncopyable.h"
 #include "magio-v3/net/address.h"
@@ -84,13 +85,23 @@ public:
 
     Coro<void> connect(const EndPoint& ep, std::error_code& ec);
 
-    Coro<size_t> write(const char* msg, size_t len, std::error_code& ec);
+    void connect(const EndPoint& ep, std::function<void(std::error_code)>&& completion_cb);
 
-    Coro<size_t> read(char* buf, size_t len, std::error_code& ec);
+    Coro<size_t> send(const char* msg, size_t len, std::error_code& ec);
 
-    Coro<size_t> write_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec);
+    void send(const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+
+    Coro<size_t> receive(char* buf, size_t len, std::error_code& ec);
+
+    void receive(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+
+    Coro<size_t> send_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec);
+
+    void send_to(const char* msg, size_t len, const EndPoint& ep, std::function<void(std::error_code, size_t)>&& completion_cb);
 
     Coro<std::pair<size_t, EndPoint>> receive_from(char* msg, size_t len, std::error_code& ec);
+
+    void receive_from(char* msg, size_t len, std::function<void(std::error_code ec, size_t, EndPoint)>);
 
     void cancel();
 

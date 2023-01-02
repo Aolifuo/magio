@@ -16,13 +16,15 @@ public:
 
     Acceptor& operator=(Acceptor&& other) noexcept;
 
-    void bind_and_listen(const EndPoint& ep, Transport tp, std::error_code& ec);
+    void bind_and_listen(const EndPoint& ep, std::error_code& ec);
 
     void set_option(int op, SmallBytes bytes, std::error_code& ec);
 
     SmallBytes get_option(int op, std::error_code& ec);
 
     Coro<std::pair<Socket, EndPoint>> accept(std::error_code& ec);
+
+    void accept(std::function<void(std::error_code, Socket, EndPoint)>&& completion_cb);
 
 private:
     Socket listener_;

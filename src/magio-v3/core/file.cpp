@@ -31,7 +31,6 @@ RandomAccessFile::~RandomAccessFile() {
 RandomAccessFile::RandomAccessFile(RandomAccessFile&& other) noexcept
     : handle_(other.handle_)
     , enable_app_(other.enable_app_)
-    , size_(other.size_) 
 {
     other.reset();
 }
@@ -39,7 +38,6 @@ RandomAccessFile::RandomAccessFile(RandomAccessFile&& other) noexcept
 RandomAccessFile& RandomAccessFile::operator=(RandomAccessFile&& other) noexcept {
     handle_ = other.handle_;
     enable_app_ = other.enable_app_;
-    size_ = other.size_;
     other.reset();
     return *this;
 }
@@ -111,14 +109,8 @@ void RandomAccessFile::open(const char *path, int mode, int x) {
         return;
     }
 
-    size_t size = 0;
-    LARGE_INTEGER large_int;
-    ::GetFileSizeEx(handle, &large_int);
-    size = large_int.QuadPart;
-
     handle_ = handle;
     enable_app_ = enable_app;
-    size_ = size;
 
 #elif defined (__linux__)
     int flag = 0;
@@ -205,6 +197,22 @@ Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std
     co_return ioc.buf.len;
 }
 
+void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = std::function<void (std::error_code, size_t)>;
+    auto ioc = new IoContext;
+    ioc->handle = decltype(IoContext::handle)(handle_);
+    ioc->buf.buf = buf;
+    ioc->buf.len = len;
+    ioc->ptr = new Cb(std::move(completion_cb));
+    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+        auto cb = (Cb*)ptr;
+        (*cb)(ec, ioc->buf.len);
+        delete ioc;
+        delete cb;
+    };
+    this_context::get_service().read_file(*ioc, offset);
+}
+
 Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
     IoContext ioc;
@@ -214,9 +222,13 @@ Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t l
     ioc.ptr = &rhandle;
     ioc.cb = completion_callback;
 
+#ifdef _WIN32
     if (enable_app_) {
-        offset = size_;
+        LARGE_INTEGER large_int;
+        ::GetFileSizeEx(handle_, &large_int);
+        offset = large_int.QuadPart;
     }
+#endif
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
@@ -224,15 +236,36 @@ Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t l
     });
 
     ec = rhandle.ec;
-    size_ += ioc.buf.len;
 
     co_return ioc.buf.len;
+}
+
+void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = std::function<void (std::error_code, size_t)>;
+    auto ioc = new IoContext;
+    ioc->handle = decltype(IoContext::handle)(handle_);
+    ioc->buf.buf = (char*)msg;
+    ioc->buf.len = len;
+    ioc->ptr = new Cb(std::move(completion_cb));
+    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+        auto cb = (Cb*)ptr;
+        (*cb)(ec, ioc->buf.len);
+        delete ioc;
+        delete cb;
+    };
+#ifdef _WIN32
+    if (enable_app_) {
+        LARGE_INTEGER large_int;
+        ::GetFileSizeEx(handle_, &large_int);
+        offset = large_int.QuadPart;
+    }
+#endif
+    this_context::get_service().write_file(*ioc, offset);
 }
 
 void RandomAccessFile::reset() {
     handle_ = (Handle)-1;
     enable_app_ = false;
-    size_ = 0;
 }
 
 File::File() {
@@ -273,9 +306,22 @@ Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
     co_return rd;
 }
 
+void File::read(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
+    file_.read_at(read_offset_, buf, len, [cb = std::move(completion_cb), this](std::error_code ec, size_t len) {
+        read_offset_ += len;
+        cb(ec, len);
+    });
+}
+
 Coro<size_t> File::write(const char *buf, size_t len, std::error_code &ec) {
     size_t wl = co_await file_.write_at(0, buf, len, ec);
     co_return wl;
+}
+
+void File::write(const char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
+    file_.write_at(0, buf, len, [cb = std::move(completion_cb)](std::error_code ec, size_t len) {
+        cb(ec, len);
+    });
 }
 
 void File::sync_all() {
