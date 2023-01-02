@@ -12,13 +12,13 @@ Coro<> handle_connection(net::Socket sock) {
     std::error_code ec;
     char buf[1024];
     for (; ;) {
-        size_t rd = co_await sock.read(buf, sizeof(buf), ec);
+        size_t rd = co_await sock.receive(buf, sizeof(buf), ec);
         if (ec || rd == 0) {
             M_ERROR("{}", ec ? ec.message() : "EOF");
             break;
         }
         M_INFO("receive: {}", string_view(buf, rd));
-        co_await sock.write(buf, rd, ec);
+        co_await sock.send(buf, rd, ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             break;
@@ -34,7 +34,7 @@ Coro<> server() {
     }
 
     net::Acceptor acceptor;
-    acceptor.bind_and_listen(local, net::Transport::Tcp, ec);
+    acceptor.bind_and_listen(local, ec);
     if (ec) {
         M_FATAL("{}", ec.message());
     }
@@ -81,12 +81,12 @@ Coro<> client() {
  
     char buf[1024];
     for (int i = 0; i < 5; ++i) {
-        co_await socket.write("hello server", 12, ec);
+        co_await socket.send("hello server", 12, ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             break;
         }
-        size_t rd = co_await socket.read(buf, sizeof(buf), ec);
+        size_t rd = co_await socket.receive(buf, sizeof(buf), ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             break;
@@ -129,7 +129,7 @@ Coro<> amain() {
         }
 
         M_INFO("from [{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
-        co_await socket.write_to("Hello", 5, peer, ec);
+        co_await socket.send_to("Hello", 5, peer, ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             continue;
@@ -150,7 +150,7 @@ int main() {
 Coro<> copyfile() {
     std::error_code ec;
     File from("from", File::ReadOnly);
-    File to("to", File::WriteOnly | File::Create);
+    File to("to", File::WriteOnly | File::Create | File::Truncate);
 
     char buf[1024]{};
     for (; ;) {
