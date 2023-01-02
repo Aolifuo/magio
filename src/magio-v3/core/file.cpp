@@ -178,6 +178,7 @@ void RandomAccessFile::sync_data() {
 #endif
 }
 
+#ifdef MAGIO_USE_CORO
 Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
     IoContext ioc;
@@ -195,22 +196,6 @@ Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std
     ec = rhandle.ec;
 
     co_return ioc.buf.len;
-}
-
-void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
-    auto ioc = new IoContext;
-    ioc->handle = decltype(IoContext::handle)(handle_);
-    ioc->buf.buf = buf;
-    ioc->buf.len = len;
-    ioc->ptr = new Cb(std::move(completion_cb));
-    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-        auto cb = (Cb*)ptr;
-        (*cb)(ec, ioc->buf.len);
-        delete ioc;
-        delete cb;
-    };
-    this_context::get_service().read_file(*ioc, offset);
 }
 
 Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::error_code &ec) {
@@ -238,6 +223,23 @@ Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t l
     ec = rhandle.ec;
 
     co_return ioc.buf.len;
+}
+#endif
+
+void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = std::function<void (std::error_code, size_t)>;
+    auto ioc = new IoContext;
+    ioc->handle = decltype(IoContext::handle)(handle_);
+    ioc->buf.buf = buf;
+    ioc->buf.len = len;
+    ioc->ptr = new Cb(std::move(completion_cb));
+    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+        auto cb = (Cb*)ptr;
+        (*cb)(ec, ioc->buf.len);
+        delete ioc;
+        delete cb;
+    };
+    this_context::get_service().read_file(*ioc, offset);
 }
 
 void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
@@ -300,22 +302,24 @@ void File::close() {
     file_.close();
 }
 
+#ifdef MAGIO_USE_CORO
 Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
     size_t rd = co_await file_.read_at(read_offset_, buf, len, ec);
     read_offset_ += rd;
     co_return rd;
 }
 
+Coro<size_t> File::write(const char *buf, size_t len, std::error_code &ec) {
+    size_t wl = co_await file_.write_at(0, buf, len, ec);
+    co_return wl;
+}
+#endif
+
 void File::read(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     file_.read_at(read_offset_, buf, len, [cb = std::move(completion_cb), this](std::error_code ec, size_t len) {
         read_offset_ += len;
         cb(ec, len);
     });
-}
-
-Coro<size_t> File::write(const char *buf, size_t len, std::error_code &ec) {
-    size_t wl = co_await file_.write_at(0, buf, len, ec);
-    co_return wl;
 }
 
 void File::write(const char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {

@@ -4,9 +4,9 @@
 #include <chrono>
 
 #include "magio-v3/core/unit.h"
-#include "magio-v3/core/coroutine.h"
 #include "magio-v3/core/io_service.h"
 #include "magio-v3/core/execution.h"
+#include "magio-v3/core/coroutine.h"
 
 namespace magio {
 
@@ -54,6 +54,7 @@ void stop();
 
 void execute(Task&& task);
 
+#ifdef MAGIO_USE_CORO
 template<typename T>
 void spawn(Coro<T> coro);
 
@@ -63,12 +64,13 @@ void spawn(Coro<T> coro, detail::UseCoro);
 template<typename T>
 void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler);
 
+void wake_in_context(std::coroutine_handle<> h);
+#endif
+
 template<typename Rep, typename Per>
 TimerHandle expires_after(const std::chrono::duration<Rep, Per>& dur, TimerTask&& task);
 
 TimerHandle expires_until(const TimerClock::time_point& tp, TimerTask&& task);
-
-void wake_in_context(std::coroutine_handle<> h);
 
 IoService& get_service();
 

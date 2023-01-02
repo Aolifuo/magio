@@ -3,6 +3,7 @@
 
 namespace magio {
 
+#ifdef MAGIO_USE_CORO
 template<typename...Ts>
 inline Coro<> select(Coro<Ts>...coros) {
     auto flag = std::make_shared<bool>(false);
@@ -107,6 +108,7 @@ inline Coro<> sleep_until(const TimerClock::time_point& tp) {
 }
 
 }
+#endif
 
 }
 

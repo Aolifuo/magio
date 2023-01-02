@@ -52,6 +52,7 @@ SmallBytes Acceptor::get_option(int op, std::error_code &ec) {
     return listener_.get_option(op, ec);
 }
 
+#ifdef MAGIO_USE_CORO
 Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
     char buf[128];
     IoContext ioc;
@@ -97,6 +98,7 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
         ep
     };
 }
+#endif
 
 void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, Socket, EndPoint)>;

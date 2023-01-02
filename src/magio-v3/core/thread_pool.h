@@ -45,6 +45,33 @@ public:
 
     void execute(Task&& task) override;
 
+    template<typename Cb, typename Func, typename...Args>
+    void async(Cb&& cb, Func&& func, Args...args) {
+        auto ctx = LocalContext;
+        execute([
+            ctx,
+            cb = std::forward<Cb>(cb), 
+            func = std::forward<Func>(func), 
+            tup = std::make_tuple(std::forward<Args>(args)...)
+        ]() mutable {
+            if constexpr (std::is_void_v<std::invoke_result_t<Func, Args...>>) {
+                std::apply([&](auto&&...args) {
+                    return func(args...);
+                }, tup);
+
+                ctx->execute(std::move(cb));
+            } else {
+                auto value = std::apply([&](auto&&...args) {
+                    return func(args...);
+                }, tup);
+                ctx->execute([cb = std::move(cb), value = std::move(value)] {
+                    cb(std::move(value));
+                });
+            }
+        });
+    }
+
+#ifdef MAGIO_USE_CORO
     template<typename Func, typename...Args>
     Coro<std::invoke_result_t<Func, Args...>> spawn_blocking(Func&& func, Args&&...args) {
         using ReturnType = std::invoke_result_t<Func, Args...>;
@@ -78,6 +105,7 @@ public:
             co_return std::move(result.value());
         }
     }
+#endif
 
 private:
     void run_in_background();

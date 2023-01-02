@@ -17,6 +17,7 @@ inline void execute(Task&& task) {
     LocalContext->execute(std::move(task));
 }
 
+#ifdef MAGIO_USE_CORO
 template<typename T>
 inline void spawn(Coro<T> coro) {
     wake_in_context(coro.handle());
@@ -33,6 +34,11 @@ inline void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler) {
     wake_in_context(coro.handle());
 }
 
+inline void wake_in_context(std::coroutine_handle<> h) {
+    LocalContext->wake_in_context(h);
+}
+#endif
+
 template<typename Rep, typename Per>
 inline TimerHandle expires_after(const std::chrono::duration<Rep, Per>& dur, TimerTask&& task) {
     return LocalContext->expires_after(dur, std::move(task));
@@ -42,9 +48,7 @@ inline TimerHandle expires_until(const TimerClock::time_point& tp, TimerTask&& t
     return LocalContext->expires_until(tp, std::move(task));
 }
 
-inline void wake_in_context(std::coroutine_handle<> h) {
-    LocalContext->wake_in_context(h);
-}
+
 
 inline IoService& get_service() {
     return LocalContext->get_service();

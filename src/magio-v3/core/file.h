@@ -43,11 +43,13 @@ public:
 
     void close();
 
+#ifdef MAGIO_USE_CORO
     Coro<size_t> read_at(size_t offset, char* buf, size_t len, std::error_code& ec);
 
-    void read_at(size_t offset, char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
-
     Coro<size_t> write_at(size_t offset, const char* msg, size_t len, std::error_code& ec);
+#endif
+
+    void read_at(size_t offset, char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
 
     void write_at(size_t offset, const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
 
@@ -91,12 +93,14 @@ public:
 
     void close();
 
+#ifdef MAGIO_USE_CORO
     Coro<size_t> read(char* buf, size_t len, std::error_code& ec);
+    
+    Coro<size_t> write(const char* buf, size_t len, std::error_code& ec);
+#endif
 
     void read(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
-
-    Coro<size_t> write(const char* buf, size_t len, std::error_code& ec);
-
+    
     void write(const char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
 
     void sync_all();

@@ -5,6 +5,7 @@
 
 namespace magio {
 
+#ifdef MAGIO_USE_CORO
 // thread safe
 template<typename T>
 class Channel: Noncopyable {
@@ -93,6 +94,7 @@ private:
     std::deque<std::unique_ptr<Entry>> sq_;
     std::deque<std::unique_ptr<Entry>> cq_;
 };
+#endif
 
 }
 

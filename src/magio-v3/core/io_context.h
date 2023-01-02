@@ -58,6 +58,7 @@ struct IoContext {
 #endif
 };
 
+#ifdef MAGIO_USE_CORO
 struct ResumeHandle {
     std::error_code ec;
     std::coroutine_handle<> handle;
@@ -81,6 +82,7 @@ inline void completion_callback_with_msg(std::error_code ec, IoContext* ioc, voi
     h->ec = ec;
     h->handle.resume();
 }
+#endif
 #endif
 
 }

@@ -22,7 +22,9 @@ public:
 
     SmallBytes get_option(int op, std::error_code& ec);
 
+#ifdef MAGIO_USE_CORO
     Coro<std::pair<Socket, EndPoint>> accept(std::error_code& ec);
+#endif
 
     void accept(std::function<void(std::error_code, Socket, EndPoint)>&& completion_cb);
 

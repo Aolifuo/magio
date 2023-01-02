@@ -23,6 +23,9 @@ public:
 
     void execute(Task&& task) override;
 
+    void dispatch(Task&& task);
+
+#ifdef MAGIO_USE_CORO
     template<typename T>
     void spawn(Coro<T> coro) {
         wake_in_context(coro.handle());
@@ -33,6 +36,9 @@ public:
         coro.set_callback(std::move(handler));
         wake_in_context(coro.handle());
     }
+    
+    void wake_in_context(std::coroutine_handle<>);
+#endif
 
     template<typename Rep, typename Per>
     TimerHandle expires_after(const std::chrono::duration<Rep, Per>& dur, TimerTask&& task) {
@@ -42,8 +48,6 @@ public:
     TimerHandle expires_until(const TimerClock::time_point& tp, TimerTask&& task) {
         return timer_queue_.push(tp, std::move(task));
     }
-
-    void wake_in_context(std::coroutine_handle<>);
 
     bool assert_in_context_thread();
 
@@ -58,7 +62,11 @@ private:
 
     State state_ = Stopping;
     size_t thread_id_;
+#ifdef MAGIO_USE_CORO
     std::vector<std::coroutine_handle<>> pending_handles_;
+#else
+    std::vector<Task> pending_handles_;
+#endif
     TimerQueue timer_queue_;
     std::unique_ptr<IoService> p_io_service_;
 };

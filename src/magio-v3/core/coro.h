@@ -16,6 +16,7 @@ inline thread_local size_t CoroId = 0;
 
 }
 
+#ifdef MAGIO_USE_CORO
 template<typename = void>
 class Coro;
 
@@ -278,9 +279,8 @@ inline Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur);
 
 inline Coro<> sleep_until(const TimerClock::time_point& tp);
 
-
-
 }
+#endif
 
 }
 

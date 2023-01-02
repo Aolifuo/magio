@@ -37,7 +37,7 @@ void CoroContext::start() {
     }
 
     state_ = Running;
-    std::vector<std::coroutine_handle<>> handles;
+    decltype(pending_handles_) handles;
     std::vector<TimerTask> timer_tasks;
 
     for (; state_ != Stopping;) {
@@ -47,7 +47,11 @@ void CoroContext::start() {
         }
 
         for (auto& h : handles) {
+#ifdef MAGIO_USE_CORO
             h.resume();
+#else
+            h();
+#endif
         }
         // TODO shrink
         handles.clear();
@@ -72,10 +76,28 @@ void CoroContext::stop() {
 }
 
 void CoroContext::execute(Task &&task) {
+#ifdef MAGIO_USE_CORO
     auto coro = [](Task task) mutable -> Coro<> {
         co_return task();
     }(std::move(task));
     wake_in_context(coro.handle());
+#else
+    {
+        std::lock_guard lk(mutex_);
+        pending_handles_.push_back(std::move(task));
+    }
+    if (!assert_in_context_thread()) {
+        wake_up();
+    }
+#endif
+}
+
+void CoroContext::dispatch(Task &&task) {
+    if (assert_in_context_thread()) {
+        task();
+    } else {
+        execute(std::move(task));
+    }
 }
 
 void CoroContext::handle_io_poller() {
@@ -97,6 +119,7 @@ void CoroContext::handle_io_poller() {
     }
 }
 
+#ifdef MAGIO_USE_CORO
 void CoroContext::wake_in_context(std::coroutine_handle<> h) {
     {
         std::lock_guard lk(mutex_);
@@ -106,6 +129,7 @@ void CoroContext::wake_in_context(std::coroutine_handle<> h) {
         wake_up();
     }
 }
+#endif
 
 void CoroContext::wake_up() {
     p_io_service_->wake_up();

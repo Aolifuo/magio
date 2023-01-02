@@ -83,23 +83,25 @@ public:
 
     SmallBytes get_option(int op, std::error_code& ec);
 
+#ifdef MAGIO_USE_CORO
     Coro<void> connect(const EndPoint& ep, std::error_code& ec);
-
-    void connect(const EndPoint& ep, std::function<void(std::error_code)>&& completion_cb);
 
     Coro<size_t> send(const char* msg, size_t len, std::error_code& ec);
 
-    void send(const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
-
     Coro<size_t> receive(char* buf, size_t len, std::error_code& ec);
-
-    void receive(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
 
     Coro<size_t> send_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec);
 
-    void send_to(const char* msg, size_t len, const EndPoint& ep, std::function<void(std::error_code, size_t)>&& completion_cb);
-
     Coro<std::pair<size_t, EndPoint>> receive_from(char* msg, size_t len, std::error_code& ec);
+#endif
+
+    void connect(const EndPoint& ep, std::function<void(std::error_code)>&& completion_cb);
+
+    void send(const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+
+    void receive(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+
+    void send_to(const char* msg, size_t len, const EndPoint& ep, std::function<void(std::error_code, size_t)>&& completion_cb);
 
     void receive_from(char* msg, size_t len, std::function<void(std::error_code ec, size_t, EndPoint)>);
 
