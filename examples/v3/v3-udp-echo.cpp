@@ -26,7 +26,7 @@ Coro<> amain() {
             continue;
         }
         M_INFO("from [{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
-        co_await socket.write_to("Hello", 5, peer, ec);
+        co_await socket.send_to("Hello", 5, peer, ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             continue;

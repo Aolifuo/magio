@@ -8,13 +8,13 @@ Coro<> handle_connection(net::Socket sock) {
     std::error_code ec;
     char buf[1024];
     for (; ;) {
-        size_t rd = co_await sock.read(buf, sizeof(buf), ec);
+        size_t rd = co_await sock.receive(buf, sizeof(buf), ec);
         if (ec || rd == 0) {
             M_ERROR("{}", ec ? ec.message() : "EOF");
             break;
         }
         M_INFO("receive: {}", string_view(buf, rd));
-        co_await sock.write(buf, rd, ec);
+        co_await sock.send(buf, rd, ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             break;
@@ -30,7 +30,7 @@ Coro<> server() {
     }
 
     net::Acceptor acceptor;
-    acceptor.bind_and_listen(local, net::Transport::Tcp, ec);
+    acceptor.bind_and_listen(local, ec);
     if (ec) {
         M_FATAL("{}", ec.message());
     }

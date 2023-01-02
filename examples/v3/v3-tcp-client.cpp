@@ -26,12 +26,12 @@ Coro<> client() {
  
     char buf[1024];
     for (int i = 0; i < 5; ++i) {
-        co_await socket.write("hello server", 12, ec);
+        co_await socket.send("hello server", 12, ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             break;
         }
-        size_t rd = co_await socket.read(buf, sizeof(buf), ec);
+        size_t rd = co_await socket.receive(buf, sizeof(buf), ec);
         if (ec) {
             M_ERROR("{}", ec.message());
             break;

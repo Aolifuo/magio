@@ -7,7 +7,7 @@ using namespace chrono_literals;
 Coro<> copyfile() {
     std::error_code ec;
     File from("from", File::ReadOnly);
-    File to("to", File::WriteOnly | File::Create);
+    File to("to", File::WriteOnly | File::Create | File::Truncate);
 
     char buf[1024]{};
     for (; ;) {
