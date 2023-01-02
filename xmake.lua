@@ -26,32 +26,12 @@ end
 add_requires("fmt")
 add_packages("fmt")
 
--- target("magio")
---     set_kind("static")
---     add_files("src/magio/**.cpp")
---     add_includedirs("src", {public = true})
+add_defines("MAGIO_USE_CORO")
 
 target("magio-v3")
     set_kind("static")
     add_files("src/magio-v3/**.cpp")
     add_includedirs("src", {public = true})
-
--- v2 tests
--- for _, dir in ipairs(os.files("tests/v2/**.cpp")) do
---     target(path.basename(dir))
---         set_kind("binary")
---         set_group("tests")
---         add_files(dir)
---         add_deps("magio")
--- end
-
--- v2 examples
--- for _, dir in ipairs(os.files("examples/v2/*.cpp")) do
---     target(path.basename(dir))
---         set_kind("binary")
---         add_files(dir)
---         add_deps("magio")
--- end
 
 -- v3 examples
 for _, dir in ipairs(os.files("examples/v3/*.cpp")) do
