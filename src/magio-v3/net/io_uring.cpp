@@ -30,7 +30,7 @@ IoUring::IoUring(unsigned entries) {
     wake_up_ctx_->op = Operation::WakeUp;
     wake_up_ctx_->handle = ::eventfd(EFD_NONBLOCK, 0);
     wake_up_ctx_->ptr = (void*)1;
-    wake_up_ctx_->cb = [](std::error_code ec, void* p) {
+    wake_up_ctx_->cb = [](std::error_code ec, IoContext* ioc, void* p) {
         if (ec) {
             M_SYS_ERROR("wake up error: {}", ec.message());
         }
@@ -174,7 +174,7 @@ int IoUring::poll(bool block, std::error_code &ec) {
                 break;
             }
         }
-        ioc->cb(inner_ec, ioc->ptr);
+        ioc->cb(inner_ec, ioc, ioc->ptr);
     }
     ::io_uring_cq_advance(p_io_uring_, count);
 

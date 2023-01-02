@@ -43,7 +43,7 @@ struct IoContext {
     socklen_t addr_len;
     WSABUF buf;
     void* ptr;
-    void(*cb)(std::error_code, void*);
+    void(*cb)(std::error_code, IoContext*, void*);
 #elif defined(__linux__)
     Operation op;
     int handle;
@@ -54,7 +54,7 @@ struct IoContext {
     socklen_t addr_len;
     IoBuf buf;
     void* ptr;
-    void(*cb)(std::error_code, void*);
+    void(*cb)(std::error_code, IoContext*, void*);
 #endif
 };
 
@@ -63,7 +63,7 @@ struct ResumeHandle {
     std::coroutine_handle<> handle;
 };
 
-inline void completion_callback(std::error_code ec, void* ptr) {
+inline void completion_callback(std::error_code ec, IoContext* ioc, void* ptr) {
     auto* h = static_cast<ResumeHandle*>(ptr);
     h->ec = ec;
     h->handle.resume();
@@ -76,7 +76,7 @@ struct ResumeWithMsg {
     std::coroutine_handle<> handle;
 };
 
-inline void completion_callback_with_msg(std::error_code ec, void* ptr) {
+inline void completion_callback_with_msg(std::error_code ec, IoContext* ioc, void* ptr) {
     auto* h = static_cast<ResumeWithMsg*>(ptr);
     h->ec = ec;
     h->handle.resume();

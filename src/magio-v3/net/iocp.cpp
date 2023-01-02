@@ -126,7 +126,7 @@ void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
     );
     
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -144,7 +144,7 @@ void IoCompletionPort::write_file(IoContext &ioc, size_t offset) {
     );
     
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -163,7 +163,7 @@ void IoCompletionPort::connect(IoContext& ioc) {
     );
 
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -175,7 +175,7 @@ void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
     SOCKET sock_handle = detail::open_socket(
         listener.ip(), listener.transport(), ec);
     if (ec) {
-        ioc.cb(ec, ioc.ptr);
+        ioc.cb(ec, &ioc, ioc.ptr);
         return;
     }
     ioc.handle = sock_handle;
@@ -193,7 +193,7 @@ void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
 
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
         detail::close_socket(sock_handle);
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
         return;
     }
 }
@@ -214,7 +214,7 @@ void IoCompletionPort::send(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -234,7 +234,7 @@ void IoCompletionPort::receive(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -256,7 +256,7 @@ void IoCompletionPort::send_to(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -278,7 +278,7 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, ioc.ptr);
+        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -363,7 +363,7 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
             break;
         }
 
-        ioc->cb(inner_ec, ioc->ptr);
+        ioc->cb(inner_ec, ioc, ioc->ptr);
     }
 
     return 1;
