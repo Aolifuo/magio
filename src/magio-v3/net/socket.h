@@ -84,17 +84,22 @@ public:
     SmallBytes get_option(int op, std::error_code& ec);
 
 #ifdef MAGIO_USE_CORO
+    [[nodiscard]]
     Coro<void> connect(const EndPoint& ep, std::error_code& ec);
 
+    [[nodiscard]]
     Coro<size_t> send(const char* msg, size_t len, std::error_code& ec);
 
+    [[nodiscard]]
     Coro<size_t> receive(char* buf, size_t len, std::error_code& ec);
 
+    [[nodiscard]]
     Coro<size_t> send_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec);
 
+    [[nodiscard]]
     Coro<std::pair<size_t, EndPoint>> receive_from(char* msg, size_t len, std::error_code& ec);
-#endif
 
+#endif
     void connect(const EndPoint& ep, std::function<void(std::error_code)>&& completion_cb);
 
     void send(const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
@@ -103,7 +108,7 @@ public:
 
     void send_to(const char* msg, size_t len, const EndPoint& ep, std::function<void(std::error_code, size_t)>&& completion_cb);
 
-    void receive_from(char* msg, size_t len, std::function<void(std::error_code ec, size_t, EndPoint)>);
+    void receive_from(char* msg, size_t len, std::function<void(std::error_code ec, size_t, EndPoint)>&& completion_cb);
 
     void cancel();
 

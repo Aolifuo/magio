@@ -361,7 +361,7 @@ void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::funct
 
 }
 
-void Socket::receive_from(char *msg, size_t len, std::function<void (std::error_code, size_t, EndPoint)>) {
+void Socket::receive_from(char *msg, size_t len, std::function<void (std::error_code, size_t, EndPoint)>&& completion_cb) {
     
 }
 
