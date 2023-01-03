@@ -80,7 +80,7 @@ void CoroContext::execute(Task &&task) {
     auto coro = [](Task task) mutable -> Coro<> {
         co_return task();
     }(std::move(task));
-    wake_in_context(coro.handle());
+    queue_in_context(coro.handle());
 #else
     {
         std::lock_guard lk(mutex_);
@@ -121,6 +121,14 @@ void CoroContext::handle_io_poller() {
 
 #ifdef MAGIO_USE_CORO
 void CoroContext::wake_in_context(std::coroutine_handle<> h) {
+    if (assert_in_context_thread()) {
+        h.resume();
+    } else {
+        queue_in_context(h);
+    }
+}
+
+void CoroContext::queue_in_context(std::coroutine_handle<> h) {
     {
         std::lock_guard lk(mutex_);
         pending_handles_.push_back(h);

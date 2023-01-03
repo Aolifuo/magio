@@ -54,6 +54,8 @@ void stop();
 
 void execute(Task&& task);
 
+void dispatch(Task&& task);
+
 #ifdef MAGIO_USE_CORO
 template<typename T>
 void spawn(Coro<T> coro);
@@ -65,6 +67,8 @@ template<typename T>
 void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler);
 
 void wake_in_context(std::coroutine_handle<> h);
+
+void queue_in_context(std::coroutine_handle<> h);
 #endif
 
 template<typename Rep, typename Per>

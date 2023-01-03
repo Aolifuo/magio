@@ -35,7 +35,7 @@ public:
     template<typename PT>
     void await_suspend(std::coroutine_handle<PT> prev_h) {
         handle_.promise().prev_handle = prev_h;
-        this_context::wake_in_context(handle_); // wake main then prev
+        this_context::queue_in_context(handle_); // wake main then prev
     }
 
     T await_resume() {
@@ -245,7 +245,7 @@ public:
     }
 
     void await_suspend(std::coroutine_handle<> prev_h) {
-        this_context::wake_in_context(prev_h);
+        this_context::queue_in_context(prev_h);
     }
 
     void await_resume() { }

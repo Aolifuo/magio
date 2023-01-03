@@ -17,10 +17,14 @@ inline void execute(Task&& task) {
     LocalContext->execute(std::move(task));
 }
 
+inline void dispatch(Task &&task) {
+    LocalContext->dispatch(std::move(task));
+}
+
 #ifdef MAGIO_USE_CORO
 template<typename T>
 inline void spawn(Coro<T> coro) {
-    wake_in_context(coro.handle());
+    queue_in_context(coro.handle());
 }
 
 template<typename T>
@@ -31,11 +35,15 @@ inline void spawn(Coro<T> coro, detail::UseCoro) {
 template<typename T>
 inline void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler) {
     coro.set_callback(std::move(handler));
-    wake_in_context(coro.handle());
+    queue_in_context(coro.handle());
 }
 
 inline void wake_in_context(std::coroutine_handle<> h) {
     LocalContext->wake_in_context(h);
+}
+
+inline void queue_in_context(std::coroutine_handle<> h) {
+    LocalContext->queue_in_context(h);
 }
 #endif
 
