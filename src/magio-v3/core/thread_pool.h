@@ -73,6 +73,7 @@ public:
 
 #ifdef MAGIO_USE_CORO
     template<typename Func, typename...Args>
+    [[nodiscard]]
     Coro<std::invoke_result_t<Func, Args...>> spawn_blocking(Func&& func, Args&&...args) {
         using ReturnType = std::invoke_result_t<Func, Args...>;
 
@@ -94,7 +95,7 @@ public:
                             return func(args...);
                         }, tuple));
                     }
-                    ctx->wake_in_context(h);
+                    ctx->queue_in_context(h);
                 });
             }
         );
