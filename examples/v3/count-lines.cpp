@@ -21,7 +21,7 @@ Coro<> count_lines_impl(string path, Mutex& co_m, Condition& cond, size_t& lines
             break;
         }
         string_view sv(buf, len);
-        for (size_t pos = 0; (pos = sv.find("\n", pos)) != string_view::npos;) {
+        for (size_t pos = 0; (pos = sv.find('\n', pos)) != string_view::npos;) {
             ++pos;
             ++lines;
         }
@@ -43,7 +43,7 @@ Coro<> count_lines(const char* dir_name) {
         count_down = 1;
         this_context::spawn(count_lines_impl(dir_name, co_m, cond, lines, count_down));
     } else {
-        for (auto entry : fs::recursive_directory_iterator(dir_name)) {
+        for (const auto& entry : fs::recursive_directory_iterator(dir_name)) {
             if (!entry.is_regular_file()) {
                 continue;
             }

@@ -37,9 +37,10 @@ Coro<> amain(ThreadPool& pool) {
     }
     
     auto bg = TimerClock::now();
+    // sort(vec.begin(), vec.end(), greater<>());
     co_await fork_join_sort(pool, vec.begin(), vec.end(), greater<>(), 3);
     auto dif = TimerClock::now() - bg;
-    M_INFO("{}", dif);
+    M_INFO("{}", chrono::duration_cast<chrono::milliseconds>(dif));
 
     co_return this_context::stop();
 }
