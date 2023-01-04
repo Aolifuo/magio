@@ -46,7 +46,7 @@ public:
     void execute(Task&& task) override;
 
     template<typename Cb, typename Func, typename...Args>
-    void async(Cb&& cb, Func&& func, Args...args) {
+    void async(Cb&& cb, Func&& func, Args&&...args) {
         auto ctx = LocalContext;
         execute([
             ctx,
@@ -69,6 +69,15 @@ public:
                 });
             }
         });
+    }
+
+    template<typename Cb, typename F, typename Class, typename...Args>
+    void async(Cb&& cb, F Class::* pfun, Class* obj, Args&&...args) {
+        async(
+            std::forward<Cb>(cb), 
+            [pfun, obj](auto&&...ts) { return (obj->*pfun)(ts...); }, 
+            std::forward<Args>(args)...
+        );
     }
 
 #ifdef MAGIO_USE_CORO
