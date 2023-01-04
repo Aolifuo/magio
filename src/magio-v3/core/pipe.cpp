@@ -37,7 +37,7 @@ Coro<size_t> ReadablePipe::read(char *buf, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
     IoContext ioc{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf = {buf, len},
+        .buf = io_buf(buf, len),
         .ptr = &rhandle,
         .cb = completion_callback
     };
@@ -56,7 +56,7 @@ void ReadablePipe::read(char *buf, size_t len, std::function<void (std::error_co
     using Cb = std::function<void (std::error_code, size_t)>;
     auto ioc = new IoContext{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf = {buf, len},
+        .buf = io_buf(buf, len),
         .ptr = new Cb(std::move(cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
@@ -72,11 +72,11 @@ void ReadablePipe::read(char *buf, size_t len, std::function<void (std::error_co
 void ReadablePipe::close() {
     if (handle_ != (Handle)-1) {
 #ifdef _WIN32
-
+        ::CloseHandle(handle_);
 #elif defined (__linux__)
         ::close(handle_);
 #endif
-        handle_ = -1;
+        handle_ = (Handle)-1;
     }
 }
 
@@ -105,7 +105,7 @@ Coro<size_t> WritablePipe::write(const char *msg, size_t len, std::error_code &e
     ResumeHandle rhandle;
     IoContext ioc{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf = {(char*)msg, len},
+        .buf = io_buf((char*)msg, len),
         .ptr = &rhandle,
         .cb = completion_callback
     };
@@ -124,7 +124,7 @@ void WritablePipe::write(const char *msg, size_t len, std::function<void (std::e
     using Cb = std::function<void (std::error_code, size_t)>;
     auto ioc = new IoContext{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf = {(char*)msg, len},
+        .buf = io_buf((char*)msg, len),
         .ptr = new Cb(std::move(cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
@@ -140,17 +140,32 @@ void WritablePipe::write(const char *msg, size_t len, std::function<void (std::e
 void WritablePipe::close() {
     if (handle_ != (Handle)-1) {
 #ifdef _WIN32
-
+        ::CloseHandle(handle_);
 #elif defined (__linux__)
         ::close(handle_);
 #endif
-        handle_ = -1;
+        handle_ = (Handle)-1;
     }
 }
 
 std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec) {
 #ifdef _WIN32
+    HANDLE read_h;
+    HANDLE write_h;
+    
+    // ?
+    BOOL status = ::CreatePipe(
+        &read_h, 
+        &write_h, 
+        NULL, 
+        0
+    );
 
+    if (!status) {
+        ec = SYSTEM_ERROR_CODE;
+    }
+
+    return {ReadablePipe(read_h), WritablePipe(write_h)};
 #elif defined (__linux__)
     int pipefd[2];
     if (-1 == ::pipe(pipefd)) {

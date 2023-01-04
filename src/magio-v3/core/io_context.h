@@ -36,26 +36,19 @@ struct IoContext {
     OVERLAPPED overlapped;
     Operation op;
     SOCKET handle;
-    union {
-        sockaddr_in remote_addr;
-        sockaddr_in6 remote_addr6;
-    };
-    socklen_t addr_len;
     WSABUF buf;
-    void* ptr;
-    void(*cb)(std::error_code, IoContext*, void*);
 #elif defined(__linux__)
     Operation op;
     int handle;
+    IoBuf buf;
+#endif
     union {
         sockaddr_in remote_addr;
         sockaddr_in6 remote_addr6;
     };
     socklen_t addr_len;
-    IoBuf buf;
     void* ptr;
     void(*cb)(std::error_code, IoContext*, void*);
-#endif
 };
 
 #ifdef MAGIO_USE_CORO
@@ -70,7 +63,13 @@ inline void completion_callback(std::error_code ec, IoContext* ioc, void* ptr) {
     h->handle.resume();
 }
 
-#ifdef __linux__
+#ifdef _WIN32
+
+inline WSABUF io_buf(char* buf, size_t len) {
+    return {(ULONG)len, buf};
+}
+
+#elif defined (__linux__)
 struct ResumeWithMsg {
     std::error_code ec;
     msghdr msg;
@@ -82,7 +81,13 @@ inline void completion_callback_with_msg(std::error_code ec, IoContext* ioc, voi
     h->ec = ec;
     h->handle.resume();
 }
+
+inline IoBuf(char* buf, size_t len) {
+    return {buf, len};
+}
+
 #endif
+
 #endif
 
 }

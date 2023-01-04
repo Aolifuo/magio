@@ -21,7 +21,7 @@ struct FindNonVoidPlace<std::index_sequence<Idx...>, N, First, Ts...>
 
 template<size_t...Idx, size_t N, typename...Ts>
 struct FindNonVoidPlace<std::index_sequence<Idx...>, N, void, Ts...>
-    : FindNonVoidPlace<std::index_sequence<Idx..., std::numeric_limits<size_t>::max()>, N, Ts...>
+    : FindNonVoidPlace<std::index_sequence<Idx..., (size_t)-1>, N, Ts...>
 { };
 
 template<size_t...Idx, size_t N>

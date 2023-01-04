@@ -48,7 +48,7 @@ inline Coro<RemoveVoidTuple<Ts...>> join(Coro<Ts>...coros) {
                     *count = 0;
                     h.resume();
                 } else {
-                    if constexpr (Idx != std::numeric_limits<size_t>::max()) {
+                    if constexpr (Idx != (size_t)-1) {
                         std::get<Idx>(result) = std::move(ret);  
                     }
                     
@@ -73,7 +73,7 @@ inline Coro<RemoveVoidTuple<Ts...>> series(Coro<Ts>...coros) {
 
     co_await [&]<size_t...Idx>(std::index_sequence<Idx...>) -> Coro<> {
         (co_await [&]() mutable -> Coro<> {
-            if constexpr (Idx != std::numeric_limits<size_t>::max()) {
+            if constexpr (Idx != (size_t)-1) {
                 std::get<Idx>(result) = co_await coros;
             } else {
                 co_await coros;

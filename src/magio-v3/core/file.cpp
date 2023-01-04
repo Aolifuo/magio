@@ -183,7 +183,7 @@ Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std
     ResumeHandle rhandle;
     IoContext ioc{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf = {buf, len},
+        .buf = io_buf(buf, len),
         .ptr = &rhandle,
         .cb = completion_callback
     };
@@ -201,7 +201,7 @@ Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t l
     ResumeHandle rhandle;
     IoContext ioc{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf = {(char*)msg, len},
+        .buf = io_buf((char*)msg, len),
         .ptr = &rhandle,
         .cb = completion_callback
     };
@@ -228,7 +228,7 @@ void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::functi
     using Cb = std::function<void (std::error_code, size_t)>;
     auto ioc = new IoContext{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf= {buf, len},
+        .buf= io_buf(buf, len),
         .ptr = new Cb(std::move(completion_cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
@@ -245,7 +245,7 @@ void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std:
     using Cb = std::function<void (std::error_code, size_t)>;
     auto ioc = new IoContext{
         .handle = decltype(IoContext::handle)(handle_),
-        .buf = {(char*)msg, len},
+        .buf = io_buf((char*)msg, len),
         .ptr = new Cb(std::move(completion_cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;

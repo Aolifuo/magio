@@ -47,7 +47,7 @@ public:
 private:
     ReadablePipe(Handle);
 
-    Handle handle_ = -1;
+    Handle handle_ = (Handle)-1;
 };
 
 class WritablePipe: Noncopyable {
@@ -85,7 +85,7 @@ public:
 private:
     WritablePipe(Handle);
 
-    Handle handle_ = -1;
+    Handle handle_ = (Handle)-1;
 };
 
 std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec);

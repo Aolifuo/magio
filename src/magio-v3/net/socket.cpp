@@ -171,7 +171,7 @@ Coro<size_t> Socket::receive(char* buf, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
     IoContext ioc{
         .handle = handle_,
-        .buf = {buf, len},
+        .buf = io_buf(buf, len),
         .ptr = &rhandle,
         .cb = completion_callback
     };
@@ -190,7 +190,7 @@ Coro<size_t> Socket::send(const char* msg, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
     IoContext ioc{
         .handle = handle_,
-        .buf = {(char*)msg, len},
+        .buf = io_buf((char*)msg, len),
         .ptr = &rhandle,
         .cb = completion_callback
     };
@@ -325,7 +325,7 @@ void Socket::receive(char *buf, size_t len, std::function<void (std::error_code,
     check_relation();
     auto ioc = new IoContext{
         .handle = handle_,
-        .buf = {buf, len},
+        .buf = io_buf(buf, len),
         .ptr = new Cb(std::move(completion_cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
@@ -343,7 +343,7 @@ void Socket::send(const char *msg, size_t len, std::function<void (std::error_co
     check_relation();
     auto ioc = new IoContext{
         .handle = handle_,
-        .buf = {(char*)msg, len},
+        .buf = io_buf((char*)msg, len),
         .ptr = new Cb(std::move(completion_cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;

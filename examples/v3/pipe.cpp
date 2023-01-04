@@ -52,6 +52,9 @@ int main() {
     MultithreadedContexts ctxs(2, 2);
     error_code ec;
     tie(read_end, write_end) = make_pipe(ec);
+    if (ec) {
+        M_FATAL("failed to make pipe {}", ec.value());
+    }
     ctxs.get(0).spawn(console_read(write_end));
     ctxs.get(1).spawn(console_write(read_end));
     ctxs.start_all();
