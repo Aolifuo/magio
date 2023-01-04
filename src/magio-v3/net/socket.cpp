@@ -50,7 +50,7 @@ Socket::Handle open_socket(Ip ip, Transport tp, std::error_code& ec) {
 #endif
 
     if (handle == -1) {
-        ec = SOCKET_ERROR_CODE;
+        ec = SYSTEM_ERROR_CODE;
     }
 
     return handle;
@@ -118,7 +118,7 @@ void Socket::bind(const EndPoint& ep, std::error_code &ec) {
         (const sockaddr*)address.addr_in_,
         address.is_v4() ? sizeof(sockaddr_in) : sizeof(sockaddr_in6)
     )) {
-        ec = SOCKET_ERROR_CODE;
+        ec = SYSTEM_ERROR_CODE;
         return;
     }
 
@@ -128,7 +128,7 @@ void Socket::bind(const EndPoint& ep, std::error_code &ec) {
 void Socket::set_option(int op, SmallBytes bytes, std::error_code& ec) {
     int r = ::setsockopt(handle_, SOL_SOCKET, op, (const char*)bytes.data(), bytes.size());
     if (-1 == r) {
-        ec = SOCKET_ERROR_CODE;
+        ec = SYSTEM_ERROR_CODE;
     }
 }
 
@@ -137,7 +137,7 @@ SmallBytes Socket::get_option(int op, std::error_code &ec) {
     socklen_t len = sizeof(buf);
     int r = ::getsockopt(handle_, SOL_SOCKET, op, buf, &len);
     if (-1 == r) {
-        ec = SOCKET_ERROR_CODE;
+        ec = SYSTEM_ERROR_CODE;
         return {};
     }
 
@@ -169,12 +169,12 @@ Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
 Coro<size_t> Socket::receive(char* buf, size_t len, std::error_code &ec) {
     check_relation();
     ResumeHandle rhandle;
-    IoContext ioc;
-    ioc.handle = handle_;
-    ioc.buf.buf = buf;
-    ioc.buf.len = len;
-    ioc.ptr = &rhandle;
-    ioc.cb = completion_callback;
+    IoContext ioc{
+        .handle = handle_,
+        .buf = {buf, len},
+        .ptr = &rhandle,
+        .cb = completion_callback
+    };
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
@@ -182,19 +182,18 @@ Coro<size_t> Socket::receive(char* buf, size_t len, std::error_code &ec) {
     });
 
     ec = rhandle.ec;
-
     co_return ioc.buf.len;
 }
 
 Coro<size_t> Socket::send(const char* msg, size_t len, std::error_code &ec) {
     check_relation();
     ResumeHandle rhandle;
-    IoContext ioc;
-    ioc.handle = handle_;
-    ioc.buf.buf = (char*)msg;
-    ioc.buf.len = len;
-    ioc.ptr = &rhandle;
-    ioc.cb = completion_callback;
+    IoContext ioc{
+        .handle = handle_,
+        .buf = {(char*)msg, len},
+        .ptr = &rhandle,
+        .cb = completion_callback
+    };
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
@@ -202,7 +201,6 @@ Coro<size_t> Socket::send(const char* msg, size_t len, std::error_code &ec) {
     });
 
     ec = rhandle.ec;
-
     co_return ioc.buf.len;
 }
 
@@ -237,7 +235,6 @@ Coro<size_t> Socket::send_to(const char* msg, size_t len, const EndPoint& ep, st
     });
 
     ec = rhandle.ec;
-
     co_return ioc.buf.len;
 }
 
@@ -326,34 +323,36 @@ void Socket::connect(const EndPoint &ep, std::function<void (std::error_code)> &
 void Socket::receive(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
     check_relation();
-    auto ioc = new IoContext;
-    ioc->handle = handle_;
-    ioc->buf.buf = buf;
-    ioc->buf.len = len;
-    ioc->ptr = new Cb(std::move(completion_cb));
-    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-        auto cb = (Cb*)ptr;
-        (*cb)(ec, ioc->buf.len);
-        delete ioc;
-        delete cb;
+    auto ioc = new IoContext{
+        .handle = handle_,
+        .buf = {buf, len},
+        .ptr = new Cb(std::move(completion_cb)),
+        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            (*cb)(ec, ioc->buf.len);
+            delete ioc;
+            delete cb;
+        }
     };
+
     this_context::get_service().receive(*ioc);
 }
 
 void Socket::send(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
     check_relation();
-    auto ioc = new IoContext;
-    ioc->handle = handle_;
-    ioc->buf.buf = (char*)msg;
-    ioc->buf.len = len;
-    ioc->ptr = new Cb(std::move(completion_cb));
-    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-        auto cb = (Cb*)ptr;
-        (*cb)(ec, ioc->buf.len);
-        delete ioc;
-        delete cb;
+    auto ioc = new IoContext{
+        .handle = handle_,
+        .buf = {(char*)msg, len},
+        .ptr = new Cb(std::move(completion_cb)),
+        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            (*cb)(ec, ioc->buf.len);
+            delete ioc;
+            delete cb;
+        }
     };
+
     this_context::get_service().send(*ioc);
 }
 

@@ -40,7 +40,7 @@ void Acceptor::bind_and_listen(const EndPoint &ep, std::error_code& ec) {
 
     // listen
     if (-1 == ::listen(listener_.handle(), SOMAXCONN)) {
-        ec = SOCKET_ERROR_CODE;
+        ec = SYSTEM_ERROR_CODE;
     }
 }
 

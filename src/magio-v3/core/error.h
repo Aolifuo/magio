@@ -22,9 +22,9 @@ public:
 std::error_code make_socket_error_code(int code);
 
 #ifdef _WIN32
-#define SOCKET_ERROR_CODE make_socket_error_code(::GetLastError())
+#define SYSTEM_ERROR_CODE make_socket_error_code(::GetLastError())
 #elif defined(__linux__)
-#define SOCKET_ERROR_CODE make_socket_error_code(errno)
+#define SYSTEM_ERROR_CODE make_socket_error_code(errno)
 #endif
 
 }

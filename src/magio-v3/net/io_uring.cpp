@@ -23,7 +23,7 @@ IoUring::IoUring(unsigned entries) {
     p_io_uring_ = new io_uring;
     if (0 > ::io_uring_queue_init_params(entries, p_io_uring_, &params)) {
         delete p_io_uring_;
-        M_FATAL("failed to create io uring: {}", SOCKET_ERROR_CODE.message());
+        M_FATAL("failed to create io uring: {}", SYSTEM_ERROR_CODE.message());
     }
 
     wake_up_ctx_ = new IoContext;

@@ -51,7 +51,7 @@ IoCompletionPort::IoCompletionPort() {
         NULL, 
         NULL)
     ) {
-        M_FATAL("Failed to get accept func: {}", SOCKET_ERROR_CODE.value());
+        M_FATAL("Failed to get accept func: {}", SYSTEM_ERROR_CODE.value());
     }
     
     GUID GUidConnectEx = WSAID_CONNECTEX;
@@ -66,7 +66,7 @@ IoCompletionPort::IoCompletionPort() {
         NULL, 
         NULL)
     ) {
-        M_FATAL("Failed to get connect func: {}", SOCKET_ERROR_CODE.value());
+        M_FATAL("Failed to get connect func: {}", SYSTEM_ERROR_CODE.value());
     }
 
     GUID GuidGetAcceptExSockAddrs = WSAID_GETACCEPTEXSOCKADDRS;
@@ -81,7 +81,7 @@ IoCompletionPort::IoCompletionPort() {
         NULL, 
         NULL)
     ) {
-        M_FATAL("Failed to get sock addr func: {}", SOCKET_ERROR_CODE.value());
+        M_FATAL("Failed to get sock addr func: {}", SYSTEM_ERROR_CODE.value());
     }
 
     HANDLE handle = ::CreateIoCompletionPort(
@@ -92,7 +92,7 @@ IoCompletionPort::IoCompletionPort() {
     );
 
     if (!handle) {
-        M_FATAL("Failed to create iocp handle: {}", SOCKET_ERROR_CODE.value());
+        M_FATAL("Failed to create iocp handle: {}", SYSTEM_ERROR_CODE.value());
     }
 
     data_ = new Data{
@@ -126,7 +126,7 @@ void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
     );
     
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -144,7 +144,7 @@ void IoCompletionPort::write_file(IoContext &ioc, size_t offset) {
     );
     
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -163,7 +163,7 @@ void IoCompletionPort::connect(IoContext& ioc) {
     );
 
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -193,7 +193,7 @@ void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
 
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
         detail::close_socket(sock_handle);
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
         return;
     }
 }
@@ -214,7 +214,7 @@ void IoCompletionPort::send(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -234,7 +234,7 @@ void IoCompletionPort::receive(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -256,7 +256,7 @@ void IoCompletionPort::send_to(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -278,7 +278,7 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SOCKET_ERROR_CODE, &ioc, ioc.ptr);
+        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
     }
 }
 
@@ -304,14 +304,14 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
             if (WAIT_TIMEOUT == ::GetLastError()) {
                 return 0;
             }
-            inner_ec = SOCKET_ERROR_CODE;
+            inner_ec = SYSTEM_ERROR_CODE;
         }
         
         if (ULONG_MAX == bytes_transferred) {
             // be waked up
             return 2;
         } else if (!ioc) {
-            ec = SOCKET_ERROR_CODE;
+            ec = SYSTEM_ERROR_CODE;
             return -1;
         }       
 
@@ -378,7 +378,7 @@ void IoCompletionPort::relate(void* sock_handle, std::error_code& ec) {
     );
 
     if (!handle) {
-        ec = SOCKET_ERROR_CODE;
+        ec = SYSTEM_ERROR_CODE;
     }
 }
 

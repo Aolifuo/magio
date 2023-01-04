@@ -20,7 +20,7 @@ IpAddress make_address(std::string_view str, std::error_code& ec) {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         if (-1 == ::inet_pton(AF_INET, str.data(), &addr.sin_addr)) {
-            ec = SOCKET_ERROR_CODE;
+            ec = SYSTEM_ERROR_CODE;
             return {};
         }
         std::memcpy(address.addr_in_, &addr, sizeof(addr));
@@ -33,7 +33,7 @@ IpAddress make_address(std::string_view str, std::error_code& ec) {
         addr.sin6_family = AF_INET6;
         addr.sin6_scope_id = 0;
         if (-1 == ::inet_pton(AF_INET6, str.data(), &addr.sin6_addr)) {
-            ec = SOCKET_ERROR_CODE;
+            ec = SYSTEM_ERROR_CODE;
             return {};
         }
         std::memcpy(address.addr_in_, &addr, sizeof(addr));
