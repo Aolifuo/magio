@@ -23,7 +23,6 @@ CoroContext::CoroContext(size_t entries)
     }
 
     p_io_service_ = IOSERVICE(entries);
-
     LocalContext = this;
 }
 

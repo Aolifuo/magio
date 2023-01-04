@@ -181,12 +181,12 @@ void RandomAccessFile::sync_data() {
 #ifdef MAGIO_USE_CORO
 Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
-    IoContext ioc;
-    ioc.handle = decltype(IoContext::handle)(handle_);
-    ioc.buf.buf = buf;
-    ioc.buf.len = len;
-    ioc.ptr = &rhandle;
-    ioc.cb = completion_callback;
+    IoContext ioc{
+        .handle = decltype(IoContext::handle)(handle_),
+        .buf = {buf, len},
+        .ptr = &rhandle,
+        .cb = completion_callback
+    };
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rhandle.handle = h;
@@ -194,18 +194,17 @@ Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std
     });
 
     ec = rhandle.ec;
-
     co_return ioc.buf.len;
 }
 
 Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::error_code &ec) {
     ResumeHandle rhandle;
-    IoContext ioc;
-    ioc.handle = decltype(IoContext::handle)(handle_);
-    ioc.buf.buf = (char*)msg;
-    ioc.buf.len = len;
-    ioc.ptr = &rhandle;
-    ioc.cb = completion_callback;
+    IoContext ioc{
+        .handle = decltype(IoContext::handle)(handle_),
+        .buf = {(char*)msg, len},
+        .ptr = &rhandle,
+        .cb = completion_callback
+    };
 
 #ifdef _WIN32
     if (enable_app_) {
@@ -221,40 +220,41 @@ Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t l
     });
 
     ec = rhandle.ec;
-
     co_return ioc.buf.len;
 }
 #endif
 
 void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
-    auto ioc = new IoContext;
-    ioc->handle = decltype(IoContext::handle)(handle_);
-    ioc->buf.buf = buf;
-    ioc->buf.len = len;
-    ioc->ptr = new Cb(std::move(completion_cb));
-    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-        auto cb = (Cb*)ptr;
-        (*cb)(ec, ioc->buf.len);
-        delete ioc;
-        delete cb;
+    auto ioc = new IoContext{
+        .handle = decltype(IoContext::handle)(handle_),
+        .buf= {buf, len},
+        .ptr = new Cb(std::move(completion_cb)),
+        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            (*cb)(ec, ioc->buf.len);
+            delete ioc;
+            delete cb;
+        }
     };
+
     this_context::get_service().read_file(*ioc, offset);
 }
 
 void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
-    auto ioc = new IoContext;
-    ioc->handle = decltype(IoContext::handle)(handle_);
-    ioc->buf.buf = (char*)msg;
-    ioc->buf.len = len;
-    ioc->ptr = new Cb(std::move(completion_cb));
-    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-        auto cb = (Cb*)ptr;
-        (*cb)(ec, ioc->buf.len);
-        delete ioc;
-        delete cb;
+    auto ioc = new IoContext{
+        .handle = decltype(IoContext::handle)(handle_),
+        .buf = {(char*)msg, len},
+        .ptr = new Cb(std::move(completion_cb)),
+        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            (*cb)(ec, ioc->buf.len);
+            delete ioc;
+            delete cb;
+        }
     };
+
 #ifdef _WIN32
     if (enable_app_) {
         LARGE_INTEGER large_int;

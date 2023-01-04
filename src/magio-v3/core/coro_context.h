@@ -1,7 +1,6 @@
 #ifndef MAGIO_CORE_CO_CONTEXT_H_
 #define MAGIO_CORE_CO_CONTEXT_H_
 
-#include <deque>
 #include <mutex>
 
 #include "magio-v3/core/coro.h"
@@ -40,8 +39,8 @@ public:
     void wake_in_context(std::coroutine_handle<>);
 
     void queue_in_context(std::coroutine_handle<>);
-#endif
 
+#endif
     template<typename Rep, typename Per>
     TimerHandle expires_after(const std::chrono::duration<Rep, Per>& dur, TimerTask&& task) {
         return timer_queue_.push(TimerClock::now() + dur, std::move(task));

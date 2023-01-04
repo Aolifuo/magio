@@ -13,6 +13,8 @@ class Coro;
 
 class CoroContext;
 
+class LockGuard;
+
 class Mutex: Noncopyable {
     friend class LockGuard;
     friend class Condition;
