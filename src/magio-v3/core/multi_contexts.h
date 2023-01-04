@@ -35,7 +35,8 @@ private:
     size_t every_entries_ = 0;
     size_t next_idx_ = 0;
     size_t thread_id_ = 0;
-    WaitGroup wg_;
+    WaitGroup build_ctx_wg_;
+    WaitGroup start_wg_;
     std::vector<std::unique_ptr<CoroContext>> contexts_;
     std::vector<std::thread> threads_;
 };
