@@ -279,23 +279,26 @@ File::File(RandomAccessFile file)
 { }
 
 File::File(const char *path, int mode, int x)
-    : file_(RandomAccessFile(path, (RandomAccessFile::Openmode)mode, x)) 
+    : file_(path, (RandomAccessFile::Openmode)mode, x) 
 { }
 
 File::File(File&& other) noexcept
     : file_(std::move(other.file_))
     , read_offset_(other.read_offset_)
+    , write_offset_(other.write_offset_)
 { }
 
 File& File::operator=(File&& other) noexcept {
     file_ = std::move(other.file_);
     read_offset_ = other.read_offset_;
+    write_offset_ = other.write_offset_;
     return *this;
 }
 
 void File::open(const char *path, int mode, int x) {
     file_.open(path, mode, x);
     read_offset_ = 0;
+    write_offset_ = 0;
 }
 
 void File::close() {
@@ -310,7 +313,8 @@ Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
 }
 
 Coro<size_t> File::write(const char *buf, size_t len, std::error_code &ec) {
-    size_t wl = co_await file_.write_at(0, buf, len, ec);
+    size_t wl = co_await file_.write_at(write_offset_, buf, len, ec);
+    write_offset_ += wl;
     co_return wl;
 }
 #endif
@@ -323,7 +327,8 @@ void File::read(char *buf, size_t len, std::function<void (std::error_code, size
 }
 
 void File::write(const char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    file_.write_at(0, buf, len, [cb = std::move(completion_cb)](std::error_code ec, size_t len) {
+    file_.write_at(write_offset_, buf, len, [cb = std::move(completion_cb), this](std::error_code ec, size_t len) {
+        write_offset_ += len;
         cb(ec, len);
     });
 }

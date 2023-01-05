@@ -11,6 +11,8 @@ template<typename>
 class Coro;
 
 class RandomAccessFile: Noncopyable {
+    friend class File;
+
 public:
     using Handle =
 #ifdef  _WIN32
@@ -120,6 +122,7 @@ private:
 
     RandomAccessFile file_;
     size_t read_offset_ = 0;
+    size_t write_offset_ = 0;
 };
 
 }
