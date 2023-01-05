@@ -122,7 +122,9 @@ void Socket::bind(const EndPoint& ep, std::error_code &ec) {
         return;
     }
 
+#ifdef _WIN32
     this_context::get_service().relate((void*)handle_, ec);
+#endif
 }
 
 void Socket::set_option(int op, SmallBytes bytes, std::error_code& ec) {
@@ -367,7 +369,7 @@ void Socket::receive_from(char *msg, size_t len, std::function<void (std::error_
 void Socket::cancel() {
     if (-1 != handle_) {
 #ifdef _WIN32
-        ::CancelIo((void*)handle_);
+        ::CancelIoEx((void*)handle_, NULL);
 #elif defined(__linux__)
 
 #endif        
@@ -395,11 +397,13 @@ void Socket::reset() {
 }
 
 void Socket::check_relation() {
+#ifdef _WIN32
     if (handle_ != -1 && !is_related_) {
         std::error_code ec;
         this_context::get_service().relate((void*)handle_, ec);
         is_related_ = true;
     }
+#endif
 }
 
 }

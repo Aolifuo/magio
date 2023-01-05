@@ -82,7 +82,7 @@ inline void completion_callback_with_msg(std::error_code ec, IoContext* ioc, voi
     h->handle.resume();
 }
 
-inline IoBuf(char* buf, size_t len) {
+inline IoBuf io_buf(char* buf, size_t len) {
     return {buf, len};
 }
 
