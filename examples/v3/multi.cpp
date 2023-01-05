@@ -35,7 +35,7 @@ Coro<> server(MultithreadedContexts& ctxs) {
         M_FATAL("{}", ec.message());
     }
 
-    for (; ;) {
+    for (; ; ec.clear()) {
         auto [socket, peer] = co_await acceptor.accept(ec);
         if (ec) {
             M_ERROR("{}", ec.message());
