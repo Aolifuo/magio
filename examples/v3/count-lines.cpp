@@ -26,7 +26,7 @@ private:
 
         for (auto& entry : fs::recursive_directory_iterator(dir_name_)) {
             if (!entry.is_regular_file()) {
-                break;
+                continue;
             }
 
             count_down_++;
@@ -42,7 +42,6 @@ private:
 
     Coro<> count_one_file(string path) {
         char buf[1024];
-        std::error_code ec;
         File file(path.c_str(), File::ReadOnly);
         if (!file) {
             M_ERROR("cannot open {}", path);
@@ -50,6 +49,7 @@ private:
         }
 
         for (; ;) {
+            error_code ec;
             size_t len = co_await file.read(buf, sizeof(buf), ec);
             if (ec || len == 0) {
                 break;
@@ -75,9 +75,13 @@ private:
     size_t lines_ = 0;
 };
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        M_FATAL("{}", "please input one dir name");
+    }
+
     CoroContext ctx(128);
-    CountLines cl(R"(/path/to/dir)");
+    CountLines cl(argv[1]);
     cl.start();
     ctx.start();
 }

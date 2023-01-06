@@ -22,20 +22,20 @@ Coro<> amain() {
     for (; ; ec.clear()) {
         auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf), ec);
         if (ec) {
-            M_ERROR("{}", ec.message());
+            M_ERROR("recv error: {}", ec.message());
             continue;
         }
-        M_INFO("from [{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
-        co_await socket.send_to("Hello", 5, peer, ec);
+        M_INFO("[{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
+        co_await socket.send_to(buf, rd, peer, ec);
         if (ec) {
-            M_ERROR("{}", ec.message());
+            M_ERROR("send error: {}", ec.message());
             continue;
         }
     }
 }
 
 int main() {
-    CoroContext ctx(100);
+    CoroContext ctx(128);
     this_context::spawn(amain());
     ctx.start();    
 }

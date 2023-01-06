@@ -15,9 +15,9 @@ public:
 
 private:
     void receive() {
-        socket_.receive(buf_, sizeof(buf_), [p = shared_from_this()](std::error_code ec, size_t len) {
+        socket_.receive(buf_, sizeof(buf_), [p = shared_from_this()](error_code ec, size_t len) {
             if (ec || len == 0) {
-                M_ERROR("socket receive error: {}", len == 0 ? "EOF" : to_string(ec.value()));
+                M_ERROR("receive error: {}", ec ? ec.message() : "EOF");
                 return;
             }
             M_INFO("{}", string_view(p->buf_, len));
@@ -26,9 +26,9 @@ private:
     }
 
     void send(string_view msg) {
-        socket_.send(msg.data(), msg.length(), [p = shared_from_this()](std::error_code ec, size_t len) {
+        socket_.send(msg.data(), msg.length(), [p = shared_from_this()](error_code ec, size_t len) {
             if (ec) {
-                M_ERROR("socket send error: {}", ec.value());
+                M_ERROR("send error: {}", ec.value());
                 return;
             }
             p->receive();
@@ -42,28 +42,28 @@ private:
 class TcpServer {
 public:
     void start(const char* ip, net::PortType port) {
-        std::error_code ec;
+        error_code ec;
         net::EndPoint ep(net::make_address(ip, ec), port);
         if (ec) {
-            M_FATAL("cannot make address: {}", ec.value());
+            M_FATAL("cannot make address: {}", ec.message());
         }
         acceptor_.bind_and_listen(ep, ec);
         if (ec) {
-            M_FATAL("cannot bind and listen: {}", ec.value());
+            M_FATAL("cannot bind and listen: {}", ec.message());
         }
         accept();
     }
 
 private:
     void accept() {
-        acceptor_.accept([&](std::error_code ec, net::Socket socket, net::EndPoint ep) {
+        acceptor_.accept([&](error_code ec, net::Socket socket, net::EndPoint ep) {
             if (ec) {
-                M_ERROR("accept error {}", ec.value());
-                return;
+                M_ERROR("accept error {}", ec.message());
+            } else {
+                M_INFO("accept [{}]:{}", ep.address().to_string(), ep.port());
+                auto conn = make_shared<TcpConnection>(std::move(socket));
+                conn->start();
             }
-            M_INFO("[{}]:{}", ep.address().to_string(), ep.port());
-            auto conn = make_shared<TcpConnection>(std::move(socket));
-            conn->start();
             accept();
         });
     }

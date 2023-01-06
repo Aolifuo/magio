@@ -5,14 +5,17 @@ using namespace magio;
 using namespace chrono_literals;
 
 Coro<> copyfile() {
-    std::error_code ec;
     File from("from", File::ReadOnly);
     File to("to", File::WriteOnly | File::Create | File::Truncate);
+    if (!from || !to) {
+        M_FATAL("cannot open file {} or {}", "from", "to");
+    }
 
-    char buf[1024]{};
+    char buf[1024];
     for (; ;) {
+        error_code ec;
         size_t rd = co_await from.read(buf, sizeof(buf), ec);
-        if (rd == 0) {
+        if (ec || rd == 0) {
             break;
         }
         co_await to.write(buf, rd, ec);
@@ -21,7 +24,7 @@ Coro<> copyfile() {
 }
 
 int main() {
-    CoroContext ctx(100);
+    CoroContext ctx(128);
     this_context::spawn(copyfile());
     ctx.start();
 }

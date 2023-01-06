@@ -19,9 +19,9 @@ void stop() {
 
 Coro<> console_read(WritablePipe& write_end) {
     string line;
-    error_code ec;
     
     for (; ;) {
+        error_code ec;
         if (!getline(cin, line) || line.empty()) {
             co_return stop();
         }
@@ -36,9 +36,9 @@ Coro<> console_read(WritablePipe& write_end) {
 
 Coro<> console_write(ReadablePipe& read_end) {
     char buf[1024];
-    error_code ec;
     
     for (; ;) {
+        error_code ec;
         size_t len = co_await read_end.read(buf, sizeof(buf), ec);
         if (ec) {
             M_ERROR("read_end error: {}", ec.value());
