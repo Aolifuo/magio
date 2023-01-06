@@ -47,6 +47,7 @@ private:
 
     IoContext* wake_up_ctx_;
     io_uring_cqe* cqes_[kCQEs];
+    size_t io_num_ = 0;
     io_uring* p_io_uring_ = nullptr;
 };
 

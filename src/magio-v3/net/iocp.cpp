@@ -19,6 +19,8 @@ struct IoCompletionPort::Data {
     LPFN_ACCEPTEX accept;
     LPFN_CONNECTEX connect;
     LPFN_GETACCEPTEXSOCKADDRS get_sock_addr;
+
+    size_t io_num = 0;
 };
 
 IoCompletionPort::IoCompletionPort() {
@@ -113,6 +115,7 @@ IoCompletionPort::~IoCompletionPort() {
 }
 
 void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::ReadFile;
     ioc.overlapped.Offset = offset;
@@ -131,6 +134,7 @@ void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
 }
 
 void IoCompletionPort::write_file(IoContext &ioc, size_t offset) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::WriteFile;
     ioc.overlapped.Offset = offset;
@@ -149,6 +153,7 @@ void IoCompletionPort::write_file(IoContext &ioc, size_t offset) {
 }
 
 void IoCompletionPort::connect(IoContext& ioc) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::Connect;
 
@@ -168,6 +173,7 @@ void IoCompletionPort::connect(IoContext& ioc) {
 }
 
 void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::Accept;
 
@@ -199,6 +205,7 @@ void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
 }
 
 void IoCompletionPort::send(IoContext &ioc) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::Send;
 
@@ -219,6 +226,7 @@ void IoCompletionPort::send(IoContext &ioc) {
 }
 
 void IoCompletionPort::receive(IoContext &ioc) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::Receive;
 
@@ -239,6 +247,7 @@ void IoCompletionPort::receive(IoContext &ioc) {
 }
 
 void IoCompletionPort::send_to(IoContext &ioc) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::Send;
 
@@ -261,6 +270,7 @@ void IoCompletionPort::send_to(IoContext &ioc) {
 }
 
 void IoCompletionPort::receive_from(IoContext &ioc) {
+    ++data_->io_num;
     ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
     ioc.op = Operation::Receive;
 
@@ -284,6 +294,10 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
 
 // invoke all
 int IoCompletionPort::poll(bool block, std::error_code &ec) {
+    if (!block && data_->io_num == 0) {
+        return 0;
+    }
+
     ULONG wait_time = block ? ULONG_MAX : 0;
     for (int i = 0; i < 1024; ++i) {
         std::error_code inner_ec;
@@ -321,15 +335,18 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
         }
             break;
         case Operation::ReadFile: {
+            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;
         case Operation::WriteFile: {
+            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;
         case
         Operation::Accept: {
+            --data_->io_num;
             LPSOCKADDR local_addr_ptr;
             LPSOCKADDR remote_addr_ptr;
             int local_addr_len = 0;
@@ -351,13 +368,16 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
         }
             break;
         case Operation::Connect: {
+            --data_->io_num;
         }
             break;
         case Operation::Send: {
+            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;
         case Operation::Receive: {
+            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;

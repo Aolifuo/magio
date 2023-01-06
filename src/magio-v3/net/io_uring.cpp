@@ -52,6 +52,7 @@ IoUring::~IoUring() {
 }
 
 void IoUring::read_file(IoContext &ioc, size_t offset) {
+    ++io_num_;
     ioc.op = Operation::ReadFile;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_read(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
@@ -59,6 +60,7 @@ void IoUring::read_file(IoContext &ioc, size_t offset) {
 }
 
 void IoUring::write_file(IoContext &ioc, size_t offset) {
+    ++io_num_;
     ioc.op = Operation::WriteFile;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_write(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
@@ -66,6 +68,7 @@ void IoUring::write_file(IoContext &ioc, size_t offset) {
 }
 
 void IoUring::connect(IoContext &ioc) {
+    ++io_num_;
     ioc.op = Operation::Connect;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_connect(
@@ -75,6 +78,7 @@ void IoUring::connect(IoContext &ioc) {
 }
 
 void IoUring::accept(Socket &listener, IoContext &ioc) {
+    ++io_num_;
     ioc.op = Operation::Accept;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_accept(
@@ -85,6 +89,7 @@ void IoUring::accept(Socket &listener, IoContext &ioc) {
 }
 
 void IoUring::send(IoContext &ioc) {
+    ++io_num_;
     ioc.op = Operation::Send;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_send(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
@@ -92,6 +97,7 @@ void IoUring::send(IoContext &ioc) {
 }
 
 void IoUring::receive(IoContext &ioc) {
+    ++io_num_;
     ioc.op = Operation::Receive;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_recv(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
@@ -99,6 +105,7 @@ void IoUring::receive(IoContext &ioc) {
 }
 
 void IoUring::send_to(IoContext &ioc) {
+    ++io_num_;
     ioc.op = Operation::Send;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     auto p = (ResumeWithMsg*)ioc.ptr;
@@ -107,6 +114,7 @@ void IoUring::send_to(IoContext &ioc) {
 }
 
 void IoUring::receive_from(IoContext &ioc) {
+    ++io_num_;
     ioc.op = Operation::Receive;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     auto p = (ResumeWithMsg*)ioc.ptr;
@@ -116,6 +124,10 @@ void IoUring::receive_from(IoContext &ioc) {
 
 // invoke all completion
 int IoUring::poll(bool block, std::error_code &ec) {
+    if (!block && io_num_ == 0) {
+        return 0;
+    }
+
     int r;
 
     r = ::io_uring_submit_and_wait(p_io_uring_, block);
@@ -145,14 +157,17 @@ int IoUring::poll(bool block, std::error_code &ec) {
             }
                 break;
             case Operation::ReadFile: {
+                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::WriteFile: {
+                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::Accept: {
+                --io_num_;
                 ioc->handle = cqes_[i]->res;
                 ::getpeername(
                     ioc->handle, 
@@ -162,13 +177,16 @@ int IoUring::poll(bool block, std::error_code &ec) {
             }
                 break;
             case Operation::Connect: {
+                --io_num_;
             }
                 break;
             case Operation::Receive: {
+                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::Send: {
+                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
