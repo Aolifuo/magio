@@ -363,6 +363,7 @@ void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::funct
     };
     std::memcpy(&ioc->remote_addr, ep.address().addr_in_, ioc->addr_len);
 
+#ifdef __linux__
     auto cbm = (CbWithMsg<Cb>*)ioc->ptr;
     cbm->msg.msg_name = &ioc->remote_addr;
     cbm->msg.msg_namelen = ioc->addr_len;
@@ -371,6 +372,7 @@ void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::funct
     cbm->msg.msg_control = nullptr;
     cbm->msg.msg_controllen = 0;
     cbm->msg.msg_flags = 0;
+#endif
 
     this_context::get_service().send_to(*ioc);
 }
@@ -413,6 +415,7 @@ void Socket::receive_from(char *buf, size_t len, std::function<void (std::error_
 #endif
     };
 
+#ifdef __linux__
     auto cbm = (CbWithMsg<Cb>*)ioc->ptr;
     cbm->msg.msg_name = &ioc->remote_addr;
     cbm->msg.msg_namelen = ioc->addr_len;
@@ -421,6 +424,7 @@ void Socket::receive_from(char *buf, size_t len, std::function<void (std::error_
     cbm->msg.msg_control = nullptr;
     cbm->msg.msg_controllen = 0;
     cbm->msg.msg_flags = 0;
+#endif
 
     this_context::get_service().receive_from(*ioc);
 }
