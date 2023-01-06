@@ -73,29 +73,14 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
         co_return {};
     }
 
-    EndPoint ep;
-    Ip ipv;
-
-    std::memset(buf, 0, sizeof(buf));
-    ::inet_ntop(ioc.remote_addr.sin_family, &ioc.remote_addr, buf, sizeof(buf));
-
-    if (ioc.remote_addr.sin_family == AF_INET) {
-        ipv = Ip::v4;
-        ep = EndPoint(
-            IpAddress(ioc.remote_addr, buf, Ip::v4),
-            ::ntohs(ioc.remote_addr.sin_port)
-        );
-    } else {
-        ipv = Ip::v6;
-        ep = EndPoint(
-            IpAddress(ioc.remote_addr6, buf, Ip::v6),
-            ::ntohs(ioc.remote_addr6.sin6_port)
-        );
-    }
+    Ip ipv = ioc.remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
 
     co_return {
         Socket(ioc.handle, ipv, Transport::Tcp), 
-        ep
+        EndPoint(
+            make_address((sockaddr*)&ioc.remote_addr),
+            ::ntohs(ioc.remote_addr.sin_port)
+        )
     };
 }
 #endif
@@ -111,26 +96,15 @@ void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&
         if (ec) {
            (*cb)(ec, {}, {});
         } else {
-            EndPoint ep;
-            Ip ipv;
-
-            std::memset(ioc->buf.buf, 0, 128);
-            ::inet_ntop(ioc->remote_addr.sin_family, &ioc->remote_addr, ioc->buf.buf, 128);
-
-            if (ioc->remote_addr.sin_family == AF_INET) {
-                ipv = Ip::v4;
-                ep = EndPoint(
-                    IpAddress(ioc->remote_addr, ioc->buf.buf, Ip::v4),
+            Ip ipv = ioc->remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
+            (*cb)(
+                ec, 
+                Socket(ioc->handle, ipv, Transport::Tcp), 
+                EndPoint(
+                    make_address((sockaddr*)&ioc->remote_addr),
                     ::ntohs(ioc->remote_addr.sin_port)
-                );
-            } else {
-                ipv = Ip::v6;
-                ep = EndPoint(
-                    IpAddress(ioc->remote_addr6, ioc->buf.buf, Ip::v6),
-                    ::ntohs(ioc->remote_addr6.sin6_port)
-                );
-            }
-            (*cb)(ec, Socket(ioc->handle, ipv, Transport::Tcp), ep);
+                )
+            );
         }
 
         delete ioc->buf.buf;
