@@ -153,12 +153,12 @@ void RandomAccessFile::open(const char *path, int mode, int x) {
 
 void RandomAccessFile::close() {
     if (handle_ != (Handle)-1) {
-        reset();
 #ifdef _WIN32
         ::CloseHandle(handle_);
 #elif defined (__linux__)
         ::close(handle_);
 #endif
+    reset();
     }
 }
 
