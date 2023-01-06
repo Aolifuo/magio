@@ -116,7 +116,7 @@ void Socket::bind(const EndPoint& ep, std::error_code &ec) {
     if (-1 == ::bind(
         handle_, 
         (const sockaddr*)address.addr_in_,
-        address.is_v4() ? sizeof(sockaddr_in) : sizeof(sockaddr_in6)
+        address.addr_len()
     )) {
         ec = SYSTEM_ERROR_CODE;
         return;
@@ -342,7 +342,8 @@ void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::funct
     auto ioc = new IoContext{
         .handle = handle_,
         .buf = io_buf((char*)msg, len),
-        .addr_len = ep.address().addr_len(),
+        .addr_len = (socklen_t)ep.address().addr_len(),
+#ifdef _WIN32
         .ptr = new Cb(std::move(completion_cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
@@ -350,8 +351,27 @@ void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::funct
             delete cb;
             delete ioc;
         }
+#elif defined (__linux__)
+        .ptr = new CbWithMsg<Cb>{{}, std::move(completion_cb)},
+        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cbm = (CbWithMsg<Cb>*)ptr;
+            cbm->cb(ec, ioc->buf.len);
+            delete cbm;
+            delete ioc;
+        }
+#endif
     };
     std::memcpy(&ioc->remote_addr, ep.address().addr_in_, ioc->addr_len);
+
+    auto cbm = (CbWithMsg<Cb>*)ioc->ptr;
+    cbm->msg.msg_name = &ioc->remote_addr;
+    cbm->msg.msg_namelen = ioc->addr_len;
+    cbm->msg.msg_iov = (iovec*)&ioc->buf;
+    cbm->msg.msg_iovlen = 1;
+    cbm->msg.msg_control = nullptr;
+    cbm->msg.msg_controllen = 0;
+    cbm->msg.msg_flags = 0;
+
     this_context::get_service().send_to(*ioc);
 }
 
@@ -361,10 +381,10 @@ void Socket::receive_from(char *buf, size_t len, std::function<void (std::error_
         .handle = handle_,
         .buf = io_buf(buf, len),
         .addr_len = sizeof(sockaddr_in6),
+#ifdef _WIN32
         .ptr = new Cb(std::move(completion_cb)),
         .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
-
             (*cb)(
                 ec, ioc->buf.len, 
                 EndPoint(
@@ -375,7 +395,33 @@ void Socket::receive_from(char *buf, size_t len, std::function<void (std::error_
             delete cb;
             delete ioc;
         }
+#elif defined (__linux__)
+        .ptr = new CbWithMsg<Cb>{{}, std::move(completion_cb)},
+        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cbm = (CbWithMsg<Cb>*)ptr;
+            cbm->cb(
+                ec,
+                ioc->buf.len,
+                EndPoint(
+                    make_address((sockaddr*)&ioc->remote_addr), 
+                    ::ntohs(ioc->remote_addr.sin_port)
+                )
+            );
+            delete cbm;
+            delete ioc;
+        }
+#endif
     };
+
+    auto cbm = (CbWithMsg<Cb>*)ioc->ptr;
+    cbm->msg.msg_name = &ioc->remote_addr;
+    cbm->msg.msg_namelen = ioc->addr_len;
+    cbm->msg.msg_iov = (iovec*)&ioc->buf;
+    cbm->msg.msg_iovlen = 1;
+    cbm->msg.msg_control = nullptr;
+    cbm->msg.msg_controllen = 0;
+    cbm->msg.msg_flags = 0;
+
     this_context::get_service().receive_from(*ioc);
 }
 

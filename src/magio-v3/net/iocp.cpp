@@ -13,6 +13,21 @@ namespace magio {
 
 namespace net {
 
+class WebSocket {
+public:
+    static void init() {
+        static WebSocket ws;
+        WSADATA wsa_data;
+        if (0 != ::WSAStartup(MAKEWORD(2, 2), &wsa_data)) {
+            M_FATAL("{}", "failed to start wsa");
+        }
+    }
+
+    ~WebSocket() {
+        ::WSACleanup();
+    }
+};
+
 struct IoCompletionPort::Data {
     HANDLE handle;
 
@@ -24,10 +39,7 @@ struct IoCompletionPort::Data {
 };
 
 IoCompletionPort::IoCompletionPort() {
-    WSADATA wsa_data;
-    if (0 != ::WSAStartup(MAKEWORD(2, 2), &wsa_data)) {
-        M_FATAL("{}", "failed to start wsa");
-    }
+    WebSocket::init();
 
     std::error_code ec;
     Socket socket;
@@ -107,7 +119,6 @@ IoCompletionPort::IoCompletionPort() {
 
 IoCompletionPort::~IoCompletionPort() {
     if (data_) {
-        ::WSACleanup();
         ::CloseHandle(data_->handle);
         delete data_;
         data_ = nullptr;

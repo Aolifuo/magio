@@ -71,9 +71,15 @@ inline WSABUF io_buf(char* buf, size_t len) {
 
 #elif defined (__linux__)
 struct ResumeWithMsg {
-    std::error_code ec;
     msghdr msg;
+    std::error_code ec;
     std::coroutine_handle<> handle;
+};
+
+template<typename Cb>
+struct CbWithMsg {
+    msghdr msg;
+    Cb cb;
 };
 
 inline void completion_callback_with_msg(std::error_code ec, IoContext* ioc, void* ptr) {
