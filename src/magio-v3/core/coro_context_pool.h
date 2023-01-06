@@ -17,7 +17,6 @@ public:
 
     ~CoroContextPool();
 
-    // include base ctx
     void start_all();
 
     CoroContext& next_context();
@@ -29,8 +28,6 @@ private:
 
     bool assert_in_self_thread();
     
-    CoroContext* base_ctx_;
-
     State state_ = Stopping;
     size_t every_entries_ = 0;
     size_t next_idx_ = 0;

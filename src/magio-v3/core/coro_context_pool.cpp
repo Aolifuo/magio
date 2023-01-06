@@ -7,22 +7,18 @@
 namespace magio {
 
 CoroContextPool::CoroContextPool(size_t num, size_t every)
-    : base_ctx_(LocalContext)
-    , every_entries_(every)
+    : every_entries_(every)
     , thread_id_(CurrentThread::get_id())
-    , build_ctx_wg_(num)
+    , build_ctx_wg_(num - 1)
     , start_wg_(1)
     , contexts_(num)
 {
-    if (!LocalContext) {
-        M_FATAL("{}", "There is no context in this thread");
+    if (num < 1) {
+        M_FATAL("{}", "num must >= 1");
     }
 
-    if (num == 0) {
-        M_FATAL("{}", "num == 0");
-    }
-
-    for (size_t i = 0; i < contexts_.size(); ++i) {
+    contexts_[0] = std::make_unique<CoroContext>(every);
+    for (size_t i = 1; i < contexts_.size(); ++i) {
         threads_.emplace_back(&CoroContextPool::run_in_background, this, i);
     }
     build_ctx_wg_.wait();
@@ -36,7 +32,7 @@ CoroContextPool::~CoroContextPool() {
         });
     }
 
-    for (size_t i = 0; i < contexts_.size(); ++i) {
+    for (size_t i = 0; i < threads_.size(); ++i) {
         if (threads_[i].joinable()) {
             threads_[i].join();
         }
@@ -54,7 +50,7 @@ void CoroContextPool::start_all() {
 
     state_ = Running;
     start_wg_.done();
-    base_ctx_->start();
+    contexts_[0]->start();
 }
 
 CoroContext& CoroContextPool::next_context() {
