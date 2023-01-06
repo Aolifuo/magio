@@ -16,7 +16,7 @@ std::string SocketSystemError::message(int code) const {
         | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
         code,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT),
         (LPTSTR)&pbuf,
         0,
         NULL
