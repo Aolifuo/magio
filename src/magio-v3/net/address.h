@@ -6,6 +6,8 @@
 
 #include "magio-v3/net/protocal.h"
 
+struct sockaddr;
+
 namespace magio {
 
 namespace net {
@@ -17,6 +19,7 @@ class IpAddress {
     friend class EndPoint;
     friend class Acceptor;
     friend IpAddress make_address(std::string_view str, std::error_code& ec);
+    friend IpAddress make_address(sockaddr* paddr);
 
     template<typename Addr>
     IpAddress(Addr addr, std::string_view str, Ip level)
@@ -45,6 +48,8 @@ public:
     }
 
 private:
+    int addr_len() const;
+
     char addr_in_[32];
     std::string ip_;
     Ip level_;
@@ -52,6 +57,8 @@ private:
 
 // v4 v6
 IpAddress make_address(std::string_view str, std::error_code& ec);
+
+IpAddress make_address(sockaddr* paddr);
 
 class EndPoint {
 public:

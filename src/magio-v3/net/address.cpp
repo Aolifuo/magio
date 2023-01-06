@@ -43,6 +43,32 @@ IpAddress make_address(std::string_view str, std::error_code& ec) {
     }
 }
 
+IpAddress make_address(sockaddr* paddr) {
+    IpAddress address;
+    char buf[32]{};
+    socklen_t addr_len = paddr->sa_family == AF_INET
+        ? sizeof(sockaddr_in)
+        : sizeof(sockaddr_in6);
+    std::memcpy(address.addr_in_, paddr, addr_len);
+    ::inet_ntop(
+        paddr->sa_family, paddr, 
+        buf, sizeof(buf)
+    );
+    address.ip_ = buf;
+    address.level_ = paddr->sa_family == AF_INET
+        ? Ip::v4
+        : Ip::v6;
+    return address;
+}
+
+int IpAddress::addr_len() const {
+    auto& addr = *(sockaddr_in*)addr_in_;
+    if (addr.sin_family == AF_INET) {
+        return sizeof(sockaddr_in);
+    }
+    return sizeof(sockaddr_in6);
+}
+
 EndPoint::EndPoint(IpAddress address, PortType port) {
     port_ = port;
     if (address.is_v4()) {
