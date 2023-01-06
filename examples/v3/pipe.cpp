@@ -49,7 +49,7 @@ Coro<> console_write(ReadablePipe& read_end) {
 }
 
 int main() {
-    MultithreadedContexts ctxs(2, 2);
+    CoroContextPool ctxs(2, 2);
     error_code ec;
     tie(read_end, write_end) = make_pipe(ec);
     if (ec) {
