@@ -3,7 +3,7 @@ set_config("cxxflags", "-stdlib=libc++")
 set_config("ldflags", "-stdlib=libc++")
 
 set_project("magio")
-set_version("0.0.8")
+set_version("0.0.9")
 
 add_rules("mode.debug", "mode.release")
 set_languages("cxx20")
@@ -50,8 +50,3 @@ for _, dir in ipairs(os.files("dev/**.cpp")) do
 end
 
 --xmake project -k compile_commands
---TODO
---singelevent
---dns resolver
---mutex condvar
---channel
