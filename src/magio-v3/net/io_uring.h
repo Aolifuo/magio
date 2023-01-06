@@ -46,7 +46,7 @@ private:
     void prep_wake_up();
 
     IoContext* wake_up_ctx_;
-    io_uring_cqe* cqes[kCQEs];
+    io_uring_cqe* cqes_[kCQEs];
     io_uring* p_io_uring_ = nullptr;
 };
 

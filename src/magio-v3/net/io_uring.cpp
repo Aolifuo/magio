@@ -129,13 +129,13 @@ int IoUring::poll(bool block, std::error_code &ec) {
         return -1;
     }
 
-    unsigned count = ::io_uring_peek_batch_cqe(p_io_uring_, cqes, sizeof(cqes));
+    unsigned count = ::io_uring_peek_batch_cqe(p_io_uring_, cqes_, sizeof(cqes_));
     for (unsigned i = 0; i < count; ++i) {
         std::error_code inner_ec;
-        void* data = ::io_uring_cqe_get_data(cqes[i]);
+        void* data = ::io_uring_cqe_get_data(cqes_[i]);
         IoContext* ioc = (IoContext*)data;
-        if (cqes[i]->res < 0) {
-            inner_ec = make_socket_error_code(-cqes[i]->res);
+        if (cqes_[i]->res < 0) {
+            inner_ec = make_socket_error_code(-cqes_[i]->res);
             ioc->buf.len = 0;
         } else {
             switch (ioc->op) {
@@ -145,15 +145,15 @@ int IoUring::poll(bool block, std::error_code &ec) {
             }
                 break;
             case Operation::ReadFile: {
-                ioc->buf.len = cqes[i]->res;
+                ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::WriteFile: {
-                ioc->buf.len = cqes[i]->res;
+                ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::Accept: {
-                ioc->handle = cqes[i]->res;
+                ioc->handle = cqes_[i]->res;
                 ::getpeername(
                     ioc->handle, 
                     (sockaddr*)&ioc->remote_addr,
@@ -165,11 +165,11 @@ int IoUring::poll(bool block, std::error_code &ec) {
             }
                 break;
             case Operation::Receive: {
-                ioc->buf.len = cqes[i]->res;
+                ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::Send: {
-                ioc->buf.len = cqes[i]->res;
+                ioc->buf.len = cqes_[i]->res;
             }
                 break;
             }
