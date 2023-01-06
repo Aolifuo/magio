@@ -9,25 +9,25 @@ Magio是一个基于C++20实现的协程网络库，包含异步文件IO，网�
 
 ```cpp
 Coro<> handle_connection(net::Socket sock) {
-    std::error_code ec;
     char buf[1024];
     for (; ;) {
+        error_code ec;
         size_t rd = co_await sock.receive(buf, sizeof(buf), ec);
         if (ec || rd == 0) {
-            M_ERROR("{}", ec ? ec.message() : "EOF");
+            M_ERROR("recv error: {}", ec ? ec.message() : "EOF");
             break;
         }
         M_INFO("receive: {}", string_view(buf, rd));
         co_await sock.send(buf, rd, ec);
         if (ec) {
-            M_ERROR("{}", ec.message());
+            M_ERROR("send error: {}", ec.message());
             break;
         }
     }
 }
 
 Coro<> server() {
-    std::error_code ec;
+    error_code ec;
     net::EndPoint local(net::make_address("::1", ec), 1234);
     if (ec) {
         M_FATAL("{}", ec.message());
@@ -43,9 +43,10 @@ Coro<> server() {
         auto [socket, peer] = co_await acceptor.accept(ec);
         if (ec) {
             M_ERROR("{}", ec.message());
+        } else {
+            M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
+            this_context::spawn(handle_connection(std::move(socket)));
         }
-        M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
-        this_context::spawn(handle_connection(std::move(socket)));
     }
 }
 
@@ -60,7 +61,7 @@ int main() {
 
 ```cpp
 Coro<> client() {
-    std::error_code ec;
+    error_code ec;
     net::EndPoint local(net::make_address("::1", ec), 0);
     net::EndPoint peer(net::make_address("::1", ec), 1234);
     if (ec) {
@@ -76,19 +77,19 @@ Coro<> client() {
 
     co_await socket.connect(peer, ec);
     if (ec) {
-        M_FATAL("{}", ec.message());
+        M_FATAL("connect error: {}", ec.message());
     }
  
     char buf[1024];
     for (int i = 0; i < 5; ++i) {
         co_await socket.send("hello server", 12, ec);
         if (ec) {
-            M_ERROR("{}", ec.message());
+            M_ERROR("send error: {}", ec.message());
             break;
         }
         size_t rd = co_await socket.receive(buf, sizeof(buf), ec);
-        if (ec) {
-            M_ERROR("{}", ec.message());
+        if (ec || rd == 0) {
+            M_ERROR("recv error: {}", ec ? ec.message() : "EOF");
             break;
         }
         M_INFO("{}", string_view(buf, rd));
@@ -124,14 +125,13 @@ Coro<> amain() {
     for (; ; ec.clear()) {
         auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf), ec);
         if (ec) {
-            M_ERROR("{}", ec.message());
+            M_ERROR("recv error: {}", ec.message());
             continue;
         }
-
-        M_INFO("from [{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
-        co_await socket.send_to("Hello", 5, peer, ec);
+        M_INFO("[{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
+        co_await socket.send_to(buf, rd, peer, ec);
         if (ec) {
-            M_ERROR("{}", ec.message());
+            M_ERROR("send error: {}", ec.message());
             continue;
         }
     }
@@ -148,14 +148,17 @@ int main() {
 
 ```cpp
 Coro<> copyfile() {
-    std::error_code ec;
     File from("from", File::ReadOnly);
     File to("to", File::WriteOnly | File::Create | File::Truncate);
+    if (!from || !to) {
+        M_FATAL("cannot open file {} or {}", "from", "to");
+    }
 
-    char buf[1024]{};
+    char buf[1024];
     for (; ;) {
+        error_code ec;
         size_t rd = co_await from.read(buf, sizeof(buf), ec);
-        if (rd == 0) {
+        if (ec || rd == 0) {
             break;
         }
         co_await to.write(buf, rd, ec);
@@ -164,7 +167,7 @@ Coro<> copyfile() {
 }
 
 int main() {
-    CoroContext ctx(100);
+    CoroContext ctx(128);
     this_context::spawn(copyfile());
     ctx.start();
 }
