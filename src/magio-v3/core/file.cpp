@@ -151,6 +151,13 @@ void RandomAccessFile::open(const char *path, int mode, int x) {
 #endif
 }
 
+void RandomAccessFile::cancel() {
+    if (handle_ != (Handle)-1) {
+        IoContext ioc{.handle = decltype(IoContext::handle)(handle_)};
+        this_context::get_service().cancel(ioc);
+    } 
+}
+
 void RandomAccessFile::close() {
     if (handle_ != (Handle)-1) {
 #ifdef _WIN32
@@ -299,6 +306,10 @@ void File::open(const char *path, int mode, int x) {
     file_.open(path, mode, x);
     read_offset_ = 0;
     write_offset_ = 0;
+}
+
+void File::cancel() {
+    file_.cancel();
 }
 
 void File::close() {

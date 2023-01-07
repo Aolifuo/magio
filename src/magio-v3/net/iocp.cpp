@@ -198,6 +198,9 @@ void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
     }
     ioc.handle = sock_handle;
 
+    SOCKET listener_h = listener.handle();
+    std::memcpy(&ioc.buf.buf[120], &listener_h, sizeof(listener_h));
+
     bool status = data_->accept(
         listener.handle(),
         ioc.handle,
@@ -304,6 +307,10 @@ void IoCompletionPort::receive_from(IoContext &ioc) {
     }
 }
 
+void IoCompletionPort::cancel(IoContext &ioc) {
+    ::CancelIoEx((HANDLE)ioc.handle, NULL);
+}
+
 // invoke all
 int IoCompletionPort::poll(bool block, std::error_code &ec) {
     if (!block && data_->io_num == 0) {
@@ -375,6 +382,12 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
 
                 std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
                 ioc->addr_len = remote_addr_len;
+
+                auto listener_h = *(SOCKET*)&ioc->buf.buf[120];
+                ::setsockopt(
+                    ioc->handle, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
+                    (const char*)&listener_h, sizeof(listener_h)
+                );
             } else {
                 detail::close_socket(ioc->handle);
             }

@@ -431,11 +431,8 @@ void Socket::receive_from(char *buf, size_t len, std::function<void (std::error_
 
 void Socket::cancel() {
     if (-1 != handle_) {
-#ifdef _WIN32
-        ::CancelIoEx((void*)handle_, NULL);
-#elif defined(__linux__)
-
-#endif        
+        IoContext ioc{.handle = handle_};
+        this_context::get_service().cancel(ioc);
     }
 }
 

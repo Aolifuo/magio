@@ -43,6 +43,8 @@ public:
 
     void open(const char* path, int mode, int x = 0744);
 
+    void cancel();
+
     void close();
 
 #ifdef MAGIO_USE_CORO
@@ -94,6 +96,8 @@ public:
     File& operator=(File&& other) noexcept;
 
     void open(const char* path, int mode, int x = 0744);
+
+    void cancel();
 
     void close();
 

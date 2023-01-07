@@ -35,6 +35,8 @@ public:
     void send_to(IoContext& ioc) override;
 
     void receive_from(IoContext& ioc) override;
+
+    void cancel(IoContext& ioc) override;
     
     void relate(void* sock_handle, std::error_code& ec) override;
 

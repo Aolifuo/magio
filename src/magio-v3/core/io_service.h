@@ -35,6 +35,8 @@ public:
 
     virtual void receive_from(IoContext& ioc) = 0;
 
+    virtual void cancel(IoContext& ioc) = 0;
+
     virtual void relate(void* handle, std::error_code& ec) = 0;
 
     // -1->big error, 0->wait timeout; 1->io; 2->continue

@@ -122,6 +122,10 @@ void IoUring::receive_from(IoContext &ioc) {
     ::io_uring_sqe_set_data(sqe, &ioc);
 }
 
+void IoUring::cancel(IoContext& ioc) {
+    
+}
+
 // invoke all completion
 int IoUring::poll(bool block, std::error_code &ec) {
     if (!block && io_num_ == 0) {
