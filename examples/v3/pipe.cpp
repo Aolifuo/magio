@@ -5,57 +5,63 @@ using namespace std;
 using namespace magio;
 using namespace chrono_literals;
 
-CoroContext base{1};
-ReadablePipe read_end;
-WritablePipe write_end;
+class ConsoleReadWrite {
+public:
+    ConsoleReadWrite(CoroContextPool& pool): ctx_pool_(pool)
+    { }
 
-void stop() {
-    read_end.close();
-    write_end.close();
-    base.execute([] {
-        base.stop();
-    });
-}
+    void start() {
+        ctx_pool_.next_context().spawn(console_read(), [](exception_ptr eptr, Unit) {
+            this_context::stop();
+        });
+        ctx_pool_.next_context().spawn(console_write(), [](exception_ptr eptr, Unit) {
+            this_context::stop();
+        });
+    }
 
-Coro<> console_read(WritablePipe& write_end) {
-    string line;
-    
-    for (; ;) {
-        error_code ec;
-        if (!getline(cin, line) || line.empty()) {
-            co_return stop();
+private:
+    Coro<> console_read() {
+        string line;
+        
+        for (; ;) {
+            error_code ec;
+            if (!getline(cin, line) || line.empty()) {
+                break;
+            }
+
+            co_await write_end_.write(line.c_str(), line.length(), ec);
+            if (ec) {
+                M_ERROR("write_end error: {}", ec.message());
+                break;
+            }
         }
 
-        co_await write_end.write(line.c_str(), line.length(), ec);
-        if (ec) {
-            M_ERROR("write_end error: {}", ec.value());
-            co_return stop();
+        read_end_.close();
+        write_end_.close();
+    }
+
+    Coro<> console_write() {
+        char buf[1024];
+        
+        for (; ;) {
+            error_code ec;
+            size_t len = co_await read_end_.read(buf, sizeof(buf), ec);
+            if (ec) {
+                M_ERROR("read_end error: {}", ec.message());
+                break;
+            }
+            cout << string_view(buf, len) << '\n';
         }
     }
-}
 
-Coro<> console_write(ReadablePipe& read_end) {
-    char buf[1024];
-    
-    for (; ;) {
-        error_code ec;
-        size_t len = co_await read_end.read(buf, sizeof(buf), ec);
-        if (ec) {
-            M_ERROR("read_end error: {}", ec.value());
-            break;
-        }
-        cout << string_view(buf, len) << '\n';
-    }
-}
+    CoroContextPool& ctx_pool_;
+    ReadablePipe read_end_;
+    WritablePipe write_end_;
+};
 
 int main() {
     CoroContextPool ctxs(2, 2);
-    error_code ec;
-    tie(read_end, write_end) = make_pipe(ec);
-    if (ec) {
-        M_FATAL("failed to make pipe {}", ec.value());
-    }
-    ctxs.get(0).spawn(console_read(write_end));
-    ctxs.get(1).spawn(console_write(read_end));
+    ConsoleReadWrite crw(ctxs);
+    crw.start();
     ctxs.start_all();
 }
