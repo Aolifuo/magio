@@ -165,6 +165,9 @@ std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec) {
         ec = SYSTEM_ERROR_CODE;
     }
 
+    this_context::get_service().relate(read_h, ec); // ?
+    this_context::get_service().relate(write_h, ec); // ?
+
     return {ReadablePipe(read_h), WritablePipe(write_h)};
 #elif defined (__linux__)
     int pipefd[2];
