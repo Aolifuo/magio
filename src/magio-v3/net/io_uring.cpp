@@ -146,6 +146,11 @@ int IoUring::poll(bool block, std::error_code &ec) {
         std::error_code inner_ec;
         void* data = ::io_uring_cqe_get_data(cqes_[i]);
         IoContext* ioc = (IoContext*)data;
+
+        if (ioc->op != Operation::WakeUp) {
+            --io_num_;
+        }
+        
         if (cqes_[i]->res < 0) {
             inner_ec = make_socket_error_code(-cqes_[i]->res);
             ioc->buf.len = 0;
@@ -157,17 +162,14 @@ int IoUring::poll(bool block, std::error_code &ec) {
             }
                 break;
             case Operation::ReadFile: {
-                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::WriteFile: {
-                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::Accept: {
-                --io_num_;
                 ioc->handle = cqes_[i]->res;
                 ::getpeername(
                     ioc->handle, 
@@ -177,16 +179,13 @@ int IoUring::poll(bool block, std::error_code &ec) {
             }
                 break;
             case Operation::Connect: {
-                --io_num_;
             }
                 break;
             case Operation::Receive: {
-                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
             case Operation::Send: {
-                --io_num_;
                 ioc->buf.len = cqes_[i]->res;
             }
                 break;
