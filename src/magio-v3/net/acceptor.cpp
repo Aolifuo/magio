@@ -73,14 +73,6 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
         co_return {};
     }
 
-#ifdef _WIN32
-    net::Socket::Handle listener_h = listener_.handle();
-    ::setsockopt(
-        ioc.handle, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
-        (const char*)&listener_h, sizeof(listener_h)
-    );
-#endif
-
     Ip ipv = ioc.remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
     co_return {
         Socket(ioc.handle, ipv, Transport::Tcp), 
@@ -103,13 +95,6 @@ void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&
         if (ec) {
            (*cb)(ec, {}, {});
         } else {
-#ifdef _WIN32
-            auto listener_h = *(SOCKET*)&ioc->buf.buf[120];
-            ::setsockopt(
-                ioc->handle, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
-                (const char*)&listener_h, sizeof(listener_h)
-            );
-#endif
             Ip ipv = ioc->remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
             (*cb)(
                 ec, 
