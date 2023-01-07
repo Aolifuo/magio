@@ -30,7 +30,7 @@ add_defines("MAGIO_USE_CORO")
 
 target("magio-v3")
     set_kind("static")
-    add_files("src/magio-v3/**.cpp")
+    add_files("src/magio-v3/core/**.cpp", "src/magio-v3/net/**.cpp")
     add_includedirs("src", {public = true})
 
 -- v3 examples
