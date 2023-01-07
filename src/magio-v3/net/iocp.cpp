@@ -111,6 +111,7 @@ IoCompletionPort::IoCompletionPort() {
 
     data_ = new Data{
         handle,
+
         (LPFN_ACCEPTEX)accept_ptr,
         (LPFN_CONNECTEX)connect_ptr,
         (LPFN_GETACCEPTEXSOCKADDRS)get_sock_addr_ptr
@@ -340,55 +341,59 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
             return -1;
         }       
 
+        --data_->io_num;
         switch(ioc->op) {
         case Operation::WakeUp: {
             // Never
         }
             break;
         case Operation::ReadFile: {
-            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;
         case Operation::WriteFile: {
-            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;
-        case
-        Operation::Accept: {
-            --data_->io_num;
-            LPSOCKADDR local_addr_ptr;
-            LPSOCKADDR remote_addr_ptr;
-            int local_addr_len = 0;
-            int remote_addr_len = 0;
+        case Operation::Accept: {
+            if (!inner_ec) {
+                LPSOCKADDR local_addr_ptr;
+                LPSOCKADDR remote_addr_ptr;
+                int local_addr_len = 0;
+                int remote_addr_len = 0;
 
-            data_->get_sock_addr(
-                ioc->buf.buf,
-                0,
-                sizeof(sockaddr_in6) + 16,
-                sizeof(sockaddr_in6) + 16,
-                &local_addr_ptr,
-                &local_addr_len,
-                &remote_addr_ptr,
-                &remote_addr_len
-            );
+                data_->get_sock_addr(
+                    ioc->buf.buf,
+                    0,
+                    sizeof(sockaddr_in6) + 16,
+                    sizeof(sockaddr_in6) + 16,
+                    &local_addr_ptr,
+                    &local_addr_len,
+                    &remote_addr_ptr,
+                    &remote_addr_len
+                );
 
-            std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
-            ioc->addr_len = remote_addr_len;
+                std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
+                ioc->addr_len = remote_addr_len;
+            } else {
+                detail::close_socket(ioc->handle);
+            }
         }
             break;
         case Operation::Connect: {
-            --data_->io_num;
+            if (!inner_ec) {
+                ::setsockopt(
+                    ioc->handle, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT,
+                    NULL, 0
+                );
+            }
         }
             break;
         case Operation::Send: {
-            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;
         case Operation::Receive: {
-            --data_->io_num;
             ioc->buf.len = bytes_transferred;
         }
             break;

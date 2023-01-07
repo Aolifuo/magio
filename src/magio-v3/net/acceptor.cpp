@@ -7,6 +7,7 @@
 
 #ifdef _WIN32
 #include <Ws2tcpip.h>
+#include <MSWSock.h>
 #elif defined (__linux__)
 #include <arpa/inet.h>
 #endif
@@ -69,12 +70,18 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
     
     ec = handle.ec;
     if (ec) {
-        detail::close_socket(ioc.handle);
         co_return {};
     }
 
-    Ip ipv = ioc.remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
+#ifdef _WIN32
+    net::Socket::Handle listener_h = listener_.handle();
+    ::setsockopt(
+        ioc.handle, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
+        (const char*)&listener_h, sizeof(listener_h)
+    );
+#endif
 
+    Ip ipv = ioc.remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
     co_return {
         Socket(ioc.handle, ipv, Transport::Tcp), 
         EndPoint(
@@ -87,7 +94,7 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
 
 void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, Socket, EndPoint)>;
-    auto* ioc = new IoContext;
+    auto ioc = new IoContext;
     ioc->buf.buf = new char[128];
     ioc->buf.len = 128;
     ioc->ptr = new Cb(std::move(completion_cb));
@@ -96,6 +103,13 @@ void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&
         if (ec) {
            (*cb)(ec, {}, {});
         } else {
+#ifdef _WIN32
+            auto listener_h = *(SOCKET*)&ioc->buf.buf[120];
+            ::setsockopt(
+                ioc->handle, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
+                (const char*)&listener_h, sizeof(listener_h)
+            );
+#endif
             Ip ipv = ioc->remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
             (*cb)(
                 ec, 
@@ -108,10 +122,12 @@ void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&
         }
 
         delete ioc->buf.buf;
-        delete ioc;
         delete cb;
+        delete ioc;
     };
 
+    auto listener_h = listener_.handle();
+    std::memcpy(&ioc->buf.buf[120], &listener_h, sizeof(listener_h));
     this_context::get_service().accept(listener_, *ioc);
 }
 
