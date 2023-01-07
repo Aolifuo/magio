@@ -83,7 +83,7 @@ public:
 #ifdef MAGIO_USE_CORO
     template<typename Func, typename...Args>
     [[nodiscard]]
-    Coro<std::invoke_result_t<Func, Args...>> spawn_blocking(Func&& func, Args&&...args) {
+    Coro<std::invoke_result_t<Func, Args...>> spawn_blocking(Func func, Args&&...args) {
         using ReturnType = std::invoke_result_t<Func, Args...>;
 
         CoroContext* ctx = LocalContext;
@@ -92,7 +92,7 @@ public:
             [&](std::coroutine_handle<> h) mutable {
                 execute([
                     &result, h, ctx,
-                    func = std::forward<Func>(func), 
+                    func = std::move(func), 
                     tuple = std::make_tuple(std::forward<Args>(args)...)
                 ]() mutable {
                     if constexpr (std::is_void_v<ReturnType>) {
@@ -114,6 +114,15 @@ public:
         } else {
             co_return std::move(result.value());
         }
+    }
+
+    template<typename F, typename Class, typename...Args>
+    [[nodiscard]]
+    auto spawn_blocking(F Class::* pfun, Class* obj, Args&&...args) {
+        return spawn_blocking(
+            [pfun, obj](auto&&...ts) { return (obj->*pfun)(ts...); },
+            std::forward<Args>(args)...
+        );
     }
 #endif
 
