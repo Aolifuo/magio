@@ -106,7 +106,7 @@ void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&
             );
         }
 
-        delete ioc->buf.buf;
+        delete [] ioc->buf.buf;
         delete cb;
         delete ioc;
     };
