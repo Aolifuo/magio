@@ -110,7 +110,18 @@ public:
             });
             co_await guard.mutex_.lock();
         }
-        co_return;
+    }
+
+    [[nodiscard]]
+    Coro<void> wait(LockGuard& guard) {
+        co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
+            {
+                std::lock_guard lk(m_);
+                queue_.push_back({LocalContext, h});
+            }
+            guard.mutex_.unlock();
+        });
+        co_await guard.mutex_.lock();
     }
 
     void notify_one();
