@@ -63,11 +63,7 @@ private:
 
     State state_ = Stopping;
     size_t thread_id_;
-#ifdef MAGIO_USE_CORO
-    std::vector<std::coroutine_handle<>> pending_handles_;
-#else
     std::vector<Task> pending_handles_;
-#endif
     TimerQueue timer_queue_;
     std::unique_ptr<IoService> p_io_service_;
 };
