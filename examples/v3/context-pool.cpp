@@ -50,7 +50,7 @@ Coro<> server() {
         M_FATAL("{}", ec.message());
     }
 
-    for (size_t i = 0; i < 1; ++i) {
+    for (size_t i = 0; i < 10; ++i) {
         this_context::spawn(accept(std::move(acceptor)));
     }
 
