@@ -77,13 +77,6 @@ public:
         return result;
     }
 
-    void for_each() {
-        Node* dest = head_.load()->next.load();
-        for (; dest; dest = dest->next.load()) {
-            printf("%d\n", dest->value);
-        }
-    }
-
 private:
     std::atomic<Node*> head_;
     std::atomic<Node*> tail_;
