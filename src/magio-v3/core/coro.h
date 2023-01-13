@@ -10,13 +10,53 @@
 
 namespace magio {
 
+#ifdef MAGIO_USE_CORO
 namespace detail {
 
 inline thread_local size_t CoroId = 0;
 
+class Yield {
+public:
+    bool await_ready() { 
+        return false; 
+    }
+
+    void await_suspend(std::coroutine_handle<> prev_h) {
+        this_context::queue_in_context(prev_h);
+    }
+
+    void await_resume() { }
+};
+
+class GetId {
+public:
+    class Awaitable {
+    public:
+        bool await_ready() { 
+            return false; 
+        }
+
+        template<typename PH>
+        auto await_suspend(std::coroutine_handle<PH> prev_h) {
+            id_ = prev_h.promise().id;
+            return prev_h;
+        }
+
+        size_t await_resume() { 
+            return id_;
+        }
+
+    private:
+        size_t id_ = 0;
+    };
+    
+    GetId::Awaitable operator co_await() {
+        return {};
+    }
+};
+
 }
 
-#ifdef MAGIO_USE_CORO
 template<typename = void>
 class Coro;
 
@@ -238,41 +278,9 @@ inline Coro<RemoveVoidTuple<Ts...>> series(Coro<Ts>...coros);
 
 namespace this_coro {
 
-class Yield {
-public:
-    bool await_ready() { 
-        return false; 
-    }
+inline detail::Yield yield;
 
-    void await_suspend(std::coroutine_handle<> prev_h) {
-        this_context::queue_in_context(prev_h);
-    }
-
-    void await_resume() { }
-};
-
-class GetId {
-public:
-    bool await_ready() { 
-        return false; 
-    }
-
-    template<typename PH>
-    void await_suspend(std::coroutine_handle<PH> prev_h) {
-        id_ = prev_h.promise().id;
-    }
-
-    size_t await_resume() { 
-        return id_;
-    }
-
-private:
-    size_t id_ = 0;
-};
-
-inline Yield yield;
-
-inline GetId get_id;
+inline detail::GetId get_id;
 
 template<typename Rep, typename Per>
 inline Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur);
