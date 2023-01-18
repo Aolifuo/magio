@@ -27,7 +27,7 @@ IoUring::IoUring(unsigned entries) {
     }
 
     wake_up_ctx_ = new IoContext;
-    wake_up_ctx_->op = Operation::WakeUp;
+    wake_up_ctx_->op = Operation::Noop;
     wake_up_ctx_->handle = ::eventfd(EFD_NONBLOCK, 0);
     wake_up_ctx_->ptr = (void*)1;
     wake_up_ctx_->cb = [](std::error_code ec, IoContext* ioc, void* p) {
@@ -127,22 +127,22 @@ void IoUring::cancel(IoContext& ioc) {
 }
 
 // invoke all completion
-int IoUring::poll(size_t wait_time, std::error_code &ec) {
-    if (wait_time == 0 && io_num_ == 0) {
+int IoUring::poll(size_t nanosec, std::error_code &ec) {
+    // printf("%zu\n", nanosec);
+    if (nanosec == 0 && io_num_ == 0) {
         return 0;
     }
 
     ::io_uring_submit(p_io_uring_);
 
     __kernel_timespec timespec{
-        .tv_sec = wait_time / 1000,
-        .tv_nsec = 1000 * 1000 * (wait_time % 1000)
+        .tv_sec = (__kernel_time64_t)(nanosec / 1000000000),
+        .tv_nsec = (long long)(nanosec % 1000000000)
     };
 
-    io_uring_cqe* cqe
+    io_uring_cqe* cqe;
     int r = ::io_uring_wait_cqe_timeout(p_io_uring_, &cqe, &timespec);
-    if (-EAGAIN == r) {
-        // non block and no completion
+    if (-ETIME == r || -EAGAIN == r) {
         return 0;
     } else if (-EINTR == r) {
         return 2;
@@ -150,71 +150,82 @@ int IoUring::poll(size_t wait_time, std::error_code &ec) {
         ec = make_socket_error_code(-r);
         return -1;
     }
-
-    unsigned count = ::io_uring_peek_batch_cqe(p_io_uring_, cqes_, sizeof(cqes_));
-    for (unsigned i = 0; i < count; ++i) {
-        std::error_code inner_ec;
-        void* data = ::io_uring_cqe_get_data(cqes_[i]);
-        IoContext* ioc = (IoContext*)data;
-
-        if (ioc->op != Operation::WakeUp) {
-            --io_num_;
-        } else {
-            prep_wake_up();
+    handle_cqe(cqe);
+    ::io_uring_cqe_seen(p_io_uring_, cqe);
+    
+    if(0 == ::io_uring_peek_cqe(p_io_uring_, &cqe)) {
+        unsigned head, count = 0;
+        io_uring_for_each_cqe(p_io_uring_, head, cqe) {
+            ++count;
+            handle_cqe(cqe);
         }
-        
-        if (cqes_[i]->res < 0) {
-            inner_ec = make_socket_error_code(-cqes_[i]->res);
-            ioc->buf.len = 0;
-        } else {
-            switch (ioc->op) {
-            case Operation::WakeUp: {
-            }
-                break;
-            case Operation::ReadFile: {
-                ioc->buf.len = cqes_[i]->res;
-            }
-                break;
-            case Operation::WriteFile: {
-                ioc->buf.len = cqes_[i]->res;
-            }
-                break;
-            case Operation::Accept: {
-                ioc->handle = cqes_[i]->res;
-                ::getpeername(
-                    ioc->handle, 
-                    (sockaddr*)&ioc->remote_addr,
-                    (socklen_t*)ioc->buf.buf
-                );
-            }
-                break;
-            case Operation::Connect: {
-            }
-                break;
-            case Operation::Receive: {
-                ioc->buf.len = cqes_[i]->res;
-            }
-                break;
-            case Operation::Send: {
-                ioc->buf.len = cqes_[i]->res;
-            }
-                break;
-            }
-        }
-        ioc->cb(inner_ec, ioc, ioc->ptr);
+        ::io_uring_cq_advance(p_io_uring_, count);
     }
-    ::io_uring_cq_advance(p_io_uring_, count);
 
     return 1;
 }
 
+void IoUring::handle_cqe(io_uring_cqe* cqe) {
+    std::error_code inner_ec;
+    IoContext* ioc = (IoContext*)::io_uring_cqe_get_data(cqe);
+
+    if (ioc->op != Operation::Noop) {
+        --io_num_;
+    } else if (ioc->buf.len == (size_t)-1) {
+        // wake
+        prep_wake_up();
+    }
+
+    if (cqe->res < 0) {
+        inner_ec = make_socket_error_code(-cqe->res);
+        ioc->buf.len = 0;
+    } else {
+        switch (ioc->op) {
+        case Operation::ReadFile: {
+            ioc->buf.len = cqe->res;
+        }
+            break;
+        case Operation::WriteFile: {
+            ioc->buf.len = cqe->res;
+        }
+            break;
+        case Operation::Accept: {
+            ioc->handle = cqe->res;
+            ::getpeername(
+                ioc->handle, 
+                (sockaddr*)&ioc->remote_addr,
+                (socklen_t*)ioc->buf.buf
+            );
+        }
+            break;
+        case Operation::Connect: {
+        }
+            break;
+        case Operation::Receive: {
+            ioc->buf.len = cqe->res;
+        }
+            break;
+        case Operation::Send: {
+            ioc->buf.len = cqe->res;
+        }
+            break;
+        default:
+            break;
+        }
+    }
+
+    ioc->cb(inner_ec, ioc, ioc->ptr);
+}
+
 void IoUring::wake_up() {
-    ::write(wake_up_ctx_->handle, &wake_up_ctx_->remote_addr, sizeof(void*));
+    size_t len = (size_t)-1;
+    ::write(wake_up_ctx_->handle, &len, sizeof(size_t));
 }
 
 void IoUring::prep_wake_up() {
+    wake_up_ctx_->buf.len = 0;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_read(sqe, wake_up_ctx_->handle, &wake_up_ctx_->ptr, sizeof(void*), 0);
+    ::io_uring_prep_read(sqe, wake_up_ctx_->handle, &wake_up_ctx_->buf.len, sizeof(size_t), 0);
     ::io_uring_sqe_set_data(sqe, wake_up_ctx_);
 }
 

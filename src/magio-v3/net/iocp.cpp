@@ -311,11 +311,12 @@ void IoCompletionPort::cancel(IoContext &ioc) {
 }
 
 // invoke all
-int IoCompletionPort::poll(size_t wait_time, std::error_code &ec) {
-    if (wait_time == 0 && data_->io_num == 0) {
+int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
+    if (nanosec == 0 && data_->io_num == 0) {
         return 0;
     }
 
+    size_t wait_time = nanosec / 1000000;
     for (int i = 0; i < 1024; ++i) {
         std::error_code inner_ec;
         DWORD bytes_transferred = 0;
@@ -348,10 +349,6 @@ int IoCompletionPort::poll(size_t wait_time, std::error_code &ec) {
 
         --data_->io_num;
         switch(ioc->op) {
-        case Operation::WakeUp: {
-            // Never
-        }
-            break;
         case Operation::ReadFile: {
             ioc->buf.len = bytes_transferred;
         }
@@ -407,6 +404,8 @@ int IoCompletionPort::poll(size_t wait_time, std::error_code &ec) {
         case Operation::Receive: {
             ioc->buf.len = bytes_transferred;
         }
+            break;
+        default:
             break;
         }
 
