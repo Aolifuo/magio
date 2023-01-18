@@ -27,22 +27,33 @@ Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
     return *this;
 }
 
-void Acceptor::bind_and_listen(const EndPoint &ep, std::error_code& ec) {
+Acceptor Acceptor::bind_and_listen(const EndPoint &ep, std::error_code& ec) {
+    Acceptor acceptor;
     auto& address = ep.address();
-    listener_.open(address.ip(), Transport::Tcp, ec);
+    acceptor.listener_ = Socket::open(address.ip(), Transport::Tcp, ec);
     if (ec) {
-        return;
+        return {};
     }
 
-    listener_.bind(ep, ec);
+    acceptor.listener_.bind(ep, ec);
     if (ec) {
-        return;
+        return {};
     }
 
     // listen
-    if (-1 == ::listen(listener_.handle(), SOMAXCONN)) {
+    if (-1 == ::listen(acceptor.listener_.handle(), SOMAXCONN)) {
         ec = SYSTEM_ERROR_CODE;
+        return {};
     }
+
+#ifdef _WIN32
+    this_context::get_service().relate((void*)acceptor.listener_.handle(), ec);
+    if (ec) {
+        return {};
+    }
+#endif
+
+    return acceptor;
 }
 
 void Acceptor::set_option(int op, SmallBytes bytes, std::error_code& ec) {

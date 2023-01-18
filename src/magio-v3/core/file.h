@@ -33,15 +33,14 @@ public:
 
     RandomAccessFile();
 
-    RandomAccessFile(const char* path, int mode, int x = 0744);
-
     ~RandomAccessFile();
 
     RandomAccessFile(RandomAccessFile&& other) noexcept;
 
     RandomAccessFile& operator=(RandomAccessFile&& other) noexcept;
 
-    void open(const char* path, int mode, int x = 0744);
+    [[nodiscard]]
+    static RandomAccessFile open(const char* path, int mode, int x = 0744);
 
     void cancel();
 
@@ -53,8 +52,8 @@ public:
 
     [[nodiscard]]
     Coro<size_t> write_at(size_t offset, const char* msg, size_t len, std::error_code& ec);
-
 #endif
+
     void read_at(size_t offset, char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
 
     void write_at(size_t offset, const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
@@ -89,13 +88,12 @@ public:
 
     File();
 
-    File(const char* path, int mode, int x = 0744);
-
     File(File&& other) noexcept;
 
     File& operator=(File&& other) noexcept;
 
-    void open(const char* path, int mode, int x = 0744);
+    [[nodiscard]]
+    static File open(const char* path, int mode, int x = 0744);
 
     void cancel();
 
@@ -107,8 +105,8 @@ public:
     
     [[nodiscard]]
     Coro<size_t> write(const char* buf, size_t len, std::error_code& ec);
-
 #endif
+
     void read(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
     
     void write(const char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);

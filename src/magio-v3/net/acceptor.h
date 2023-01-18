@@ -16,7 +16,8 @@ public:
 
     Acceptor& operator=(Acceptor&& other) noexcept;
 
-    void bind_and_listen(const EndPoint& ep, std::error_code& ec);
+    [[nodiscard]]
+    static Acceptor bind_and_listen(const EndPoint& ep, std::error_code& ec);
 
     void set_option(int op, SmallBytes bytes, std::error_code& ec);
 

@@ -75,7 +75,8 @@ public:
 
     Socket& operator=(Socket&& other) noexcept;
 
-    void open(Ip ip, Transport tp, std::error_code& ec);
+    [[nodiscard]]
+    static Socket open(Ip ip, Transport tp, std::error_code& ec);
 
     void bind(const EndPoint& ep, std::error_code& ec);
 
@@ -98,8 +99,8 @@ public:
 
     [[nodiscard]]
     Coro<std::pair<size_t, EndPoint>> receive_from(char* buf, size_t len, std::error_code& ec);
-
 #endif
+
     void connect(const EndPoint& ep, std::function<void(std::error_code)>&& completion_cb);
 
     void send(const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
@@ -113,12 +114,12 @@ public:
     void cancel();
 
     void shutdown(Shutdown type);
+    
+    void close();
 
     Handle handle() const {
         return handle_;
     }
-
-    void close();
 
     Ip ip() const {
         return ip_;

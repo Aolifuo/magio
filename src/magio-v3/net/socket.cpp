@@ -104,11 +104,12 @@ Socket& Socket::operator=(Socket&& other) noexcept {
     return *this;
 }
 
-void Socket::open(Ip ip, Transport tp, std::error_code &ec) {
-    close();
-    handle_ = detail::open_socket(ip, tp, ec);
-    ip_ = ip;
-    transport_ = tp;
+Socket Socket::open(Ip ip, Transport tp, std::error_code &ec) {
+    Socket socket;
+    socket.handle_ = detail::open_socket(ip, tp, ec);
+    socket.ip_ = ip;
+    socket.transport_ = tp;
+    return socket;
 }
 
 void Socket::bind(const EndPoint& ep, std::error_code &ec) {
@@ -433,7 +434,7 @@ void Socket::cancel() {
 }
 
 void Socket::close() {
-    if (handle_ != -1) {
+    if (-1 != handle_) {
         detail::close_socket(handle_);
         reset();
     }

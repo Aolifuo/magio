@@ -18,12 +18,6 @@ RandomAccessFile::RandomAccessFile() {
     reset();
 }
 
-RandomAccessFile::RandomAccessFile(const char *path, int mode, int x)
-    : RandomAccessFile() 
-{
-    open(path, mode, x);
-}
-
 RandomAccessFile::~RandomAccessFile() {
     close();
 }
@@ -42,13 +36,12 @@ RandomAccessFile& RandomAccessFile::operator=(RandomAccessFile&& other) noexcept
     return *this;
 }
 
-void RandomAccessFile::open(const char *path, int mode, int x) {
-    close();
-
+RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
+    RandomAccessFile file;
 #ifdef _WIN32
     int first = mode & 0b000111;
     if (!(first)) {
-        return;
+        return file;
     }
 
     DWORD desired_access = 0;
@@ -63,7 +56,7 @@ void RandomAccessFile::open(const char *path, int mode, int x) {
         desired_access = GENERIC_READ | GENERIC_WRITE;
         break;
     default:
-        return;
+        return file;
     }
 
     // OPEN_EXISTING must exit
@@ -98,19 +91,19 @@ void RandomAccessFile::open(const char *path, int mode, int x) {
     );
 
     if (INVALID_HANDLE_VALUE == handle) {
-        return;
+        return file;
     }
 
     std::error_code ec;
     this_context::get_service().relate(handle, ec);
     if (ec) {
-        M_SYS_ERROR("cannot add file handle to iocp: {}", ec.value());
+        M_SYS_ERROR("cannot add file handle to iocp: {}", ec.message());
         ::CloseHandle(handle);
-        return;
+        return file;
     }
 
-    handle_ = handle;
-    enable_app_ = enable_app;
+    file.handle_ = handle;
+    file.enable_app_ = enable_app;
 
 #elif defined (__linux__)
     int flag = 0;
@@ -147,8 +140,10 @@ void RandomAccessFile::open(const char *path, int mode, int x) {
         return;
     }
 
-    handle_ = fd;
+    file.handle_ = fd;
 #endif
+
+    return file;
 }
 
 void RandomAccessFile::cancel() {
@@ -165,7 +160,7 @@ void RandomAccessFile::close() {
 #elif defined (__linux__)
         ::close(handle_);
 #endif
-    reset();
+        reset();
     }
 }
 
@@ -285,10 +280,6 @@ File::File(RandomAccessFile file)
     : file_(std::move(file))
 { }
 
-File::File(const char *path, int mode, int x)
-    : file_(path, (RandomAccessFile::Openmode)mode, x) 
-{ }
-
 File::File(File&& other) noexcept
     : file_(std::move(other.file_))
     , read_offset_(other.read_offset_)
@@ -302,10 +293,12 @@ File& File::operator=(File&& other) noexcept {
     return *this;
 }
 
-void File::open(const char *path, int mode, int x) {
-    file_.open(path, mode, x);
-    read_offset_ = 0;
-    write_offset_ = 0;
+File File::open(const char *path, int mode, int x) {
+    File file;
+    file.file_ = RandomAccessFile::open(path, (RandomAccessFile::Openmode)mode, x);
+    file.read_offset_ = 0;
+    file.write_offset_ = 0;
+    return file;
 }
 
 void File::cancel() {
