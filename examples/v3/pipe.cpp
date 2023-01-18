@@ -11,16 +11,22 @@ public:
     { }
 
     void start() {
-        ctx_pool_.next_context().spawn(console_read(), [](exception_ptr eptr, Unit) {
+        error_code ec;
+        tie(read_end_, write_end_) = make_pipe(ec);
+        if (ec) {
+            M_FATAL("{}", ec.message());
+        }
+        ctx_pool_.get(0).spawn(console_read(), [](exception_ptr eptr, Unit) {
             this_context::stop();
         });
-        ctx_pool_.next_context().spawn(console_write(), [](exception_ptr eptr, Unit) {
+        ctx_pool_.get(1).spawn(console_write(), [](exception_ptr eptr, Unit) {
             this_context::stop();
         });
     }
 
 private:
     Coro<> console_read() {
+        M_INFO("{}", "read thread");
         string line;
         
         for (; ;) {
@@ -41,6 +47,7 @@ private:
     }
 
     Coro<> console_write() {
+        M_INFO("{}", "write thread");
         char buf[1024];
         
         for (; ;) {
@@ -60,7 +67,8 @@ private:
 };
 
 int main() {
-    CoroContextPool ctxs(2, 2);
+    M_INFO("{}", "");
+    CoroContextPool ctxs(2, 64);
     ConsoleReadWrite crw(ctxs);
     crw.start();
     ctxs.start_all();
