@@ -9,7 +9,7 @@ public:
     void start(const char* ip, net::PortType port) {
         error_code ec;
         net::EndPoint ep(net::make_address(ip, ec), 1234);
-        socket_.open(net::Ip::v6, net::Transport::Udp, ec);
+        socket_ = net::Socket::open(net::Ip::v6, net::Transport::Udp, ec);
         socket_.bind(ep, ec);
         if (ec) {
             M_FATAL("{}", ec.message());

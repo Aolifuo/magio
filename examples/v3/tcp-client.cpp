@@ -12,8 +12,7 @@ Coro<> client() {
         M_FATAL("{}", ec.message());
     }
 
-    net::Socket socket;
-    socket.open(net::Ip::v6, net::Transport::Tcp, ec);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp, ec);
     socket.bind(local, ec);
     if (ec) {
         M_FATAL("{}", ec.message());

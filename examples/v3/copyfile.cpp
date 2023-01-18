@@ -5,8 +5,8 @@ using namespace magio;
 using namespace chrono_literals;
 
 Coro<> copyfile() {
-    File from("from", File::ReadOnly);
-    File to("to", File::WriteOnly | File::Create | File::Truncate);
+    auto from = File::open("from", File::ReadOnly);
+    auto to = File::open("to", File::WriteOnly | File::Create | File::Truncate);
     if (!from || !to) {
         M_FATAL("cannot open file {} or {}", "from", "to");
     }

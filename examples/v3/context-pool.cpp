@@ -44,8 +44,7 @@ Coro<> server() {
         M_FATAL("{}", ec.message());
     }
 
-    net::Acceptor acceptor;
-    acceptor.bind_and_listen(local, ec);
+    auto acceptor = net::Acceptor::bind_and_listen(local, ec);
     if (ec) {
         M_FATAL("{}", ec.message());
     }

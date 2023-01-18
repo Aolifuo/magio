@@ -47,7 +47,7 @@ public:
         if (ec) {
             M_FATAL("cannot make address: {}", ec.message());
         }
-        acceptor_.bind_and_listen(ep, ec);
+        acceptor_ = net::Acceptor::bind_and_listen(ep, ec);
         if (ec) {
             M_FATAL("cannot bind and listen: {}", ec.message());
         }

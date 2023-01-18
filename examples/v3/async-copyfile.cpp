@@ -7,8 +7,8 @@ using namespace chrono_literals;
 class CopyFile {
 public:
     CopyFile(const char* p1, const char* p2)
-        : from_(p1, File::ReadOnly)
-        , to_(p2, File::WriteOnly | File::Create | File::Truncate) 
+        : from_(File::open(p1, File::ReadOnly))
+        , to_(File::open(p2, File::WriteOnly | File::Create | File::Truncate)) 
     {
         if (!from_ || !to_) {
             M_FATAL("cannot open {} or {}", p1, p2);

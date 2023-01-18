@@ -42,7 +42,7 @@ private:
 
     Coro<> count_one_file(string path) {
         char buf[1024];
-        File file(path.c_str(), File::ReadOnly);
+        auto file = File::open(path.c_str(), File::ReadOnly);
         if (!file) {
             M_ERROR("cannot open {}", path);
             co_return;

@@ -6,8 +6,7 @@ using namespace chrono_literals;
 
 Coro<> amain() {
     error_code ec;
-    net::Socket socket;
-    socket.open(net::Ip::v6, net::Transport::Udp, ec);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp, ec);
     if (ec) {
         M_FATAL("{}", ec.message());
     }
