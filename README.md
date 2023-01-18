@@ -33,8 +33,7 @@ Coro<> server() {
         M_FATAL("{}", ec.message());
     }
 
-    net::Acceptor acceptor;
-    acceptor.bind_and_listen(local, ec);
+    auto acceptor = net::Acceptor::bind_and_listen(local, ec);
     if (ec) {
         M_FATAL("{}", ec.message());
     }
@@ -68,8 +67,7 @@ Coro<> client() {
         M_FATAL("{}", ec.message());
     }
 
-    net::Socket socket;
-    socket.open(net::Ip::v6, net::Transport::Tcp, ec);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp, ec);
     socket.bind(local, ec);
     if (ec) {
         M_FATAL("{}", ec.message());
@@ -109,8 +107,7 @@ int main() {
 ```cpp
 Coro<> amain() {
     error_code ec;
-    net::Socket socket;
-    socket.open(net::Ip::v6, net::Transport::Udp, ec);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp, ec);
     if (ec) {
         M_FATAL("{}", ec.message());
     }
@@ -148,8 +145,8 @@ int main() {
 
 ```cpp
 Coro<> copyfile() {
-    File from("from", File::ReadOnly);
-    File to("to", File::WriteOnly | File::Create | File::Truncate);
+    auto from = File::open("from", File::ReadOnly);
+    auto to = File::open("to", File::WriteOnly | File::Create | File::Truncate);
     if (!from || !to) {
         M_FATAL("cannot open file {} or {}", "from", "to");
     }
