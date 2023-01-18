@@ -58,14 +58,20 @@ void CoroContext::start() {
         // TODO shrink
         timer_tasks.clear();
 
-        int64_t next_duration = timer_queue_.next_duration();
+        std::error_code ec;
+        auto next_duration = timer_queue_.next_duration();
         {
             std::lock_guard lk(mutex_);
             if (!pending_handles_.empty() || state_ == Stopping) {
-                next_duration = 0;
+                next_duration = TimerClock::duration(0);
             }
         }
-        handle_io_poller(next_duration);
+
+        int status = p_io_service_->poll(next_duration.count(), ec);
+        if (-1 == status) {
+            M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.message());
+            stop();
+        }
     }
 }
 
@@ -93,15 +99,6 @@ void CoroContext::dispatch(Task &&task) {
         task();
     } else {
         execute(std::move(task));
-    }
-}
-
-void CoroContext::handle_io_poller(int64_t wait_time) {
-    std::error_code ec;
-    int status = p_io_service_->poll(wait_time < 0 ? 0 : wait_time, ec);
-    if (-1 == status) {
-        M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.message());
-        stop();
     }
 }
 

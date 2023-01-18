@@ -16,7 +16,7 @@
 namespace magio {
 
 enum class Operation {
-    WakeUp,
+    Noop,
     ReadFile,
     WriteFile,
     Accept,

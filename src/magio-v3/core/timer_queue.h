@@ -87,15 +87,15 @@ public:
         return timers_.empty();
     }
 
-    size_t next_duration() {
+    TimerClock::duration next_duration() {
         if (timers_.empty()) {
-            return 0xFFFFFFFF;
+            return TimerClock::duration::max();
         }
 
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        auto duration = (
             timers_.top()->dead_line - TimerClock::now()
-        ).count();
-        return duration < 0 ? 0 : duration;
+        );
+        return duration.count() < 0 ? TimerClock::duration(0) : duration;
     }
 
 private:
