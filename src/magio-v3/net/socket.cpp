@@ -121,10 +121,6 @@ void Socket::bind(const EndPoint& ep, std::error_code &ec) {
         ec = SYSTEM_ERROR_CODE;
         return;
     }
-
-#ifdef _WIN32
-    this_context::get_service().relate((void*)handle_, ec);
-#endif
 }
 
 void Socket::set_option(int op, SmallBytes bytes, std::error_code& ec) {

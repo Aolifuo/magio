@@ -153,6 +153,8 @@ int IoUring::poll(bool block, std::error_code &ec) {
 
         if (ioc->op != Operation::WakeUp) {
             --io_num_;
+        } else {
+            prep_wake_up();
         }
         
         if (cqes_[i]->res < 0) {
@@ -161,8 +163,6 @@ int IoUring::poll(bool block, std::error_code &ec) {
         } else {
             switch (ioc->op) {
             case Operation::WakeUp: {
-                // be waked up
-                prep_wake_up();
             }
                 break;
             case Operation::ReadFile: {

@@ -26,7 +26,7 @@ void Mutex::GuardAwaitable::await_suspend(std::coroutine_handle<> prev_h) {
 }
 
 LockGuard Mutex::GuardAwaitable::await_resume() {
-     return {co_mutex_};
+     return LockGuard{co_mutex_};
 }
 
 Mutex::Mutex()

@@ -103,7 +103,7 @@ void CoroContext::handle_io_poller() {
 
     int status = p_io_service_->poll(block, ec);
     if (-1 == status) {
-        M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.value());
+        M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.message());
         stop();
     }
 }
