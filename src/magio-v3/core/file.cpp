@@ -109,7 +109,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
     int flag = 0;
     int first = mode & 0b000111;
     if (!(first)) {
-        return;
+        return file;
     }
     switch (first) {
     case ReadOnly:
@@ -122,7 +122,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
         flag = O_RDWR;
         break;
     default:
-        return;
+        return file;
     }
 
     if (mode & Create) {
@@ -137,7 +137,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
 
     int fd = ::open(path, flag, x);
     if (-1 == fd) {
-        return;
+        return file;
     }
 
     file.handle_ = fd;
