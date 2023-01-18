@@ -42,8 +42,7 @@ IoCompletionPort::IoCompletionPort() {
     WebSocket::init();
 
     std::error_code ec;
-    Socket socket;
-    socket.open(Ip::v4, Transport::Tcp, ec);
+    auto socket = Socket::open(Ip::v4, Transport::Tcp, ec);
     if (ec) {
         M_FATAL("Failed to open a socket in iocp: {}", ec.value());
     }
@@ -312,12 +311,11 @@ void IoCompletionPort::cancel(IoContext &ioc) {
 }
 
 // invoke all
-int IoCompletionPort::poll(bool block, std::error_code &ec) {
-    if (!block && data_->io_num == 0) {
+int IoCompletionPort::poll(size_t wait_time, std::error_code &ec) {
+    if (wait_time == 0 && data_->io_num == 0) {
         return 0;
     }
 
-    ULONG wait_time = block ? ULONG_MAX : 0;
     for (int i = 0; i < 1024; ++i) {
         std::error_code inner_ec;
         DWORD bytes_transferred = 0;
@@ -329,7 +327,7 @@ int IoCompletionPort::poll(bool block, std::error_code &ec) {
             &bytes_transferred, 
             (PULONG_PTR)&key, 
             (LPOVERLAPPED*)&ioc,
-            wait_time
+            (ULONG)wait_time
         );
         wait_time = 0;
 

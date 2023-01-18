@@ -57,7 +57,7 @@ public:
 private:
     void wake_up();
 
-    void handle_io_poller();
+    void handle_io_poller(int64_t wait_time);
 
     std::mutex mutex_;
 

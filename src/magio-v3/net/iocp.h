@@ -34,7 +34,7 @@ public:
     
     void relate(void* handle, std::error_code& ec) override;
 
-    int poll(bool block, std::error_code& ec) override;
+    int poll(size_t wait_time, std::error_code& ec) override;
 
     void wake_up() override;
 

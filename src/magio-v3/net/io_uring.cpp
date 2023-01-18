@@ -127,14 +127,20 @@ void IoUring::cancel(IoContext& ioc) {
 }
 
 // invoke all completion
-int IoUring::poll(bool block, std::error_code &ec) {
-    if (!block && io_num_ == 0) {
+int IoUring::poll(size_t wait_time, std::error_code &ec) {
+    if (wait_time == 0 && io_num_ == 0) {
         return 0;
     }
 
-    int r;
+    ::io_uring_submit(p_io_uring_);
 
-    r = ::io_uring_submit_and_wait(p_io_uring_, block);
+    __kernel_timespec timespec{
+        .tv_sec = wait_time / 1000,
+        .tv_nsec = 1000 * 1000 * (wait_time % 1000)
+    };
+
+    io_uring_cqe* cqe
+    int r = ::io_uring_wait_cqe_timeout(p_io_uring_, &cqe, &timespec);
     if (-EAGAIN == r) {
         // non block and no completion
         return 0;

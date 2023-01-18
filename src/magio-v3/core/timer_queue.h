@@ -68,7 +68,6 @@ public:
 
     void get_expired(std::vector<TimerTask>& result) {
         auto current_tp = TimerClock::now();
-
         for (; !timers_.empty() && current_tp >= timers_.top()->dead_line;) {
             if (timers_.top()->flag == true) {
                 result.push_back(std::move(timers_.top()->task));
@@ -86,6 +85,17 @@ public:
 
     size_t empty() {
         return timers_.empty();
+    }
+
+    size_t next_duration() {
+        if (timers_.empty()) {
+            return 0xFFFFFFFF;
+        }
+
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            timers_.top()->dead_line - TimerClock::now()
+        ).count();
+        return duration < 0 ? 0 : duration;
     }
 
 private:
