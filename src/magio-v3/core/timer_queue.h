@@ -89,7 +89,7 @@ public:
 
     TimerClock::duration next_duration() {
         if (timers_.empty()) {
-            return TimerClock::duration::max();
+            return (TimerClock::duration::max)();
         }
 
         auto duration = (
