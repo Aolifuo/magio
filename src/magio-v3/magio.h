@@ -8,5 +8,6 @@
 #include "magio-v3/core/thread_pool.h"
 #include "magio-v3/core/coro_context_pool.h"
 #include "magio-v3/net/acceptor.h"
+#include "magio-v3/net/address.h"
 
 #endif
