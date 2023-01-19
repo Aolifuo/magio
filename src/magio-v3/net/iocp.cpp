@@ -7,7 +7,6 @@
 #include "magio-v3/net/socket.h"
 
 #include <MSWSock.h>
-#include <Ws2tcpip.h> // for socklen_t
 
 namespace magio {
 
@@ -125,192 +124,181 @@ IoCompletionPort::~IoCompletionPort() {
     }
 }
 
-void IoCompletionPort::read_file(IoContext &ioc, size_t offset) {
+void IoCompletionPort::write_file(IoHandle ioh, size_t offset, IoContext *ioc) {
     ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::ReadFile;
-    ioc.overlapped.Offset = offset;
-
-    BOOL status = ReadFile(
-        (HANDLE)ioc.handle, 
-        ioc.buf.buf, 
-        ioc.buf.len, 
-        NULL, 
-        &ioc.overlapped
-    );
-    
-    if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
-    }
-}
-
-void IoCompletionPort::write_file(IoContext &ioc, size_t offset) {
-    ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::WriteFile;
-    ioc.overlapped.Offset = offset;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
+    ioc->overlapped.Offset = offset;
 
     BOOL status = WriteFile(
-        (HANDLE)ioc.handle, 
-        ioc.buf.buf, 
-        ioc.buf.len, 
+        ioh.ptr, 
+        ioc->iovec.buf, 
+        ioc->iovec.len, 
         NULL, 
-        &ioc.overlapped
+        &ioc->overlapped
     );
     
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
 
-void IoCompletionPort::connect(IoContext& ioc) {
+void IoCompletionPort::read_file(IoHandle ioh, size_t offset, IoContext *ioc) {
     ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::Connect;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
+    ioc->overlapped.Offset = offset;
 
-    bool status = data_->connect(
-        ioc.handle,
-        (sockaddr*)&ioc.remote_addr,
-        ioc.addr_len,
-        NULL,
-        0,
-        NULL,
-        (LPOVERLAPPED)&ioc.overlapped
+    BOOL status = ReadFile(
+        ioh.ptr, 
+        ioc->iovec.buf, 
+        ioc->iovec.len, 
+        NULL, 
+        &ioc->overlapped
     );
-
+    
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
 
-void IoCompletionPort::accept(Socket &listener, IoContext &ioc) {
+void IoCompletionPort::accept(const net::Socket& listener, IoContext *ioc) {
     ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::Accept;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
 
     std::error_code ec;
-    SOCKET sock_handle = detail::open_socket(
-        listener.ip(), listener.transport(), ec);
+    SOCKET sock_handle = detail::open_socket(listener.ip(), listener.transport(), ec);
     if (ec) {
-        ioc.cb(ec, &ioc, ioc.ptr);
+        ioc->cb(ec, ioc, ioc->ptr);
         return;
     }
-    ioc.handle = sock_handle;
-
-    SOCKET listener_h = listener.handle();
-    std::memcpy(&ioc.buf.buf[120], &listener_h, sizeof(listener_h));
+    ioc->res = sock_handle;
+    auto listener_h = listener.handle();
+    std::memcpy(&ioc->iovec.buf[120], &listener_h, sizeof(listener_h));
 
     bool status = data_->accept(
         listener.handle(),
-        ioc.handle,
-        ioc.buf.buf,
+        ioc->res,
+        ioc->iovec.buf,
         0,
         sizeof(sockaddr_in6) + 16, // ipv4 ipv6
         sizeof(sockaddr_in6) + 16,
         NULL,
-        (LPOVERLAPPED)&ioc.overlapped
+        &ioc->overlapped
     );
 
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
         detail::close_socket(sock_handle);
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
-        return;
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
 
-void IoCompletionPort::send(IoContext &ioc) {
+void IoCompletionPort::connect(SocketHandle socket, IoContext *ioc) {
     ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::Send;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
+    ioc->res = socket;
+
+    bool status = data_->connect(
+        socket,
+        (sockaddr*)&ioc->remote_addr,
+        ioc->addr_len,
+        NULL,
+        0,
+        NULL,
+        (LPOVERLAPPED)&ioc->overlapped
+    );
+
+    if (!status && ERROR_IO_PENDING != ::GetLastError()) {
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
+    }
+}
+
+void IoCompletionPort::send(SocketHandle socket, IoContext *ioc) {
+    ++data_->io_num;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
 
     DWORD flag = 0;
     int status = ::WSASend(
-        ioc.handle, 
-        &ioc.buf, 
+        socket, 
+        &ioc->iovec, 
         1, 
         NULL, 
-        flag, 
-        (LPOVERLAPPED)&ioc.overlapped, 
+        flag,
+        (LPOVERLAPPED)&ioc->overlapped, 
         NULL
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
 
-void IoCompletionPort::receive(IoContext &ioc) {
+void IoCompletionPort::receive(SocketHandle socket, IoContext *ioc) {
     ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::Receive;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
 
     DWORD flag = 0;
     int status = ::WSARecv(
-        ioc.handle, 
-        (LPWSABUF)&ioc.buf, 
+        socket, 
+        (LPWSABUF)&ioc->iovec, 
         1, 
         NULL,
         &flag,
-        (LPOVERLAPPED)&ioc.overlapped, 
+        (LPOVERLAPPED)&ioc->overlapped, 
         NULL
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
 
-void IoCompletionPort::send_to(IoContext &ioc) {
+void IoCompletionPort::send_to(SocketHandle socket, IoContext *ioc) {
     ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::Send;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
 
     DWORD flag = 0;
     int status = ::WSASendTo(
-        ioc.handle,
-        &ioc.buf, 
+        socket,
+        &ioc->iovec, 
         1, 
         NULL, 
         flag, 
-        (const sockaddr *)&ioc.remote_addr, 
-        ioc.addr_len, 
-        (LPOVERLAPPED)&ioc.overlapped,
+        (const sockaddr *)&ioc->remote_addr, 
+        ioc->addr_len, 
+        (LPOVERLAPPED)&ioc->overlapped,
         NULL
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
 
-void IoCompletionPort::receive_from(IoContext &ioc) {
+void IoCompletionPort::receive_from(SocketHandle socket, IoContext *ioc) {
     ++data_->io_num;
-    ZeroMemory(&ioc.overlapped, sizeof(OVERLAPPED));
-    ioc.op = Operation::Receive;
+    ZeroMemory(&ioc->overlapped, sizeof(OVERLAPPED));
 
     DWORD flag = 0;
     int status = ::WSARecvFrom(
-        ioc.handle, 
-        &ioc.buf, 
+        socket, 
+        &ioc->iovec, 
         1,
         NULL, 
         &flag,
-        (sockaddr*)&ioc.remote_addr, 
-        &ioc.addr_len, 
-        (LPOVERLAPPED)&ioc.overlapped, 
+        (sockaddr*)&ioc->remote_addr, 
+        &ioc->addr_len, 
+        (LPOVERLAPPED)&ioc->overlapped, 
         NULL
     );
 
     if (SOCKET_ERROR == status && ERROR_IO_PENDING != ::GetLastError()) {
-        ioc.cb(SYSTEM_ERROR_CODE, &ioc, ioc.ptr);
+        ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
 
-void IoCompletionPort::cancel(IoContext &ioc) {
-    ::CancelIoEx((HANDLE)ioc.handle, NULL);
-}
+// void IoCompletionPort::cancel(IoContext &ioc) {
+//     ::CancelIoEx((HANDLE)ioc.handle, NULL);
+// }
 
-// invoke all
 int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
     if (nanosec == 0 && data_->io_num == 0) {
         return 0;
@@ -341,7 +329,7 @@ int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
         
         if (ULONG_MAX == bytes_transferred) {
             // be waked up
-            return 2;
+            continue;
         } else if (!ioc) {
             ec = SYSTEM_ERROR_CODE;
             return -1;
@@ -350,11 +338,11 @@ int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
         --data_->io_num;
         switch(ioc->op) {
         case Operation::ReadFile: {
-            ioc->buf.len = bytes_transferred;
+            ioc->res = bytes_transferred;
         }
             break;
         case Operation::WriteFile: {
-            ioc->buf.len = bytes_transferred;
+            ioc->res = bytes_transferred;
         }
             break;
         case Operation::Accept: {
@@ -365,7 +353,7 @@ int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
                 int remote_addr_len = 0;
 
                 data_->get_sock_addr(
-                    ioc->buf.buf,
+                    ioc->iovec.buf,
                     0,
                     sizeof(sockaddr_in6) + 16,
                     sizeof(sockaddr_in6) + 16,
@@ -378,31 +366,32 @@ int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
                 std::memcpy(&ioc->remote_addr, remote_addr_ptr, remote_addr_len);
                 ioc->addr_len = remote_addr_len;
 
-                auto listener_h = *(SOCKET*)&ioc->buf.buf[120];
+                auto listener_h = *(SOCKET*)&ioc->iovec.buf[120];
                 ::setsockopt(
-                    ioc->handle, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
+                    ioc->res, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
                     (const char*)&listener_h, sizeof(listener_h)
                 );
             } else {
-                detail::close_socket(ioc->handle);
+                detail::close_socket(ioc->res);
             }
+            delete[] ioc->iovec.buf;
         }
             break;
         case Operation::Connect: {
             if (!inner_ec) {
                 ::setsockopt(
-                    ioc->handle, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT,
+                    ioc->res, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT,
                     NULL, 0
                 );
             }
         }
             break;
         case Operation::Send: {
-            ioc->buf.len = bytes_transferred;
+            ioc->res = bytes_transferred;
         }
             break;
         case Operation::Receive: {
-            ioc->buf.len = bytes_transferred;
+            ioc->res = bytes_transferred;
         }
             break;
         default:
@@ -415,9 +404,9 @@ int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
     return 1;
 }
 
-void IoCompletionPort::relate(void* sock_handle, std::error_code& ec) {
+void IoCompletionPort::attach(IoHandle ioh, std::error_code &ec) {
     HANDLE handle = ::CreateIoCompletionPort(
-        (HANDLE)sock_handle, 
+        ioh.ptr, 
         data_->handle, 
         NULL, 
         0

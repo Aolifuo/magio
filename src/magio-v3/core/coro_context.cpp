@@ -22,7 +22,7 @@ CoroContext::CoroContext(size_t entries)
         M_FATAL("{}", "Entries cannot be zero");
     }
 
-    p_io_service_ = IOSERVICE(entries);
+    io_service_ = IOSERVICE(entries);
     LocalContext = this;
 }
 
@@ -67,7 +67,7 @@ void CoroContext::start() {
             }
         }
 
-        int status = p_io_service_->poll(next_duration.count(), ec);
+        int status = io_service_->poll(next_duration.count(), ec);
         if (-1 == status) {
             M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.message());
             stop();
@@ -117,11 +117,11 @@ void CoroContext::queue_in_context(std::coroutine_handle<> h) {
 #endif
 
 void CoroContext::wake_up() {
-    p_io_service_->wake_up();
+    io_service_->wake_up();
 }
 
-IoService& CoroContext::get_service() const {
-    return *p_io_service_;
+IoService CoroContext::get_service() const {
+    return {io_service_.get()};
 }
 
 bool CoroContext::assert_in_context_thread() {

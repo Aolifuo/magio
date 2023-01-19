@@ -23,60 +23,49 @@ ReadablePipe::ReadablePipe(Handle handle)
 ReadablePipe::ReadablePipe(ReadablePipe&& other) noexcept
     : handle_(other.handle_)
 {
-    other.handle_ = (Handle)-1;
+    other.handle_.a = -1;
 }
 
 ReadablePipe& ReadablePipe::operator=(ReadablePipe &&other) noexcept {
     handle_ = other.handle_;
-    other.handle_ = (Handle)-1;
+    other.handle_.a = -1;
     return *this;
 }
 
 #ifdef MAGIO_USE_CORO
 Coro<size_t> ReadablePipe::read(char *buf, size_t len, std::error_code &ec) {
-    ResumeHandle rhandle;
-    IoContext ioc{
-        .handle = decltype(IoContext::handle)(handle_),
-        .buf = io_buf(buf, len),
-        .ptr = &rhandle,
-        .cb = completion_callback
-    };
+    ResumeHandle rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        rhandle.handle = h;
-        this_context::get_service().read_file(ioc, 0);
+        rh.handle = h;
+        this_context::get_service().read_file(handle_, buf, len, 0, &rh, resume_callback);
     });
 
-    ec = rhandle.ec;
-    co_return ioc.buf.len;
+    ec = rh.ec;
+    co_return rh.res;
 }
 #endif
 
 void ReadablePipe::read(char *buf, size_t len, std::function<void (std::error_code, size_t)>&& cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
-    auto ioc = new IoContext{
-        .handle = decltype(IoContext::handle)(handle_),
-        .buf = io_buf(buf, len),
-        .ptr = new Cb(std::move(cb)),
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+
+    this_context::get_service().read_file(handle_, buf, len, 0, new Cb(std::move(cb)), 
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
-            (*cb)(ec, ioc->buf.len);
+            (*cb)(ec, ioc->res);
             delete cb;
             delete ioc;
-        }
-    };
-
-    this_context::get_service().read_file(*ioc, 0);
+        });
 }
 
 void ReadablePipe::close() {
-    if (handle_ != (Handle)-1) {
+    if (handle_.a != -1) {
 #ifdef _WIN32
-        ::CloseHandle(handle_);
+        ::CloseHandle(handle_.ptr);
 #elif defined (__linux__)
         ::close(handle_);
 #endif
-        handle_ = (Handle)-1;
+        handle_.a = -1;
     }
 }
 
@@ -91,84 +80,56 @@ WritablePipe::~WritablePipe() {
 WritablePipe::WritablePipe(WritablePipe&& other) noexcept
     : handle_(other.handle_)
 {
-    other.handle_ = (Handle)-1;
+    other.handle_.a = -1;
 }
 
 WritablePipe& WritablePipe::operator=(WritablePipe &&other) noexcept {
     handle_ = other.handle_;
-    other.handle_ = (Handle)-1;
+    other.handle_.a = -1;
     return *this;
 }
 
 #ifdef MAGIO_USE_CORO
 Coro<size_t> WritablePipe::write(const char *msg, size_t len, std::error_code &ec) {
-    ResumeHandle rhandle;
-    IoContext ioc{
-        .handle = decltype(IoContext::handle)(handle_),
-        .buf = io_buf((char*)msg, len),
-        .ptr = &rhandle,
-        .cb = completion_callback
-    };
+    ResumeHandle rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        rhandle.handle = h;
-        this_context::get_service().write_file(ioc, 0);
+        rh.handle = h;
+        this_context::get_service().write_file(handle_, msg, len, 0, &rh, resume_callback);
     });
 
-    ec = rhandle.ec;
-    co_return ioc.buf.len;
+    ec = rh.ec;
+    co_return rh.res;
 }
 #endif
 
 void WritablePipe::write(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
-    auto ioc = new IoContext{
-        .handle = decltype(IoContext::handle)(handle_),
-        .buf = io_buf((char*)msg, len),
-        .ptr = new Cb(std::move(cb)),
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+
+    this_context::get_service().write_file(handle_, msg, len, 0, new Cb(std::move(cb)), 
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
-            (*cb)(ec, ioc->buf.len);
+            (*cb)(ec, ioc->res);
             delete cb;
             delete ioc;
-        }
-    };
-
-    this_context::get_service().write_file(*ioc, 0);
+        });
 }
 
 void WritablePipe::close() {
-    if (handle_ != (Handle)-1) {
+    if (handle_.a != -1) {
 #ifdef _WIN32
-        ::CloseHandle(handle_);
+        ::CloseHandle(handle_.ptr);
 #elif defined (__linux__)
         ::close(handle_);
 #endif
-        handle_ = (Handle)-1;
+        handle_.a = -1;
     }
 }
 
 std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec) {
 #ifdef _WIN32
-    HANDLE read_h;
-    HANDLE write_h;
-    
-    // ?
-    BOOL status = ::CreatePipe(
-        &read_h, 
-        &write_h, 
-        NULL, 
-        0
-    );
-
-    if (!status) {
-        ec = SYSTEM_ERROR_CODE;
-    }
-
-    this_context::get_service().relate(read_h, ec); // ?
-    this_context::get_service().relate(write_h, ec); // ?
-
-    return {ReadablePipe(read_h), WritablePipe(write_h)};
+    // TODO
+    return {};
 #elif defined (__linux__)
     int pipefd[2];
     if (-1 == ::pipe(pipefd)) {

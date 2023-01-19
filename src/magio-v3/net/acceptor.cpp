@@ -1,13 +1,12 @@
 #include "magio-v3/net/acceptor.h"
 
+#include "magio-v3/core/error.h"
 #include "magio-v3/core/coro_context.h"
 #include "magio-v3/core/io_context.h"
-#include "magio-v3/core/error.h"
 #include "magio-v3/net/address.h"
 
 #ifdef _WIN32
-#include <Ws2tcpip.h>
-#include <MSWSock.h>
+
 #elif defined (__linux__)
 #include <arpa/inet.h>
 #endif
@@ -27,7 +26,7 @@ Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
     return *this;
 }
 
-Acceptor Acceptor::bind_and_listen(const EndPoint &ep, std::error_code& ec) {
+Acceptor Acceptor::listen(const EndPoint &ep, std::error_code& ec) {
     Acceptor acceptor;
     auto& address = ep.address();
     acceptor.listener_ = Socket::open(address.ip(), Transport::Tcp, ec);
@@ -46,85 +45,57 @@ Acceptor Acceptor::bind_and_listen(const EndPoint &ep, std::error_code& ec) {
         return {};
     }
 
-#ifdef _WIN32
-    this_context::get_service().relate((void*)acceptor.listener_.handle(), ec);
-    if (ec) {
-        return {};
-    }
-#endif
-
     return acceptor;
-}
-
-void Acceptor::set_option(int op, SmallBytes bytes, std::error_code& ec) {
-    listener_.set_option(op, bytes, ec);
-}
-
-SmallBytes Acceptor::get_option(int op, std::error_code &ec) {
-    return listener_.get_option(op, ec);
 }
 
 #ifdef MAGIO_USE_CORO
 Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
-    char buf[128];
-    IoContext ioc;
-    ResumeHandle handle;
-    ioc.buf.buf = buf;
-    ioc.buf.len = sizeof(buf);
-    ioc.ptr = &handle;
-    ioc.cb = completion_callback;
+    attach_context();
+    struct AcceptResume: ResumeHandle {
+        EndPoint ep;
+    } rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        handle.handle = h;
-        this_context::get_service().accept(listener_, ioc);
-    });
-    
-    ec = handle.ec;
-    if (ec) {
-        co_return {};
-    }
+        rh.handle = h;
+        this_context::get_service().accept(listener_, &rh, 
+            [](std::error_code ec, IoContext* ioc, void* ptr) {
+                auto rh = (AcceptResume*)ptr;
+                rh->ec = ec;
+                rh->res = ioc->res;
+                rh->ep = EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
+                rh->handle.resume();
 
-    Ip ipv = ioc.remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
+                delete ioc;
+            });
+    });
+
+    ec = rh.ec;
     co_return {
-        Socket(ioc.handle, ipv, Transport::Tcp), 
-        EndPoint(
-            make_address((sockaddr*)&ioc.remote_addr),
-            ::ntohs(ioc.remote_addr.sin_port)
-        )
+        Socket((SocketHandle)rh.res, listener_.ip(), listener_.transport()),
+        rh.ep
     };
 }
 #endif
 
 void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, Socket, EndPoint)>;
-    auto ioc = new IoContext;
-    ioc->buf.buf = new char[128];
-    ioc->buf.len = 128;
-    ioc->ptr = new Cb(std::move(completion_cb));
-    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-        auto cb = (Cb*)ptr;
-        if (ec) {
-           (*cb)(ec, {}, {});
-        } else {
-            Ip ipv = ioc->remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
+    attach_context();
+
+    this_context::get_service().accept(listener_, new Cb(std::move(completion_cb)), 
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            Ip ip = ioc->remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
             (*cb)(
-                ec, 
-                Socket(ioc->handle, ipv, Transport::Tcp), 
-                EndPoint(
-                    make_address((sockaddr*)&ioc->remote_addr),
-                    ::ntohs(ioc->remote_addr.sin_port)
-                )
+                ec, Socket(ioc->res, ip, Transport::Tcp),
+                EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
             );
-        }
+            delete cb;
+            delete ioc;
+        });
+}
 
-        delete [] ioc->buf.buf;
-        delete cb;
-        delete ioc;
-    };
-
-    auto listener_h = listener_.handle();
-    std::memcpy(&ioc->buf.buf[120], &listener_h, sizeof(listener_h));
-    this_context::get_service().accept(listener_, *ioc);
+void Acceptor::attach_context() {
+    listener_.attach_context();
 }
 
 }

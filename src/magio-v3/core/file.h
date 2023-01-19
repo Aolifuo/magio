@@ -3,6 +3,8 @@
 
 #include <functional>
 #include <system_error>
+
+#include "magio-v3/core/common.h"
 #include "magio-v3/core/noncopyable.h"
 
 namespace magio {
@@ -14,12 +16,7 @@ class RandomAccessFile: Noncopyable {
     friend class File;
 
 public:
-    using Handle =
-#ifdef  _WIN32
-    void*;
-#elif defined (__linux__)
-    int;
-#endif
+    using Handle = IoHandle;
 
     enum Openmode {
         ReadOnly  = 0b000001, 
@@ -62,16 +59,19 @@ public:
 
     void sync_data();
 
+    void attach_context();
+
     operator bool() const {
-        return handle_ != (Handle)-1;
+        return handle_.a != -1;
     }
 
 private:
     void reset();
 
     Handle handle_;
+    bool is_attached_ = false;
     // only for win
-    bool enable_app_;
+    bool enable_app_ = false;;
 };
 
 class File: Noncopyable {
@@ -110,6 +110,8 @@ public:
     void read(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
     
     void write(const char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+
+    void attach_context();
 
     void sync_all();
 

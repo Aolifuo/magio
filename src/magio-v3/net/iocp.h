@@ -8,31 +8,29 @@ namespace magio {
 
 namespace net {
 
-class IoCompletionPort: Noncopyable, public IoService {
+class IoCompletionPort: Noncopyable, public IoServiceInterface {
 public:
     IoCompletionPort();
 
     ~IoCompletionPort();
 
-    void read_file(IoContext& ioc, size_t offset) override;
-
-    void write_file(IoContext& ioc, size_t offset) override;
-
-    void connect(IoContext& ioc) override;
-
-    void accept(Socket& listener, IoContext& ioc) override;
-
-    void send(IoContext& ioc) override;
-
-    void receive(IoContext& ioc) override;
-
-    void send_to(IoContext& ioc) override;
-
-    void receive_from(IoContext& ioc) override;
-
-    void cancel(IoContext& ioc) override;
+    void write_file(IoHandle ioh, size_t offset, IoContext* ioc) override;
     
-    void relate(void* handle, std::error_code& ec) override;
+    void read_file(IoHandle ioh, size_t offset, IoContext* ioc) override;
+    
+    void accept(const net::Socket& listener, IoContext* ioc) override;
+    
+    void connect(SocketHandle socket, IoContext* ioc) override;
+
+    void send(SocketHandle socket, IoContext* ioc) override;
+
+    void receive(SocketHandle socket, IoContext* ioc) override;
+
+    void send_to(SocketHandle socket, IoContext* ioc) override;
+
+    void receive_from(SocketHandle socket, IoContext* ioc) override;
+    
+    void attach(IoHandle ioh, std::error_code& ec) override;
 
     int poll(size_t nanosec, std::error_code& ec) override;
 

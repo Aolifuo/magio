@@ -56,7 +56,7 @@ inline TimerHandle expires_until(const TimerClock::time_point& tp, TimerTask&& t
     return LocalContext->expires_until(tp, std::move(task));
 }
 
-inline IoService& get_service() {
+inline IoService get_service() {
     return LocalContext->get_service();
 }
 

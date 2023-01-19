@@ -17,18 +17,16 @@ public:
     Acceptor& operator=(Acceptor&& other) noexcept;
 
     [[nodiscard]]
-    static Acceptor bind_and_listen(const EndPoint& ep, std::error_code& ec);
-
-    void set_option(int op, SmallBytes bytes, std::error_code& ec);
-
-    SmallBytes get_option(int op, std::error_code& ec);
+    static Acceptor listen(const EndPoint& ep, std::error_code& ec);
 
 #ifdef MAGIO_USE_CORO
     [[nodiscard]]
     Coro<std::pair<Socket, EndPoint>> accept(std::error_code& ec);
-
 #endif
+
     void accept(std::function<void(std::error_code, Socket, EndPoint)>&& completion_cb);
+
+    void attach_context();
 
 private:
     Socket listener_;

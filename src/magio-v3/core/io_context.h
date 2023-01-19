@@ -26,7 +26,7 @@ enum class Operation {
 };
 
 // for linux
-struct IoBuf {
+struct IoVec {
     char* buf;
     size_t len;
 };
@@ -35,12 +35,10 @@ struct IoContext {
 #ifdef _WIN32
     OVERLAPPED overlapped;
     Operation op;
-    SOCKET handle;
-    WSABUF buf;
+    WSABUF iovec;
 #elif defined(__linux__)
     Operation op;
-    int handle;
-    IoBuf buf;
+    IoVec iovec;
 #endif
     union {
         sockaddr_in remote_addr;
@@ -49,18 +47,23 @@ struct IoContext {
     socklen_t addr_len;
     void* ptr;
     void(*cb)(std::error_code, IoContext*, void*);
+
+    uint64_t res; // sockethandle iohandle bytes
 };
 
 #ifdef MAGIO_USE_CORO
 struct ResumeHandle {
     std::error_code ec;
+    uint64_t res;
     std::coroutine_handle<> handle;
 };
 
-inline void completion_callback(std::error_code ec, IoContext* ioc, void* ptr) {
+inline void resume_callback(std::error_code ec, IoContext* ioc, void* ptr) {
     auto* h = static_cast<ResumeHandle*>(ptr);
     h->ec = ec;
+    h->res = ioc->res;
     h->handle.resume();
+    delete ioc;
 }
 
 #ifdef _WIN32
@@ -82,7 +85,7 @@ struct CbWithMsg {
     Cb cb;
 };
 
-inline void completion_callback_with_msg(std::error_code ec, IoContext* ioc, void* ptr) {
+inline void resume_callback_with_msg(std::error_code ec, IoContext* ioc, void* ptr) {
     auto* h = static_cast<ResumeWithMsg*>(ptr);
     h->ec = ec;
     h->handle.resume();

@@ -3,9 +3,11 @@
 
 #include <cstring>
 #include <functional>
+#include <system_error>
 
+#include "magio-v3/core/common.h"
 #include "magio-v3/core/noncopyable.h"
-#include "magio-v3/net/address.h"
+#include "magio-v3/net/protocal.h"
 
 namespace magio {
 
@@ -14,43 +16,7 @@ class Coro;
 
 namespace net {
 
-class SocketOption {
-public:
-    static const int ReuseAddress;
-    static const int ReceiveBufferSize;
-    static const int SendBufferSize;
-    static const int ReceiveTimeout;
-    static const int SendTimeout;
-};
-
-class SmallBytes {
-public:
-    SmallBytes() = default;
-
-    template<typename T>
-    SmallBytes(const T& elem) {
-        size_t len1 = sizeof elem;
-        size_t len2 = sizeof buf_;
-        size_ = len1 > len2 ? len2 : len1;
-        std::memcpy(buf_, &elem, size_);
-    }
-
-    template<typename T>
-    T& get() {
-        return *reinterpret_cast<T*>(buf_);
-    }
-
-    size_t size() const {
-        return size_;
-    }
-
-    const char* data() const {
-        return buf_;
-    }
-private:
-    char buf_[16];
-    size_t size_ = 0;
-};
+class EndPoint;
 
 class Socket: Noncopyable {
     friend class Acceptor;
@@ -60,12 +26,7 @@ public:
         Read = 0, Write, Both
     };
 
-    using Handle =
-#ifdef _WIN32
-    size_t;
-#elif defined(__linux__)
-    int;
-#endif
+    using Handle = SocketHandle;
 
     Socket();
 
@@ -79,10 +40,6 @@ public:
     static Socket open(Ip ip, Transport tp, std::error_code& ec);
 
     void bind(const EndPoint& ep, std::error_code& ec);
-
-    void set_option(int op, SmallBytes bytes, std::error_code& ec);
-
-    SmallBytes get_option(int op, std::error_code& ec);
 
 #ifdef MAGIO_USE_CORO
     [[nodiscard]]
@@ -117,6 +74,8 @@ public:
     
     void close();
 
+    void attach_context();
+
     Handle handle() const {
         return handle_;
     }
@@ -138,10 +97,9 @@ private:
 
     void reset();
 
-    void check_relation();
-
-    bool is_related_ = false;
     Handle handle_ = -1;
+
+    bool is_attached_ = false;
     Ip ip_ = Ip::v4;
     Transport transport_ = Transport::Tcp;
 };

@@ -76,7 +76,7 @@ TimerHandle expires_after(const std::chrono::duration<Rep, Per>& dur, TimerTask&
 
 TimerHandle expires_until(const TimerClock::time_point& tp, TimerTask&& task);
 
-IoService& get_service();
+IoService get_service();
 
 }
 

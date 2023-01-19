@@ -3,6 +3,8 @@
 
 #include <functional>
 #include <system_error>
+
+#include "magio-v3/core/common.h"
 #include "magio-v3/core/noncopyable.h"
 
 namespace magio {
@@ -16,12 +18,7 @@ class ReadablePipe: Noncopyable {
     friend std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec);
 
 public:
-    using Handle =
-#ifdef _WIN32
-    void*;
-#elif defined (__linux__)
-    int;
-#endif
+    using Handle = IoHandle;
     
     ReadablePipe() = default;
 
@@ -41,25 +38,20 @@ public:
     void close();
 
     operator bool() {
-        return handle_ != (Handle)-1;
+        return handle_.a != -1;
     }
 
 private:
     ReadablePipe(Handle);
 
-    Handle handle_ = (Handle)-1;
+    Handle handle_{.a = -1};
 };
 
 class WritablePipe: Noncopyable {
     friend std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec);
 
 public:
-    using Handle =
-#ifdef _WIN32
-    void*;
-#elif defined (__linux__)
-    int;
-#endif
+    using Handle = IoHandle;
 
     WritablePipe() = default;
 
@@ -79,13 +71,13 @@ public:
     void close();
 
     operator bool() {
-        return handle_ != (Handle)-1;
+        return handle_.a != -1;
     }
 
 private:
     WritablePipe(Handle);
 
-    Handle handle_ = (Handle)-1;
+    Handle handle_{.a = -1};
 };
 
 std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec);

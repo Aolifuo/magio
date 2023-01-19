@@ -1,14 +1,15 @@
 #include "magio-v3/net/socket.h"
 
+
 #include "magio-v3/core/error.h"
-#include "magio-v3/core/coro_context.h"
 #include "magio-v3/core/io_context.h"
+#include "magio-v3/core/coro_context.h"
+#include "magio-v3/net/address.h"
 
 #ifdef _WIN32
-#include <Ws2tcpip.h>
+
 #elif defined(__linux__)
 #include <unistd.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #endif
@@ -66,18 +67,13 @@ void close_socket(Socket::Handle handle) {
 
 }
 
-const int SocketOption::ReuseAddress = SO_REUSEADDR;
-const int SocketOption::ReceiveBufferSize = SO_RCVBUF;
-const int SocketOption::SendBufferSize = SO_SNDBUF;
-const int SocketOption::ReceiveTimeout = SO_RCVTIMEO;
-const int SocketOption::SendTimeout = SO_SNDTIMEO;
-
 Socket::Socket() { 
 
 }
 
 Socket::Socket(Handle handle, Ip ip, Transport tp) {
     handle_ = handle;
+    is_attached_ = false;
     ip_ = ip;
     transport_ = tp;
 }
@@ -87,8 +83,8 @@ Socket::~Socket() {
 }
 
 Socket::Socket(Socket&& other) noexcept
-    : is_related_(other.is_related_)
-    , handle_(other.handle_)
+    : handle_(other.handle_)
+    , is_attached_(other.is_attached_)
     , ip_(other.ip_)
     , transport_(other.transport_)
 {
@@ -96,8 +92,8 @@ Socket::Socket(Socket&& other) noexcept
 }
 
 Socket& Socket::operator=(Socket&& other) noexcept {
-    is_related_ = other.is_related_;
     handle_ = other.handle_;
+    is_attached_ = other.is_attached_;
     ip_ = other.ip_;
     transport_ = other.transport_;
     other.reset();
@@ -113,7 +109,7 @@ Socket Socket::open(Ip ip, Transport tp, std::error_code &ec) {
 }
 
 void Socket::bind(const EndPoint& ep, std::error_code &ec) {
-    auto address = ep.address();
+    auto& address = ep.address();
     if (-1 == ::bind(
         handle_, 
         (const sockaddr*)address.addr_in_,
@@ -124,312 +120,154 @@ void Socket::bind(const EndPoint& ep, std::error_code &ec) {
     }
 }
 
-void Socket::set_option(int op, SmallBytes bytes, std::error_code& ec) {
-    int r = ::setsockopt(handle_, SOL_SOCKET, op, (const char*)bytes.data(), bytes.size());
-    if (-1 == r) {
-        ec = SYSTEM_ERROR_CODE;
-    }
-}
-
-SmallBytes Socket::get_option(int op, std::error_code &ec) {
-    char buf[16];
-    socklen_t len = sizeof(buf);
-    int r = ::getsockopt(handle_, SOL_SOCKET, op, buf, &len);
-    if (-1 == r) {
-        ec = SYSTEM_ERROR_CODE;
-        return {};
-    }
-
-    return {buf};
-}
-
 #ifdef MAGIO_USE_CORO
 Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
-    check_relation();
-    auto& address = ep.address();
+    attach_context();
 
-    ResumeHandle rhandle;
-    IoContext ioc;
-    ioc.handle = handle_;
-    ioc.ptr = &rhandle;
-    ioc.cb = completion_callback;
-
-    ioc.addr_len = address.addr_len();
-    std::memcpy(&ioc.remote_addr, address.addr_in_, ioc.addr_len);
-
+    ResumeHandle rh;
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        rhandle.handle = h;
-        this_context::get_service().connect(ioc);
+        rh.handle = h;
+        this_context::get_service().connect(handle_, ep, &rh, resume_callback);
     });
 
-    ec = rhandle.ec;
+    ec = rh.ec;
 }
 
 Coro<size_t> Socket::receive(char* buf, size_t len, std::error_code &ec) {
-    check_relation();
-    ResumeHandle rhandle;
-    IoContext ioc{
-        .handle = handle_,
-        .buf = io_buf(buf, len),
-        .ptr = &rhandle,
-        .cb = completion_callback
-    };
+    attach_context();
 
+    ResumeHandle rh;
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        rhandle.handle = h;
-        this_context::get_service().receive(ioc);
+        rh.handle = h;
+        this_context::get_service().receive(handle_, buf, len, &rh, resume_callback);
     });
 
-    ec = rhandle.ec;
-    co_return ioc.buf.len;
+    ec = rh.ec;
+    co_return rh.res;
 }
 
 Coro<size_t> Socket::send(const char* msg, size_t len, std::error_code &ec) {
-    check_relation();
-    ResumeHandle rhandle;
-    IoContext ioc{
-        .handle = handle_,
-        .buf = io_buf((char*)msg, len),
-        .ptr = &rhandle,
-        .cb = completion_callback
-    };
+    attach_context();
+    ResumeHandle rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        rhandle.handle = h;
-        this_context::get_service().send(ioc);
+        rh.handle = h;
+        this_context::get_service().send(handle_, msg, len, &rh, resume_callback);
     });
 
-    ec = rhandle.ec;
-    co_return ioc.buf.len;
+    ec = rh.ec;
+    co_return rh.res;
 }
 
 Coro<size_t> Socket::send_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec) {
-    check_relation();
-    IoContext ioc;
-
-    ioc.handle = handle_;
-    ioc.buf.buf = (char*)msg;
-    ioc.buf.len = len;
-    ioc.addr_len = ep.address().addr_len();
-    std::memcpy(&ioc.remote_addr, ep.address().addr_in_, ioc.addr_len);
-#ifdef _WIN32
-    ResumeHandle rhandle;
-    ioc.cb = completion_callback;
-#elif defined (__linux__)
-    ResumeWithMsg rhandle;
-    rhandle.msg.msg_name = &ioc.remote_addr;
-    rhandle.msg.msg_namelen = ioc.addr_len;
-    rhandle.msg.msg_iov = (iovec*)&ioc.buf;
-    rhandle.msg.msg_iovlen = 1;
-    rhandle.msg.msg_control = nullptr;
-    rhandle.msg.msg_controllen = 0;
-    rhandle.msg.msg_flags = 0;
-    ioc.cb = completion_callback_with_msg;
-#endif
-    ioc.ptr = &rhandle;
+    attach_context();
+    ResumeHandle rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        rhandle.handle = h;
-        this_context::get_service().send_to(ioc);
+        rh.handle = h;
+        this_context::get_service().send_to(handle_, ep, msg, len, &rh, resume_callback);
     });
 
-    ec = rhandle.ec;
-    co_return ioc.buf.len;
+    ec = rh.ec;
+    co_return rh.res;
 }
 
 Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* buf, size_t len, std::error_code& ec) {
-    check_relation();
-    IoContext ioc;
+    attach_context();
+    struct RecvResume: ResumeHandle {
+        EndPoint ep;
+    } rh;
 
-    ioc.handle = handle_;
-    ioc.buf.buf = buf;
-    ioc.buf.len = len;
-#ifdef _WIN32
-    ResumeHandle rhandle;
-    ioc.addr_len = sizeof(sockaddr_in6);
-    ioc.cb = completion_callback;
-#elif defined (__linux__)
-    ResumeWithMsg rhandle;
-    rhandle.msg.msg_name = &ioc.remote_addr;
-    rhandle.msg.msg_namelen = sizeof(sockaddr_in6);
-    rhandle.msg.msg_iov = (iovec*)&ioc.buf;
-    rhandle.msg.msg_iovlen = 1;
-    rhandle.msg.msg_control = nullptr;
-    rhandle.msg.msg_controllen = 0;
-    rhandle.msg.msg_flags = 0;
-    ioc.cb = completion_callback_with_msg;
-#endif
-    ioc.ptr = &rhandle;
-    
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        rhandle.handle = h;
-        this_context::get_service().receive_from(ioc);
+        rh.handle = h;
+        this_context::get_service().receive_from(handle_, buf, len, &rh, 
+            [](std::error_code ec, IoContext* ioc, void* ptr) {
+                auto rh = (RecvResume*)ptr;
+                rh->ec = ec;
+                rh->res = ioc->res;
+                rh->ep = EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
+                rh->handle.resume();
+
+                delete ioc;
+            });
     });
 
-    ec = rhandle.ec;
-    if (ec) {
-        co_return {ioc.buf.len, {}};
-    }
-
-    co_return {
-        ioc.buf.len, 
-        EndPoint(
-            make_address((sockaddr*)&ioc.remote_addr),
-            ::ntohs(ioc.remote_addr.sin_port)
-        )
-    };
+    ec = rh.ec;
+    co_return {rh.res, rh.ep};
 }
 #endif
 
 void Socket::connect(const EndPoint &ep, std::function<void (std::error_code)> &&completion_cb) {
     using Cb = std::function<void (std::error_code)>;
-    check_relation();
-    auto ioc = new IoContext;
-    ioc->handle = handle_;
-    ioc->ptr = new Cb(std::move(completion_cb));
-    ioc->addr_len = ep.address().addr_len();
-    std::memcpy(&ioc->remote_addr, ep.address().addr_in_, ioc->addr_len);
-    ioc->cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-        auto cb = (Cb*)ptr;
-        (*cb)(ec);
-        delete cb;
-        delete ioc;
-    };
-    this_context::get_service().connect(*ioc);
+    attach_context();
+
+    this_context::get_service().connect(handle_, ep, new Cb(std::move(completion_cb)), 
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            (*cb)(ec);
+            delete cb;
+            delete ioc;
+        });
 }
 
 void Socket::receive(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
-    check_relation();
-    auto ioc = new IoContext{
-        .handle = handle_,
-        .buf = io_buf(buf, len),
-        .ptr = new Cb(std::move(completion_cb)),
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-            auto cb = (Cb*)ptr;
-            (*cb)(ec, ioc->buf.len);
-            delete ioc;
-            delete cb;
-        }
-    };
+    attach_context();
 
-    this_context::get_service().receive(*ioc);
+    this_context::get_service().receive(handle_, buf, len, new Cb(std::move(completion_cb)),
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            (*cb)(ec, ioc->res);
+            delete cb;
+            delete ioc;
+        });
 }
 
 void Socket::send(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
-    check_relation();
-    auto ioc = new IoContext{
-        .handle = handle_,
-        .buf = io_buf((char*)msg, len),
-        .ptr = new Cb(std::move(completion_cb)),
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-            auto cb = (Cb*)ptr;
-            (*cb)(ec, ioc->buf.len);
-            delete ioc;
-            delete cb;
-        }
-    };
+    attach_context();
 
-    this_context::get_service().send(*ioc);
+    this_context::get_service().send(handle_, msg, len, new Cb(std::move(completion_cb)),
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
+            auto cb = (Cb*)ptr;
+            (*cb)(ec, ioc->res);
+            delete cb;
+            delete ioc;
+        });
 }
 
 void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
-    auto ioc = new IoContext{
-        .handle = handle_,
-        .buf = io_buf((char*)msg, len),
-        .addr_len = (socklen_t)ep.address().addr_len(),
-#ifdef _WIN32
-        .ptr = new Cb(std::move(completion_cb)),
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+    attach_context();
+
+    this_context::get_service().send_to(handle_, ep, msg, len, new Cb(std::move(completion_cb)), 
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
-            (*cb)(ec, ioc->buf.len);
+            (*cb)(ec, ioc->res);
             delete cb;
             delete ioc;
-        }
-#elif defined (__linux__)
-        .ptr = new CbWithMsg<Cb>{{}, std::move(completion_cb)},
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-            auto cbm = (CbWithMsg<Cb>*)ptr;
-            cbm->cb(ec, ioc->buf.len);
-            delete cbm;
-            delete ioc;
-        }
-#endif
-    };
-    std::memcpy(&ioc->remote_addr, ep.address().addr_in_, ioc->addr_len);
-
-#ifdef __linux__
-    auto cbm = (CbWithMsg<Cb>*)ioc->ptr;
-    cbm->msg.msg_name = &ioc->remote_addr;
-    cbm->msg.msg_namelen = ioc->addr_len;
-    cbm->msg.msg_iov = (iovec*)&ioc->buf;
-    cbm->msg.msg_iovlen = 1;
-    cbm->msg.msg_control = nullptr;
-    cbm->msg.msg_controllen = 0;
-    cbm->msg.msg_flags = 0;
-#endif
-
-    this_context::get_service().send_to(*ioc);
+        });
 }
 
 void Socket::receive_from(char *buf, size_t len, std::function<void (std::error_code, size_t, EndPoint)>&& completion_cb) {
     using Cb = std::function<void (std::error_code, size_t, EndPoint)>;
-    auto ioc = new IoContext{
-        .handle = handle_,
-        .buf = io_buf(buf, len),
-        .addr_len = sizeof(sockaddr_in6),
-#ifdef _WIN32
-        .ptr = new Cb(std::move(completion_cb)),
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
+    attach_context();
+
+    this_context::get_service().receive_from(handle_, buf, len, new Cb(std::move(completion_cb)),
+        [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
             (*cb)(
-                ec, ioc->buf.len, 
-                EndPoint(
-                    make_address((sockaddr*)&ioc->remote_addr), 
-                    ::ntohs(ioc->remote_addr.sin_port)
-                )
+                ec, ioc->res,
+                EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
             );
             delete cb;
             delete ioc;
-        }
-#elif defined (__linux__)
-        .ptr = new CbWithMsg<Cb>{{}, std::move(completion_cb)},
-        .cb = [](std::error_code ec, IoContext* ioc, void* ptr) {
-            auto cbm = (CbWithMsg<Cb>*)ptr;
-            cbm->cb(
-                ec,
-                ioc->buf.len,
-                EndPoint(
-                    make_address((sockaddr*)&ioc->remote_addr), 
-                    ::ntohs(ioc->remote_addr.sin_port)
-                )
-            );
-            delete cbm;
-            delete ioc;
-        }
-#endif
-    };
-
-#ifdef __linux__
-    auto cbm = (CbWithMsg<Cb>*)ioc->ptr;
-    cbm->msg.msg_name = &ioc->remote_addr;
-    cbm->msg.msg_namelen = ioc->addr_len;
-    cbm->msg.msg_iov = (iovec*)&ioc->buf;
-    cbm->msg.msg_iovlen = 1;
-    cbm->msg.msg_control = nullptr;
-    cbm->msg.msg_controllen = 0;
-    cbm->msg.msg_flags = 0;
-#endif
-
-    this_context::get_service().receive_from(*ioc);
+        });
 }
 
 void Socket::cancel() {
     if (-1 != handle_) {
-        IoContext ioc{.handle = handle_};
-        this_context::get_service().cancel(ioc);
+        // 
     }
 }
 
@@ -446,21 +284,19 @@ void Socket::shutdown(Shutdown type) {
     }
 }
 
-void Socket::reset() {
-    is_related_ = false;
-    handle_ = -1;
-    ip_ = Ip::v4;
-    transport_ = Transport::Tcp;
+void Socket::attach_context() {
+    if (-1 != handle_ && !is_attached_) {
+        std::error_code ec;
+        is_attached_ = true;
+        this_context::get_service().attach(IoHandle{.b = handle_}, ec);
+    }
 }
 
-void Socket::check_relation() {
-#ifdef _WIN32
-    if (handle_ != -1 && !is_related_) {
-        std::error_code ec;
-        this_context::get_service().relate((void*)handle_, ec);
-        is_related_ = true;
-    }
-#endif
+void Socket::reset() {
+    handle_ = -1;
+    is_attached_ = false;
+    ip_ = Ip::v4;
+    transport_ = Transport::Tcp;
 }
 
 }

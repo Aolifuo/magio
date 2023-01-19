@@ -10,23 +10,20 @@ struct sockaddr;
 
 namespace magio {
 
+class IoService;
+
 namespace net {
 
 using PortType = uint_least16_t;
 
 class IpAddress {
-    friend class Socket;
     friend class EndPoint;
+    friend class Socket;
     friend class Acceptor;
+    friend class magio::IoService;
+    
     friend IpAddress make_address(std::string_view str, std::error_code& ec);
     friend IpAddress make_address(sockaddr* paddr);
-
-    template<typename Addr>
-    IpAddress(Addr addr, std::string_view str, Ip level)
-        : ip_(str), level_(level) 
-    { 
-        std::memcpy(addr_in_, &addr, sizeof(addr));
-    }
 
 public:
     IpAddress() = default;

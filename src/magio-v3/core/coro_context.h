@@ -52,7 +52,7 @@ public:
 
     bool assert_in_context_thread();
 
-    IoService& get_service() const;
+    IoService get_service() const;
 
 private:
     void wake_up();
@@ -63,7 +63,7 @@ private:
     size_t thread_id_;
     std::vector<Task> pending_handles_;
     TimerQueue timer_queue_;
-    std::unique_ptr<IoService> p_io_service_;
+    std::unique_ptr<IoServiceInterface> io_service_;
 };
 
 }
