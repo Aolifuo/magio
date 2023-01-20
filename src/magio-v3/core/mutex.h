@@ -32,7 +32,7 @@ public:
 
         void await_suspend(std::coroutine_handle<> prev_h);
 
-        void await_resume();
+        void await_resume() { }
 
     private:
         Mutex& co_mutex_;
@@ -72,8 +72,8 @@ private:
     
     void unlock();
 
-    std::atomic_flag flag_;
     std::mutex mutex_;
+    bool flag_;
     std::deque<Entry> queue_;
 };
 

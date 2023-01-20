@@ -26,7 +26,7 @@ CoroContextPool::CoroContextPool(size_t num, size_t every)
 
 CoroContextPool::~CoroContextPool() {
     state_ = PendingDestroy;
-    for (size_t i = 0; i < contexts_.size(); ++i) {
+    for (size_t i = 1; i < contexts_.size(); ++i) {
         contexts_[i]->execute([this, i] {
             contexts_[i]->stop();
         });

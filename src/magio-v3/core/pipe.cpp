@@ -63,7 +63,7 @@ void ReadablePipe::close() {
 #ifdef _WIN32
         ::CloseHandle(handle_.ptr);
 #elif defined (__linux__)
-        ::close(handle_);
+        ::close(handle_.a);
 #endif
         handle_.a = -1;
     }
@@ -120,7 +120,7 @@ void WritablePipe::close() {
 #ifdef _WIN32
         ::CloseHandle(handle_.ptr);
 #elif defined (__linux__)
-        ::close(handle_);
+        ::close(handle_.a);
 #endif
         handle_.a = -1;
     }
@@ -136,7 +136,7 @@ std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec) {
         ec = SYSTEM_ERROR_CODE;
     }
 
-    return {ReadablePipe(pipefd[0]), WritablePipe(pipefd[1])};
+    return {ReadablePipe(IoHandle{.a = pipefd[0]}), WritablePipe(IoHandle{.a = pipefd[1]})};
 #endif
 }
 

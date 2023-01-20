@@ -159,7 +159,7 @@ void RandomAccessFile::sync_all() {
 #ifdef _WIN32
     
 #elif defined (__linux__)
-    ::fsync(handle_);
+    ::fsync(handle_.a);
 #endif
 }
 
@@ -167,7 +167,7 @@ void RandomAccessFile::sync_data() {
 #ifdef _WIN32
 
 #elif defined (__linux__)
-    ::fdatasync(handle_);
+    ::fdatasync(handle_.a);
 #endif
 }
 

@@ -92,7 +92,7 @@ public:
 
             void await_resume() {
                 if (exception_) {
-                    std::rethrow_exception(std::move(exception_));
+                    std::rethrow_exception(exception_);
                 }
             }
         };
@@ -156,11 +156,11 @@ public:
 
         iterator() noexcept = default;
         iterator(const iterator &) = delete;
-        iterator(iterator && o) {
+        iterator(iterator && o) noexcept {
             std::swap(coro_, o.coro_);
         }
 
-        iterator &operator=(iterator && o) {
+        iterator &operator=(iterator && o) noexcept {
             std::swap(coro_, o.coro_);
             return *this;
         }

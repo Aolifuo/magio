@@ -4,23 +4,33 @@ namespace magio {
 
 #ifdef MAGIO_USE_CORO
 void Mutex::LockAwaitable::await_suspend(std::coroutine_handle<> prev_h) {
-    if (co_mutex_.flag_.test_and_set(std::memory_order_acquire)) {
+    bool wake = false;
+    {
         std::lock_guard lk(co_mutex_.mutex_);
-        co_mutex_.queue_.push_back({LocalContext, prev_h});
-    } else {
+        if (co_mutex_.flag_) {
+            co_mutex_.flag_ = false;
+            wake = true;
+        } else {
+            co_mutex_.queue_.push_back({LocalContext, prev_h});
+        }
+    }
+    if (wake) {
         prev_h.resume();
     }
 }
 
-void Mutex::LockAwaitable::await_resume() {
-
-}
-
 void Mutex::GuardAwaitable::await_suspend(std::coroutine_handle<> prev_h) {
-    if (co_mutex_.flag_.test_and_set(std::memory_order_acquire)) {
+    bool wake = false;
+    {
         std::lock_guard lk(co_mutex_.mutex_);
-        co_mutex_.queue_.push_back({LocalContext, prev_h});
-    } else {
+        if (co_mutex_.flag_) {
+            co_mutex_.flag_ = false;
+            wake = true;
+        } else {
+            co_mutex_.queue_.push_back({LocalContext, prev_h});
+        }
+    }
+    if (wake) {
         prev_h.resume();
     }
 }
@@ -30,7 +40,7 @@ LockGuard Mutex::GuardAwaitable::await_resume() {
 }
 
 Mutex::Mutex()
-    : flag_()
+    : flag_(true)
 { }
 
 Mutex::GuardAwaitable Mutex::lock_guard() {
@@ -49,7 +59,7 @@ void Mutex::unlock() {
             entry = queue_.front();
             queue_.pop_front();
         } else {
-            flag_.clear(std::memory_order_release);
+            flag_ = true;
         }
     }
     if (entry.h) {
@@ -77,6 +87,7 @@ void Condition::notify_all() {
         std::lock_guard lk(m_);
         tmp.swap(queue_);
     }
+
     for (auto entry : tmp) {
         entry.ctx->queue_in_context(entry.h);
     }
