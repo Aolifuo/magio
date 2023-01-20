@@ -20,8 +20,7 @@ private:
     Coro<> count_all() {
         size_t file_num = 0;
         if (!fs::exists(dir_name_) || !fs::is_directory(dir_name_)) {
-            M_INFO("{} does not exit or is not dir", dir_name_);
-            co_return;
+            M_FATAL("{} does not exit or is not dir", dir_name_);
         }
 
         for (auto& entry : fs::recursive_directory_iterator(dir_name_)) {

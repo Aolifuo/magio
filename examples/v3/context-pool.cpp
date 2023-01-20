@@ -4,61 +4,73 @@ using namespace std;
 using namespace magio;
 using namespace chrono_literals;
 
-CoroContextPool* g_ctx_pool;
+class TcpServer {
+public:
+    TcpServer(CoroContextPool& pool): pool_(pool)
+    { }
 
-Coro<> handle_connection(net::Socket sock) {
-    char buf[1024];
-    for (; ;) {
+    void start() {
+        this_context::spawn(server());
+    }
+
+private:
+    Coro<> server() {
         error_code ec;
-        size_t rd = co_await sock.receive(buf, sizeof(buf), ec);
-        if (ec || rd == 0) {
-            M_ERROR("recv error: {}", ec ? ec.message() : "EOF");
-            break;
-        }
-        M_INFO("{}", string_view(buf, rd));
-        co_await sock.send(buf, rd, ec);
+        net::EndPoint local(net::make_address("::1", ec), 1234);
         if (ec) {
-            M_ERROR("send error: {}", ec.message());
-            break;
+            M_FATAL("{}", ec.message());
         }
-    }
-}
 
-Coro<> accept(net::Acceptor acceptor) {
-    for (; ;) {
-        error_code ec;
-        auto [socket, peer] = co_await acceptor.accept(ec);
+        acceptor_ = net::Acceptor::listen(local, ec);
         if (ec) {
-            M_ERROR("accept error: {}", ec.message());
-        } else {
-            M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
-            g_ctx_pool->next_context().spawn(handle_connection(std::move(socket)));
+            M_FATAL("{}", ec.message());
+        }
+
+        for (size_t i = 0; i < 10; ++i) {
+            this_context::spawn(accept());
+        }
+        
+        co_return;
+    }
+
+    Coro<> accept() {
+        for (; ;) {
+            error_code ec;
+            auto [socket, peer] = co_await acceptor_.accept(ec);
+            if (ec) {
+                M_ERROR("accept error: {}", ec.message());
+            } else {
+                M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
+                pool_.next_context().spawn(handle_connection(std::move(socket)));
+            }
         }
     }
-}
 
-Coro<> server() {
-    error_code ec;
-    net::EndPoint local(net::make_address("::1", ec), 1234);
-    if (ec) {
-        M_FATAL("{}", ec.message());
+    Coro<> handle_connection(net::Socket sock) {
+        char buf[1024];
+        for (; ;) {
+            error_code ec;
+            size_t rd = co_await sock.receive(buf, sizeof(buf), ec);
+            if (ec || rd == 0) {
+                M_ERROR("recv error: {}", ec ? ec.message() : "EOF");
+                break;
+            }
+            M_INFO("{}", string_view(buf, rd));
+            co_await sock.send(buf, rd, ec);
+            if (ec) {
+                M_ERROR("send error: {}", ec.message());
+                break;
+            }
+        }
     }
 
-    auto acceptor = net::Acceptor::listen(local, ec);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
-
-    for (size_t i = 0; i < 10; ++i) {
-        this_context::spawn(accept(std::move(acceptor)));
-    }
-
-    co_return;
-}
+    CoroContextPool& pool_;
+    net::Acceptor acceptor_;
+};
 
 int main() {
     CoroContextPool ctx_pool(4, 50);
-    g_ctx_pool = &ctx_pool;
-    this_context::spawn(server());
+    TcpServer server(ctx_pool);
+    server.start();
     ctx_pool.start_all();
 }
