@@ -26,7 +26,6 @@ public:
 
 private:
     Coro<> console_read() {
-        M_INFO("{}", "read thread");
         string line;
         
         for (; ;) {
@@ -47,7 +46,6 @@ private:
     }
 
     Coro<> console_write() {
-        M_INFO("{}", "write thread");
         char buf[1024];
         
         for (; ;) {
@@ -67,7 +65,6 @@ private:
 };
 
 int main() {
-    M_INFO("{}", "");
     CoroContextPool ctxs(2, 64);
     ConsoleReadWrite crw(ctxs);
     crw.start();
