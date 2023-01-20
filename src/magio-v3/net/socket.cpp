@@ -1,7 +1,7 @@
 #include "magio-v3/net/socket.h"
 
-
 #include "magio-v3/core/error.h"
+#include "magio-v3/core/logger.h"
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/core/coro_context.h"
 #include "magio-v3/net/address.h"
@@ -69,7 +69,7 @@ Socket::Socket() { }
 
 Socket::Socket(Handle handle, Ip ip, Transport tp) {
     handle_ = handle;
-    is_attached_ = false;
+    attached_ = nullptr;
     ip_ = ip;
     transport_ = tp;
 }
@@ -80,7 +80,7 @@ Socket::~Socket() {
 
 Socket::Socket(Socket&& other) noexcept
     : handle_(other.handle_)
-    , is_attached_(other.is_attached_)
+    , attached_(other.attached_)
     , ip_(other.ip_)
     , transport_(other.transport_)
 {
@@ -89,7 +89,7 @@ Socket::Socket(Socket&& other) noexcept
 
 Socket& Socket::operator=(Socket&& other) noexcept {
     handle_ = other.handle_;
-    is_attached_ = other.is_attached_;
+    attached_ = other.attached_;
     ip_ = other.ip_;
     transport_ = other.transport_;
     other.reset();
@@ -281,16 +281,22 @@ void Socket::shutdown(Shutdown type) {
 }
 
 void Socket::attach_context() {
-    if (-1 != handle_ && !is_attached_) {
+    if (-1 == handle_) {
+        return;
+    }
+
+    if (!attached_) {
         std::error_code ec;
-        is_attached_ = true;
+        attached_ = LocalContext;
         this_context::get_service().attach(IoHandle{.b = handle_}, ec);
+    } else if (attached_ != LocalContext) {
+        M_FATAL("{}", "The socket cannot be attached to different context");
     }
 }
 
 void Socket::reset() {
     handle_ = -1;
-    is_attached_ = false;
+    attached_ = nullptr;
     ip_ = Ip::v4;
     transport_ = Transport::Tcp;
 }

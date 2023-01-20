@@ -9,6 +9,8 @@
 
 namespace magio {
 
+class CoroContext;
+
 template<typename>
 class Coro;
 
@@ -69,9 +71,9 @@ private:
     void reset();
 
     Handle handle_;
-    bool is_attached_ = false;
+    CoroContext* attached_;
     // only for win
-    bool enable_app_ = false;;
+    bool enable_app_ = false;
 };
 
 class File: Noncopyable {

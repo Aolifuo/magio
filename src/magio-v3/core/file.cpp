@@ -243,15 +243,21 @@ void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std:
 
 void RandomAccessFile::reset() {
     handle_.a = -1;
-    is_attached_ = false;
+    attached_ = nullptr;
     enable_app_ = false;
 }
 
 void RandomAccessFile::attach_context() {
-    if (handle_.a != -1 && !is_attached_) {
+    if (-1 == handle_.a) {
+        return;
+    }
+
+    if (!attached_) {
         std::error_code ec;
-        is_attached_ = true;
+        attached_ = LocalContext;
         this_context::get_service().attach(handle_, ec);
+    } else if (attached_ != LocalContext) {
+        M_FATAL("{}", "The file cannot be attached to different context");
     }
 }
 

@@ -11,6 +11,8 @@
 
 namespace magio {
 
+class CoroContext;
+
 template<typename>
 class Coro;
 
@@ -99,7 +101,7 @@ private:
 
     Handle handle_ = -1;
 
-    bool is_attached_ = false;
+    CoroContext* attached_;
     Ip ip_ = Ip::v4;
     Transport transport_ = Transport::Tcp;
 };
