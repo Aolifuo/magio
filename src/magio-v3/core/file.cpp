@@ -26,13 +26,13 @@ IoHandle open_file(const char* path, int mode, int x) {
 
     DWORD desired_access = 0;
     switch (first) {
-    case ReadOnly:
+    case File::ReadOnly:
         desired_access = GENERIC_READ;
         break;
-    case WriteOnly:
+    case File::WriteOnly:
         desired_access = GENERIC_WRITE;
         break;
-    case ReadWrite:
+    case File::ReadWrite:
         desired_access = GENERIC_READ | GENERIC_WRITE;
         break;
     default:
@@ -44,19 +44,19 @@ IoHandle open_file(const char* path, int mode, int x) {
     // CREATE_ALWAYS create and truncate
 
     DWORD createion_disposition = OPEN_EXISTING;
-    bool enable_app = false;
-    if (mode & Create) {
+
+    if (mode & File::Create) {
         createion_disposition = OPEN_ALWAYS; // create
     }
-    if (mode & Truncate) {
-        if (mode & Create) {
+    if (mode & File::Truncate) {
+        if (mode & File::Create) {
             createion_disposition = CREATE_ALWAYS;
         } else {
             createion_disposition = TRUNCATE_EXISTING;
         }
     }
-    if (mode & Append) {
-        enable_app = true;
+    if (mode & File::Append) {
+        //
     }
 
     LPCTSTR ppath = TEXT(path);
@@ -321,7 +321,7 @@ File File::open(const char *path, int mode, int x) {
     if (mode & File::Append) {
 #ifdef _WIN32
         LARGE_INTEGER large_int;
-        ::GetFileSizeEx(handle_.ptr, &large_int);
+        ::GetFileSizeEx(file.handle_.ptr, &large_int);
         file.write_offset_ = large_int.QuadPart;
 #endif
     } else {
@@ -378,13 +378,18 @@ Coro<size_t> File::write(const char *msg, size_t len, std::error_code &ec) {
 void File::read(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
     attach_context();
+    struct FileResume {
+        Cb cb;
+        File* pfile;
+    };
+    auto fr = new FileResume{.cb = std::move(completion_cb), .pfile = this};
 
-    this_context::get_service().read_file(handle_, buf, len, read_offset_, new Cb(std::move(completion_cb)),
+    this_context::get_service().read_file(handle_, buf, len, read_offset_, fr,
         [](std::error_code ec, IoContext* ioc, void* ptr) {
-            auto cb = (Cb*)ptr;
-            //
-            (*cb)(ec, ioc->res);
-            delete cb;
+            auto fr = (FileResume*)ptr;
+            fr->pfile->read_offset_ += ioc->res;
+            (fr->cb)(ec, ioc->res);
+            delete fr;
             delete ioc;
         });
 }
@@ -392,13 +397,18 @@ void File::read(char *buf, size_t len, std::function<void (std::error_code, size
 void File::write(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = std::function<void (std::error_code, size_t)>;
     attach_context();
+    struct FileResume {
+        Cb cb;
+        File* pfile;
+    };
+    auto fr = new FileResume{.cb = std::move(completion_cb), .pfile = this};
 
-    this_context::get_service().write_file(handle_, msg, len, write_offset_, new Cb(std::move(completion_cb)),
+    this_context::get_service().write_file(handle_, msg, len, write_offset_, fr,
         [](std::error_code ec, IoContext* ioc, void* ptr) {
-            auto cb = (Cb*)ptr;
-            //
-            (*cb)(ec, ioc->res);
-            delete cb;
+            auto fr = (FileResume*)ptr;
+            fr->pfile->write_offset_ += ioc->res;
+            (fr->cb)(ec, ioc->res);
+            delete fr;
             delete ioc;
         });
 }
