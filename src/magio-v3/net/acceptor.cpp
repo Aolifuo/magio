@@ -5,12 +5,6 @@
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/net/address.h"
 
-#ifdef _WIN32
-
-#elif defined (__linux__)
-#include <arpa/inet.h>
-#endif
-
 namespace magio {
 
 namespace net {
@@ -86,7 +80,7 @@ void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&
             auto cb = (Cb*)ptr;
             Ip ip = ioc->remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
             (*cb)(
-                ec, Socket(ioc->res, ip, Transport::Tcp),
+                ec, Socket((int)ioc->res, ip, Transport::Tcp),
                 EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
             );
             delete cb;

@@ -7,7 +7,6 @@
 #include "magio-v3/net/socket.h"
 
 #include <unistd.h>
-#include <netinet/in.h>
 #include <sys/eventfd.h>
 
 #include "liburing.h"
@@ -26,23 +25,22 @@ IoUring::IoUring(unsigned entries) {
         M_FATAL("failed to create io uring: {}", SYSTEM_ERROR_CODE.message());
     }
 
-    wake_up_ctx_ = new IoContext;
-    wake_up_ctx_->op = Operation::Noop;
-    wake_up_ctx_->handle = ::eventfd(EFD_NONBLOCK, 0);
-    wake_up_ctx_->ptr = (void*)1;
-    wake_up_ctx_->cb = [](std::error_code ec, IoContext* ioc, void* p) {
-        if (ec) {
-            M_SYS_ERROR("wake up error: {}", ec.message());
+    wake_up_fd_ = ::eventfd(EFD_NONBLOCK, 0);
+    wake_up_ctx_ = new IoContext{
+        .op = Operation::Noop,
+        .ptr = this,
+        .cb = [](std::error_code ec, IoContext* ioc, void* p) {
+            auto ioring = (IoUring*)p;
+            ioring->prep_wake_up();
         }
     };
-    std::memset(&wake_up_ctx_->remote_addr, 1, sizeof(void*));
 
     prep_wake_up();
 }
 
 IoUring::~IoUring() {
     if (p_io_uring_) {
-        ::close(wake_up_ctx_->handle);
+        ::close((int)wake_up_ctx_->res);
         ::io_uring_queue_exit(p_io_uring_);
         delete wake_up_ctx_;
         delete p_io_uring_;
@@ -51,79 +49,67 @@ IoUring::~IoUring() {
     }
 }
 
-void IoUring::read_file(IoContext &ioc, size_t offset) {
+void IoUring::write_file(IoHandle ioh, size_t offset, IoContext *ioc) {
     ++io_num_;
-    ioc.op = Operation::ReadFile;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_read(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
-    ::io_uring_sqe_set_data(sqe, &ioc);
+    ::io_uring_prep_write(sqe, ioh.a, ioc->iovec.buf, ioc->iovec.len, offset);
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
-void IoUring::write_file(IoContext &ioc, size_t offset) {
+void IoUring::read_file(IoHandle ioh, size_t offset, IoContext *ioc){
     ++io_num_;
-    ioc.op = Operation::WriteFile;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_write(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, offset);
-    ::io_uring_sqe_set_data(sqe, &ioc);
+    ::io_uring_prep_read(sqe, ioh.a, ioc->iovec.buf, ioc->iovec.len, offset);
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
-void IoUring::connect(IoContext &ioc) {
+void IoUring::accept(const net::Socket &listener, IoContext *ioc) {
     ++io_num_;
-    ioc.op = Operation::Connect;
-    io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_connect(
-        sqe, ioc.handle, (sockaddr*)&ioc.remote_addr, ioc.addr_len
-    );
-    ::io_uring_sqe_set_data(sqe, &ioc);
-}
-
-void IoUring::accept(Socket &listener, IoContext &ioc) {
-    ++io_num_;
-    ioc.op = Operation::Accept;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_accept(
-        sqe, listener.handle(), (sockaddr*)&ioc.remote_addr, 
-        (socklen_t*)ioc.buf.buf, 0
+        sqe, listener.handle(), (sockaddr*)&ioc->remote_addr, 
+        &ioc->addr_len, 0
     );
-    ::io_uring_sqe_set_data(sqe, &ioc);
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
-void IoUring::send(IoContext &ioc) {
+void IoUring::connect(SocketHandle socket, IoContext *ioc) {
     ++io_num_;
-    ioc.op = Operation::Send;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_send(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
-    ::io_uring_sqe_set_data(sqe, &ioc);
+    ::io_uring_prep_connect(
+        sqe, socket, (sockaddr*)&ioc->remote_addr, ioc->addr_len
+    );
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
-void IoUring::receive(IoContext &ioc) {
+void IoUring::send(SocketHandle socket, IoContext *ioc) {
     ++io_num_;
-    ioc.op = Operation::Receive;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_recv(sqe, ioc.handle, ioc.buf.buf, ioc.buf.len, 0);
-    ::io_uring_sqe_set_data(sqe, &ioc);
+    ::io_uring_prep_send(sqe, socket, ioc->iovec.buf, ioc->iovec.len, 0);
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
-void IoUring::send_to(IoContext &ioc) {
+void IoUring::receive(SocketHandle socket, IoContext *ioc) {
     ++io_num_;
-    ioc.op = Operation::Send;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    auto p = (ResumeWithMsg*)ioc.ptr;
-    ::io_uring_prep_sendmsg(sqe, ioc.handle, &p->msg, 0);
-    ::io_uring_sqe_set_data(sqe, &ioc);
+    ::io_uring_prep_recv(sqe, socket, ioc->iovec.buf, ioc->iovec.len, 0);
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
-void IoUring::receive_from(IoContext &ioc) {
+void IoUring::send_to(SocketHandle socket, IoContext *ioc) {
     ++io_num_;
-    ioc.op = Operation::Receive;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    auto p = (ResumeWithMsg*)ioc.ptr;
-    ::io_uring_prep_recvmsg(sqe, ioc.handle, &p->msg, 0);
-    ::io_uring_sqe_set_data(sqe, &ioc);
+    auto rwm = (ResumeWithMsg*)ioc->ptr;
+    ::io_uring_prep_sendmsg(sqe, socket, &rwm->msg, 0);
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
-void IoUring::cancel(IoContext& ioc) {
-    
+void IoUring::receive_from(SocketHandle socket, IoContext *ioc) {
+    ++io_num_;
+    io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
+    auto rwm = (ResumeWithMsg*)ioc->ptr;
+    ::io_uring_prep_recvmsg(sqe, socket, &rwm->msg, 0);
+    ::io_uring_sqe_set_data(sqe, ioc);
 }
 
 // invoke all completion
@@ -171,42 +157,31 @@ void IoUring::handle_cqe(io_uring_cqe* cqe) {
 
     if (ioc->op != Operation::Noop) {
         --io_num_;
-    } else if (ioc->buf.len == (size_t)-1) {
-        // wake
-        prep_wake_up();
     }
 
     if (cqe->res < 0) {
         inner_ec = make_socket_error_code(-cqe->res);
-        ioc->buf.len = 0;
+        ioc->res = 0;
     } else {
+        ioc->res = cqe->res;
         switch (ioc->op) {
-        case Operation::ReadFile: {
-            ioc->buf.len = cqe->res;
-        }
-            break;
-        case Operation::WriteFile: {
-            ioc->buf.len = cqe->res;
-        }
+        case Operation::WriteFile:
+        case Operation::ReadFile:
             break;
         case Operation::Accept: {
-            ioc->handle = cqe->res;
-            ::getpeername(
-                ioc->handle, 
-                (sockaddr*)&ioc->remote_addr,
-                (socklen_t*)ioc->buf.buf
-            );
+            ::getpeername((int)ioc->res, (sockaddr*)&ioc->remote_addr, &ioc->addr_len);
         }
             break;
-        case Operation::Connect: {
-        }
+        case Operation::Connect:
+        case Operation::Send:
+        case Operation::Receive:
             break;
-        case Operation::Receive: {
-            ioc->buf.len = cqe->res;
-        }
-            break;
-        case Operation::Send: {
-            ioc->buf.len = cqe->res;
+        case Operation::SendTo:
+        case Operation::ReceiveFrom: {
+            auto rwm = (ResumeWithMsg*)ioc->ptr;
+            ioc->addr_len = rwm->msg.msg_namelen;
+            ioc->ptr = rwm->ptr;
+            delete rwm;
         }
             break;
         default:
@@ -218,18 +193,18 @@ void IoUring::handle_cqe(io_uring_cqe* cqe) {
 }
 
 void IoUring::wake_up() {
-    size_t len = (size_t)-1;
-    ::write(wake_up_ctx_->handle, &len, sizeof(size_t));
+    uint64_t data{114514};
+    ::write(wake_up_fd_, &data, sizeof(uint64_t));
 }
 
 void IoUring::prep_wake_up() {
-    wake_up_ctx_->buf.len = 0;
+    wake_up_ctx_->iovec.len = 0;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_read(sqe, wake_up_ctx_->handle, &wake_up_ctx_->buf.len, sizeof(size_t), 0);
+    ::io_uring_prep_read(sqe, wake_up_fd_, &wake_up_ctx_->res, sizeof(uint64_t), 0);
     ::io_uring_sqe_set_data(sqe, wake_up_ctx_);
 }
 
-void IoUring::relate(void *sock_handle, std::error_code &ec) {
+void IoUring::attach(IoHandle ioh, std::error_code &ec) {
     return;
 }
 

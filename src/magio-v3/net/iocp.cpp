@@ -174,6 +174,9 @@ void IoCompletionPort::accept(const net::Socket& listener, IoContext *ioc) {
     auto listener_h = listener.handle();
     std::memcpy(&ioc->iovec.buf[120], &listener_h, sizeof(listener_h));
 
+    ioc->iovec.buf = new char[128]{};
+    ioc->iovec.len = 128;
+
     bool status = data_->accept(
         listener.handle(),
         ioc->res,
@@ -187,6 +190,7 @@ void IoCompletionPort::accept(const net::Socket& listener, IoContext *ioc) {
 
     if (!status && ERROR_IO_PENDING != ::GetLastError()) {
         detail::close_socket(sock_handle);
+        delete[] ioc->iovec.buf;
         ioc->cb(SYSTEM_ERROR_CODE, ioc, ioc->ptr);
     }
 }
@@ -337,13 +341,9 @@ int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
 
         --data_->io_num;
         switch(ioc->op) {
-        case Operation::ReadFile: {
+        case Operation::WriteFile:
+        case Operation::ReadFile:
             ioc->res = bytes_transferred;
-        }
-            break;
-        case Operation::WriteFile: {
-            ioc->res = bytes_transferred;
-        }
             break;
         case Operation::Accept: {
             if (!inner_ec) {
@@ -386,13 +386,11 @@ int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
             }
         }
             break;
-        case Operation::Send: {
+        case Operation::Send: 
+        case Operation::Receive:
+        case Operation::SendTo:
+        case Operation::ReceiveFrom:
             ioc->res = bytes_transferred;
-        }
-            break;
-        case Operation::Receive: {
-            ioc->res = bytes_transferred;
-        }
             break;
         default:
             break;

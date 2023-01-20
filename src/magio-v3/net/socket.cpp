@@ -10,8 +10,6 @@
 
 #elif defined(__linux__)
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #endif
 
 namespace magio {
@@ -67,9 +65,7 @@ void close_socket(Socket::Handle handle) {
 
 }
 
-Socket::Socket() { 
-
-}
+Socket::Socket() { }
 
 Socket::Socket(Handle handle, Ip ip, Transport tp) {
     handle_ = handle;

@@ -17,12 +17,14 @@ namespace magio {
 
 enum class Operation {
     Noop,
-    ReadFile,
     WriteFile,
+    ReadFile,
     Accept,
     Connect,
-    Receive,
     Send,
+    Receive,
+    SendTo,
+    ReceiveFrom
 };
 
 // for linux
@@ -52,6 +54,7 @@ struct IoContext {
 };
 
 #ifdef MAGIO_USE_CORO
+
 struct ResumeHandle {
     std::error_code ec;
     uint64_t res;
@@ -73,27 +76,15 @@ inline WSABUF io_buf(char* buf, size_t len) {
 }
 
 #elif defined (__linux__)
-struct ResumeWithMsg {
-    msghdr msg;
-    std::error_code ec;
-    std::coroutine_handle<> handle;
-};
 
-template<typename Cb>
-struct CbWithMsg {
-    msghdr msg;
-    Cb cb;
-};
-
-inline void resume_callback_with_msg(std::error_code ec, IoContext* ioc, void* ptr) {
-    auto* h = static_cast<ResumeWithMsg*>(ptr);
-    h->ec = ec;
-    h->handle.resume();
-}
-
-inline IoBuf io_buf(char* buf, size_t len) {
+inline IoVec io_buf(char* buf, size_t len) {
     return {buf, len};
 }
+
+struct ResumeWithMsg {
+    msghdr msg;
+    void* ptr;
+};
 
 #endif
 

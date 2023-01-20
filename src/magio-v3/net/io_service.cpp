@@ -34,16 +34,14 @@ void IoService::accept(const net::Socket& listener, void *user_ptr, Cb cb) {
         .ptr = user_ptr,
         .cb = cb
     };
-
-    ioc->iovec.buf = new char[128]{};
-    ioc->iovec.len = 128;
+    
     impl_->accept(listener, ioc);
 }
 
 void IoService::connect(SocketHandle socket, const net::EndPoint &remote, void *user_ptr, Cb cb) {
     auto ioc = new IoContext{
         .op = Operation::Connect,
-        .addr_len = remote.address().addr_len(),
+        .addr_len = (socklen_t)remote.address().addr_len(),
         .ptr = user_ptr,
         .cb = cb
     };
@@ -76,25 +74,59 @@ void IoService::receive(SocketHandle socket, char *buf, size_t len, void *user_p
 
 void IoService::send_to(SocketHandle socket, const net::EndPoint &remote, const char *msg, size_t len, void *user_ptr, Cb cb) {
     auto ioc = new IoContext{
-        .op = Operation::Send,
+        .op = Operation::SendTo,
         .iovec = io_buf((char*)msg, len),
-        .addr_len = remote.address().addr_len(),
+        .addr_len = (socklen_t)remote.address().addr_len(),
         .ptr = user_ptr,
         .cb = cb
     };
-
     std::memcpy(&ioc->remote_addr, remote.address().addr_in_, ioc->addr_len);
+
+#ifdef __linux__
+    auto info = msghdr{
+        .msg_name = &ioc->remote_addr,
+        .msg_namelen = ioc->addr_len,
+        .msg_iov = (iovec*)&ioc->iovec,
+        .msg_iovlen = 1,
+        .msg_control = nullptr,
+        .msg_controllen = 0,
+        .msg_flags = 0
+    };
+
+    ioc->ptr = new ResumeWithMsg{
+        .msg = {info},
+        .ptr = user_ptr
+    };
+#endif
+
     impl_->send_to(socket, ioc);
 }
 
 void IoService::receive_from(SocketHandle socket, char *buf, size_t len, void *user_ptr, Cb cb) {
     auto ioc = new IoContext{
-        .op = Operation::Receive,
+        .op = Operation::ReceiveFrom,
         .iovec = io_buf(buf, len),
         .addr_len = sizeof(sockaddr_in6),
         .ptr = user_ptr,
         .cb = cb
     };
+
+#ifdef __linux__
+    auto info = msghdr{
+        .msg_name = &ioc->remote_addr,
+        .msg_namelen = ioc->addr_len,
+        .msg_iov = (iovec*)&ioc->iovec,
+        .msg_iovlen = 1,
+        .msg_control = nullptr,
+        .msg_controllen = 0,
+        .msg_flags = 0
+    };
+
+    ioc->ptr = new ResumeWithMsg{
+        .msg = {info},
+        .ptr = user_ptr
+    };
+#endif
 
     impl_->receive_from(socket, ioc);
 }
