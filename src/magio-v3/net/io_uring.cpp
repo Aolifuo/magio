@@ -118,36 +118,43 @@ int IoUring::poll(size_t nanosec, std::error_code &ec) {
     if (nanosec == 0 && io_num_ == 0) {
         return 0;
     }
-
     ::io_uring_submit(p_io_uring_);
 
-    __kernel_timespec timespec{
+    io_uring_cqe* cqe;
+    __kernel_timespec timespec = {
         .tv_sec = (__kernel_time64_t)(nanosec / 1000000000),
         .tv_nsec = (long long)(nanosec % 1000000000)
     };
 
-    io_uring_cqe* cqe;
-    int r = ::io_uring_wait_cqe_timeout(p_io_uring_, &cqe, &timespec);
-    if (-ETIME == r || -EAGAIN == r) {
-        return 0;
+    int r = ::io_uring_peek_cqe(p_io_uring_, &cqe);
+    if (-EAGAIN == r) {
+        // nothing then sleep
+        r = ::io_uring_wait_cqe_timeout(p_io_uring_, &cqe, &timespec);
+        if (-ETIME == r || -EAGAIN == r) {
+            return 0;
+        } else if (-EINTR == r) {
+            return 2;
+        } else if (r < 0) {
+            ec = make_socket_error_code(-r);
+            return -1;
+        }
+        handle_cqe(cqe);
+        ::io_uring_cqe_seen(p_io_uring_, cqe);
+        return 1;
     } else if (-EINTR == r) {
         return 2;
     } else if (r < 0) {
         ec = make_socket_error_code(-r);
         return -1;
     }
-    handle_cqe(cqe);
-    ::io_uring_cqe_seen(p_io_uring_, cqe);
     
-    if(0 == ::io_uring_peek_cqe(p_io_uring_, &cqe)) {
-        unsigned head, count = 0;
-        io_uring_for_each_cqe(p_io_uring_, head, cqe) {
-            ++count;
-            handle_cqe(cqe);
-        }
-        ::io_uring_cq_advance(p_io_uring_, count);
+    unsigned head, count = 0;
+    io_uring_for_each_cqe(p_io_uring_, head, cqe) {
+        ++count;
+        handle_cqe(cqe);
     }
-
+    ::io_uring_cq_advance(p_io_uring_, count);
+    
     return 1;
 }
 

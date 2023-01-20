@@ -28,7 +28,7 @@ inline void spawn(Coro<T> coro) {
 }
 
 template<typename T>
-inline void spawn(Coro<T> coro, detail::UseCoro) {
+inline Coro<T> spawn(Coro<T> coro, detail::UseCoro) {
     co_return co_await coro;
 }
 

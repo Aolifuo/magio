@@ -78,6 +78,8 @@ private:
 
 class File: Noncopyable {
 public:
+    using Handle = IoHandle;
+
     enum Openmode {
         ReadOnly  = 0b000001, 
         WriteOnly = 0b000010,
@@ -89,6 +91,8 @@ public:
     };
 
     File();
+
+    ~File();
 
     File(File&& other) noexcept;
 
@@ -106,12 +110,12 @@ public:
     Coro<size_t> read(char* buf, size_t len, std::error_code& ec);
     
     [[nodiscard]]
-    Coro<size_t> write(const char* buf, size_t len, std::error_code& ec);
+    Coro<size_t> write(const char* msg, size_t len, std::error_code& ec);
 #endif
 
     void read(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
     
-    void write(const char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+    void write(const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
 
     void attach_context();
 
@@ -120,13 +124,14 @@ public:
     void sync_data();
 
     operator bool() const {
-        return file_;
+        return handle_.a != -1;
     }
 
 private:
-    File(RandomAccessFile file);
-
-    RandomAccessFile file_;
+    void reset();
+    
+    Handle handle_;
+    CoroContext* attached_;
     size_t read_offset_ = 0;
     size_t write_offset_ = 0;
 };

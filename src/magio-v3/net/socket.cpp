@@ -65,7 +65,9 @@ void close_socket(Socket::Handle handle) {
 
 }
 
-Socket::Socket() { }
+Socket::Socket() { 
+    reset();
+}
 
 Socket::Socket(Handle handle, Ip ip, Transport tp) {
     handle_ = handle;

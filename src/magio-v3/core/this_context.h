@@ -44,7 +44,7 @@ using CoroCompletionHandler = typename detail::CoroCompletionHandler<T>::type;
 
 inline thread_local CoroContext* LocalContext = nullptr;
 
-inline detail::UseCoro use_core;
+inline detail::UseCoro use_coro;
 
 namespace this_context {
 
@@ -61,7 +61,8 @@ template<typename T>
 void spawn(Coro<T> coro);
 
 template<typename T>
-void spawn(Coro<T> coro, detail::UseCoro);
+[[nodiscard]]
+Coro<T> spawn(Coro<T> coro, detail::UseCoro);
 
 template<typename T>
 void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler);

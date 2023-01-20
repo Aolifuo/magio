@@ -44,7 +44,6 @@ void CoroContext::start() {
             std::lock_guard lk(mutex_);
             handles.swap(pending_handles_);
         }
-
         for (auto& func : handles) {
             func();
         }
@@ -66,7 +65,7 @@ void CoroContext::start() {
                 next_duration = TimerClock::duration(0);
             }
         }
-
+        
         int status = io_service_->poll(next_duration.count(), ec);
         if (-1 == status) {
             M_SYS_ERROR("Io service error: {}, then the context will be stopped", ec.message());
