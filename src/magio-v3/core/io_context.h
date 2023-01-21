@@ -33,6 +33,16 @@ struct IoVec {
     size_t len;
 };
 
+#ifdef _WIN32
+inline WSABUF io_buf(char* buf, size_t len) {
+    return {(ULONG)len, buf};
+}
+#elif defined (__linux__)
+inline IoVec io_buf(char* buf, size_t len) {
+    return {buf, len};
+}
+#endif
+
 struct IoContext {
 #ifdef _WIN32
     OVERLAPPED overlapped;
@@ -54,12 +64,18 @@ struct IoContext {
 };
 
 #ifdef MAGIO_USE_CORO
-
 struct ResumeHandle {
     std::error_code ec;
     uint64_t res;
     std::coroutine_handle<> handle;
 };
+
+#if defined (__linux__)
+struct ResumeWithMsg {
+    msghdr msg;
+    void* ptr;
+};
+#endif
 
 inline void resume_callback(std::error_code ec, IoContext* ioc, void* ptr) {
     auto* h = static_cast<ResumeHandle*>(ptr);
@@ -68,26 +84,6 @@ inline void resume_callback(std::error_code ec, IoContext* ioc, void* ptr) {
     h->handle.resume();
     delete ioc;
 }
-
-#ifdef _WIN32
-
-inline WSABUF io_buf(char* buf, size_t len) {
-    return {(ULONG)len, buf};
-}
-
-#elif defined (__linux__)
-
-inline IoVec io_buf(char* buf, size_t len) {
-    return {buf, len};
-}
-
-struct ResumeWithMsg {
-    msghdr msg;
-    void* ptr;
-};
-
-#endif
-
 #endif
 
 }
