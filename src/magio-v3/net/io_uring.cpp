@@ -26,22 +26,12 @@ IoUring::IoUring(unsigned entries) {
     }
 
     wake_up_fd_ = ::eventfd(EFD_NONBLOCK, 0);
-    wake_up_ctx_ = new IoContext{
+    wake_up_ctx_ = new WakeupContext{
         .op = Operation::Noop,
         .ptr = this,
-        .cb = [](std::error_code ec, IoContext* ioc, void* p) {
-            auto ioring = (IoUring*)p;
+        .cb = [](std::error_code ec, WakeupContext* ctx) {
+            auto ioring = (IoUring*)ctx->ptr;
             ioring->prep_wake_up();
-        }
-    };
-
-    time_out_ctx_ = new IoContext{
-        .op = Operation::Noop,
-        .ptr = new __kernel_timespec{0, 0},
-        .cb = [](std::error_code ec, IoContext* ioc, void* p) {
-            auto ts = (__kernel_timespec*)p;
-            ts->tv_nsec = 0;
-            ts->tv_sec = 0;
         }
     };
 
@@ -50,12 +40,9 @@ IoUring::IoUring(unsigned entries) {
 
 IoUring::~IoUring() {
     if (p_io_uring_) {
-        auto ts = (__kernel_timespec*)time_out_ctx_->ptr;
-        ::close((int)wake_up_ctx_->res);
+        ::close(wake_up_fd_);
         ::io_uring_queue_exit(p_io_uring_);
         delete wake_up_ctx_;
-        delete ts;
-        delete time_out_ctx_;
         delete p_io_uring_;
     }
 }
@@ -167,6 +154,10 @@ void IoUring::handle_cqe(io_uring_cqe* cqe) {
 
     if (ioc->op != Operation::Noop) {
         --io_num_;
+    } else {
+        auto wctx = (WakeupContext*)ioc;
+        wctx->cb(cqe->res < 0 ? make_socket_error_code(-cqe->res) : std::error_code{}, wctx);
+        return;
     }
 
     if (cqe->res < 0) {
@@ -208,16 +199,20 @@ void IoUring::wake_up() {
 }
 
 void IoUring::prep_timeout(size_t nanosec) {
-    auto ts = (__kernel_timespec*)time_out_ctx_->ptr;
-    ts->tv_nsec = (long long)(nanosec % 1000000000);
-    ts->tv_sec = (long long)(nanosec / 1000000000);
+    auto ctx = new WakeupContext{};
+    ctx->op = Operation::Noop;
+    ctx->ts.tv_sec = (long long)(nanosec / 1000000000);
+    ctx->ts.tv_nsec = (long long)(nanosec % 1000000000);
+    ctx->cb = [](std::error_code ec, WakeupContext* ctx) {
+        delete ctx;
+    };
+    
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
-    ::io_uring_prep_timeout(sqe, ts, 1, 0);
-    ::io_uring_sqe_set_data(sqe, time_out_ctx_);
+    ::io_uring_prep_timeout(sqe, &ctx->ts, 1, 0);
+    ::io_uring_sqe_set_data(sqe, ctx);
 }
 
 void IoUring::prep_wake_up() {
-    wake_up_ctx_->iovec.len = 0;
     io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
     ::io_uring_prep_read(sqe, wake_up_fd_, &wake_up_ctx_->res, sizeof(uint64_t), 0);
     ::io_uring_sqe_set_data(sqe, wake_up_ctx_);

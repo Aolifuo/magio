@@ -11,6 +11,7 @@
 #include <Ws2tcpip.h>
 #elif defined(__linux__)
 #include <netinet/in.h>
+#include <linux/time_types.h>
 #endif
 
 namespace magio {
@@ -62,6 +63,16 @@ struct IoContext {
 
     uint64_t res; // sockethandle iohandle bytes
 };
+
+#if defined (__linux__)
+struct WakeupContext {
+    Operation op;
+    __kernel_timespec ts;
+    void* ptr;
+    void(*cb)(std::error_code, WakeupContext*);
+    uint64_t res;
+};
+#endif
 
 #ifdef MAGIO_USE_CORO
 struct ResumeHandle {
