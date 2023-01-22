@@ -43,10 +43,13 @@ public:
 private:
     void handle_cqe(io_uring_cqe*);
 
+    void prep_timeout(size_t nanosec);
+
     void prep_wake_up();
 
     int wake_up_fd_;
     IoContext* wake_up_ctx_;
+    IoContext* time_out_ctx_;
     size_t io_num_ = 0;
     io_uring* p_io_uring_ = nullptr;
 };

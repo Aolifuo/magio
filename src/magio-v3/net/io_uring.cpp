@@ -35,17 +35,28 @@ IoUring::IoUring(unsigned entries) {
         }
     };
 
+    time_out_ctx_ = new IoContext{
+        .op = Operation::Noop,
+        .ptr = new __kernel_timespec{0, 0},
+        .cb = [](std::error_code ec, IoContext* ioc, void* p) {
+            auto ts = (__kernel_timespec*)p;
+            ts->tv_nsec = 0;
+            ts->tv_sec = 0;
+        }
+    };
+
     prep_wake_up();
 }
 
 IoUring::~IoUring() {
     if (p_io_uring_) {
+        auto ts = (__kernel_timespec*)time_out_ctx_->ptr;
         ::close((int)wake_up_ctx_->res);
         ::io_uring_queue_exit(p_io_uring_);
         delete wake_up_ctx_;
+        delete ts;
+        delete time_out_ctx_;
         delete p_io_uring_;
-        wake_up_ctx_ = nullptr;
-        p_io_uring_ = nullptr;
     }
 }
 
@@ -114,23 +125,18 @@ void IoUring::receive_from(SocketHandle socket, IoContext *ioc) {
 
 // invoke all completion
 int IoUring::poll(size_t nanosec, std::error_code &ec) {
-    // printf("%zu\n", nanosec);
     if (nanosec == 0 && io_num_ == 0) {
         return 0;
     }
     ::io_uring_submit(p_io_uring_);
 
     io_uring_cqe* cqe;
-    __kernel_timespec timespec = {
-        .tv_sec = (__kernel_time64_t)(nanosec / 1000000000),
-        .tv_nsec = (long long)(nanosec % 1000000000)
-    };
-
     int r = ::io_uring_peek_cqe(p_io_uring_, &cqe);
     if (-EAGAIN == r) {
         // nothing then sleep
-        r = ::io_uring_wait_cqe_timeout(p_io_uring_, &cqe, &timespec);
-        if (-ETIME == r || -EAGAIN == r) {
+        prep_timeout(nanosec);
+        r = ::io_uring_submit_and_wait(p_io_uring_, 1);
+        if (-EAGAIN == r) {
             return 0;
         } else if (-EINTR == r) {
             return 2;
@@ -138,9 +144,6 @@ int IoUring::poll(size_t nanosec, std::error_code &ec) {
             ec = make_socket_error_code(-r);
             return -1;
         }
-        handle_cqe(cqe);
-        ::io_uring_cqe_seen(p_io_uring_, cqe);
-        return 1;
     } else if (-EINTR == r) {
         return 2;
     } else if (r < 0) {
@@ -202,6 +205,15 @@ void IoUring::handle_cqe(io_uring_cqe* cqe) {
 void IoUring::wake_up() {
     uint64_t data{114514};
     ::write(wake_up_fd_, &data, sizeof(uint64_t));
+}
+
+void IoUring::prep_timeout(size_t nanosec) {
+    auto ts = (__kernel_timespec*)time_out_ctx_->ptr;
+    ts->tv_nsec = (long long)(nanosec % 1000000000);
+    ts->tv_sec = (long long)(nanosec / 1000000000);
+    io_uring_sqe* sqe = ::io_uring_get_sqe(p_io_uring_);
+    ::io_uring_prep_timeout(sqe, ts, 1, 0);
+    ::io_uring_sqe_set_data(sqe, time_out_ctx_);
 }
 
 void IoUring::prep_wake_up() {
