@@ -8,43 +8,38 @@ Magio是一个基于C++20实现的协程网络库，包含异步文件IO，网�
 ### Tcp server
 
 ```cpp
-Coro<> handle_connection(net::Socket sock) {
+Coro<> handle_conn(net::Socket sock) {
     char buf[1024];
     for (; ;) {
         error_code ec;
-        size_t rd = co_await sock.receive(buf, sizeof(buf), ec);
-        if (ec || rd == 0) {
-            M_ERROR("recv error: {}", ec ? ec.message() : "EOF");
+        size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_err;
+        if (rd == 0) {
+            M_INFO("{}", "EOF");
             break;
         }
         M_INFO("receive: {}", string_view(buf, rd));
-        co_await sock.send(buf, rd, ec);
-        if (ec) {
-            M_ERROR("send error: {}", ec.message());
-            break;
-        }
+        co_await sock.send(buf, rd) | throw_err;
     }
 }
 
 Coro<> server() {
-    error_code ec;
-    net::EndPoint local(net::make_address("::1", ec), 1234);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
+    net::EndPoint local(net::make_address("::1") | panic_on_err, 1234);
+    auto acceptor = net::Acceptor::listen(local) | panic_on_err;
 
-    auto acceptor = net::Acceptor::listen(local, ec);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
-
-    for (; ; ec.clear()) {
-        auto [socket, peer] = co_await acceptor.accept(ec);
+    for (; ;) {
+        error_code ec;
+        auto [socket, peer] = co_await acceptor.accept() | get_code(ec);
         if (ec) {
             M_ERROR("{}", ec.message());
         } else {
             M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
-            this_context::spawn(handle_connection(std::move(socket)));
+            this_context::spawn(handle_conn(std::move(socket)), [](exception_ptr eptr, Unit) {
+                try {
+                    try_rethrow(eptr);
+                } catch(const std::system_error& err) {
+                    M_ERROR("{}", err.what());
+                }
+            });
         }
     }
 }
@@ -60,44 +55,35 @@ int main() {
 
 ```cpp
 Coro<> client() {
-    error_code ec;
-    net::EndPoint local(net::make_address("::1", ec), 0);
-    net::EndPoint peer(net::make_address("::1", ec), 1234);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
+    net::EndPoint local(net::make_address("::1") | throw_err, 0);
+    net::EndPoint peer(net::make_address("::1") | throw_err, 1234);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp) | throw_err;
 
-    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp, ec);
-    socket.bind(local, ec);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
-
-    co_await socket.connect(peer, ec);
-    if (ec) {
-        M_FATAL("connect error: {}", ec.message());
-    }
+    socket.bind(local) | throw_err;
+    co_await socket.connect(peer) | throw_err;
  
     char buf[1024];
     for (int i = 0; i < 5; ++i) {
-        co_await socket.send("hello server", 12, ec);
-        if (ec) {
-            M_ERROR("send error: {}", ec.message());
-            break;
-        }
-        size_t rd = co_await socket.receive(buf, sizeof(buf), ec);
-        if (ec || rd == 0) {
-            M_ERROR("recv error: {}", ec ? ec.message() : "EOF");
+        co_await socket.send("hello server", 12) | throw_err;
+        size_t rd = co_await socket.receive(buf, sizeof(buf)) | throw_err;
+        if (rd == 0) {
+            M_ERROR("{}", "EOF");
             break;
         }
         M_INFO("{}", string_view(buf, rd));
     }
-    this_context::stop();
 }
 
 int main() {
     CoroContext ctx(128);
-    this_context::spawn(client());
+    this_context::spawn(client(), [](exception_ptr eptr, Unit) {
+        try {
+            try_rethrow(eptr);
+        } catch(const system_error& err) {
+            M_ERROR("{}", err.what());
+        }
+        this_context::stop();
+    });
     ctx.start();
 }
 ```
@@ -106,37 +92,28 @@ int main() {
 
 ```cpp
 Coro<> amain() {
-    error_code ec;
-    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp, ec);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
+    net::EndPoint local(net::make_address("::1") | throw_err, 1234);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp) | throw_err;
+    socket.bind(local) | panic_on_err;
 
-    net::EndPoint local(net::make_address("::1", ec), 1234);
-    socket.bind(local, ec);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
-
-    char buf[1024]{};
-    for (; ; ec.clear()) {
-        auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf), ec);
-        if (ec) {
-            M_ERROR("recv error: {}", ec.message());
-            continue;
-        }
+    char buf[1024];
+    for (; ;) {
+        auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf)) | throw_err;
         M_INFO("[{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
-        co_await socket.send_to(buf, rd, peer, ec);
-        if (ec) {
-            M_ERROR("send error: {}", ec.message());
-            continue;
-        }
+        co_await socket.send_to(buf, rd, peer) | throw_err;
     }
 }
 
 int main() {
     CoroContext ctx(128);
-    this_context::spawn(amain());
+    this_context::spawn(amain(), [](exception_ptr eptr, Unit) {
+        try {
+            try_rethrow(eptr);
+        } catch(const std::system_error& err) {
+            M_ERROR("{}", err.what());
+        }
+        this_context::stop();
+    });
     ctx.start();    
 }
 ```
@@ -154,18 +131,24 @@ Coro<> copyfile() {
     char buf[1024];
     for (; ;) {
         error_code ec;
-        size_t rd = co_await from.read(buf, sizeof(buf), ec);
-        if (ec || rd == 0) {
+        size_t rd = co_await from.read(buf, sizeof(buf)) | throw_err;
+        if (rd == 0) {
             break;
         }
-        co_await to.write(buf, rd, ec);
+        co_await to.write(buf, rd) | throw_err;
     }
-    this_context::stop();
 }
 
 int main() {
     CoroContext ctx(128);
-    this_context::spawn(copyfile());
+    this_context::spawn(copyfile(), [](exception_ptr eptr, Unit) {
+        try {
+            try_rethrow(eptr);
+        } catch(const system_error& err) {
+            M_ERROR("{}", err.what());
+        }
+        this_context::stop();
+    });
     ctx.start();
 }
 ```
