@@ -128,13 +128,13 @@ int IoUring::poll(size_t nanosec, std::error_code &ec) {
         } else if (-EINTR == r) {
             return 2;
         } else if (r < 0) {
-            ec = make_socket_error_code(-r);
+            ec = make_system_error_code(-r);
             return -1;
         }
     } else if (-EINTR == r) {
         return 2;
     } else if (r < 0) {
-        ec = make_socket_error_code(-r);
+        ec = make_system_error_code(-r);
         return -1;
     }
     
@@ -156,12 +156,12 @@ void IoUring::handle_cqe(io_uring_cqe* cqe) {
         --io_num_;
     } else {
         auto wctx = (WakeupContext*)ioc;
-        wctx->cb(cqe->res < 0 ? make_socket_error_code(-cqe->res) : std::error_code{}, wctx);
+        wctx->cb(cqe->res < 0 ? make_system_error_code(-cqe->res) : std::error_code{}, wctx);
         return;
     }
 
     if (cqe->res < 0) {
-        inner_ec = make_socket_error_code(-cqe->res);
+        inner_ec = make_system_error_code(-cqe->res);
         ioc->res = 0;
     } else {
         ioc->res = cqe->res;
