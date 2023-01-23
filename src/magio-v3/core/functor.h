@@ -3,6 +3,7 @@
 
 #include "magio-v3/core/traits.h"
 #include "magio-v3/core/noncopyable.h"
+#include <cstdio>
 
 namespace magio {
 
@@ -44,6 +45,8 @@ class Functor<Ret(Args...)>: Noncopyable {
     };
     
 public:
+    using Self = Functor<Ret(Args...)>;
+
     enum Strategy {
         CFunction,
         ClassFunction
@@ -66,7 +69,11 @@ public:
 
     template<
         typename Class, 
-        constraint<std::is_class_v<Class> && std::is_invocable_v<Class, Args...>> = 0
+        constraint<
+            std::is_class_v<Class> &&
+            !std::is_same_v<Class, Self> &&
+            std::is_invocable_v<Class, Args...>
+        > = 0
     >
     Functor(const Class& lobj) {
         strategy_ = ClassFunction;
@@ -75,14 +82,18 @@ public:
 
     template<
         typename Class, 
-        constraint<std::is_class_v<Class> && std::is_invocable_v<Class, Args...>> = 0
+        constraint<
+            std::is_class_v<Class> &&
+            !std::is_same_v<Class, Self> &&
+            std::is_invocable_v<Class, Args...>
+        > = 0
     >
     Functor(Class&& robj) {
         strategy_ = ClassFunction;
         impl_.functorbase = new FunctorImpl<Class>(std::move(robj));
     }
 
-    Functor(Functor&& other) // init
+    Functor(Functor&& other) noexcept // init
         : strategy_(other.strategy_)
         , impl_(other.impl_) 
     {
@@ -91,7 +102,11 @@ public:
         }
     }
 
-    Functor& operator=(Functor&& other) {
+    Functor& operator=(Functor&& other) noexcept {
+        if (impl_.ptr == other.impl_.ptr) { // self
+            return *this;
+        }
+
         strategy_ = other.strategy_;
         impl_ = other.impl_;
         if (impl_.ptr) {

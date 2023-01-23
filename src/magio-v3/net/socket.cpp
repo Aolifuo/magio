@@ -89,6 +89,10 @@ Socket::Socket(Socket&& other) noexcept
 }
 
 Socket& Socket::operator=(Socket&& other) noexcept {
+    if (handle_ == other.handle_) { // self
+        return *this;
+    }
+    
     handle_ = other.handle_;
     attached_ = other.attached_;
     ip_ = other.ip_;

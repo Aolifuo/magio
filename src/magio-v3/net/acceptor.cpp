@@ -15,6 +15,10 @@ Acceptor::Acceptor(Acceptor&& other) noexcept
 { }
 
 Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
+    if (listener_.handle() == other.listener_.handle()) { // self
+        return *this;
+    }
+
     listener_ = std::move(other.listener_);
     return *this;
 }
