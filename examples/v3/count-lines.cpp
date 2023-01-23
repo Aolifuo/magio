@@ -49,7 +49,7 @@ private:
 
         for (; ;) {
             error_code ec;
-            size_t len = co_await file.read(buf, sizeof(buf), ec);
+            size_t len = co_await file.read(buf, sizeof(buf)) | get_code(ec);
             if (ec || len == 0) {
                 break;
             }

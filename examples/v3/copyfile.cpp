@@ -14,17 +14,23 @@ Coro<> copyfile() {
     char buf[1024];
     for (; ;) {
         error_code ec;
-        size_t rd = co_await from.read(buf, sizeof(buf), ec);
-        if (ec || rd == 0) {
+        size_t rd = co_await from.read(buf, sizeof(buf)) | throw_err;
+        if (rd == 0) {
             break;
         }
-        co_await to.write(buf, rd, ec);
+        co_await to.write(buf, rd) | throw_err;
     }
-    this_context::stop();
 }
 
 int main() {
     CoroContext ctx(128);
-    this_context::spawn(copyfile());
+    this_context::spawn(copyfile(), [](exception_ptr eptr, Unit) {
+        try {
+            try_rethrow(eptr);
+        } catch(const system_error& err) {
+            M_ERROR("{}", err.what());
+        }
+        this_context::stop();
+    });
     ctx.start();
 }

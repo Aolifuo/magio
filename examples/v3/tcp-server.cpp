@@ -4,43 +4,38 @@ using namespace std;
 using namespace magio;
 using namespace chrono_literals;
 
-Coro<> handle_connection(net::Socket sock) {
+Coro<> handle_conn(net::Socket sock) {
     char buf[1024];
     for (; ;) {
         error_code ec;
-        size_t rd = co_await sock.receive(buf, sizeof(buf), ec);
-        if (ec || rd == 0) {
-            M_ERROR("recv error: {}", ec ? ec.message() : "EOF");
+        size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_err;
+        if (rd == 0) {
+            M_INFO("{}", "EOF");
             break;
         }
         M_INFO("receive: {}", string_view(buf, rd));
-        co_await sock.send(buf, rd, ec);
-        if (ec) {
-            M_ERROR("send error: {}", ec.message());
-            break;
-        }
+        co_await sock.send(buf, rd) | throw_err;
     }
 }
 
 Coro<> server() {
-    error_code ec;
-    net::EndPoint local(net::make_address("::1", ec), 1234);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
+    net::EndPoint local(net::make_address("::1") | panic_on_err, 1234);
+    auto acceptor = net::Acceptor::listen(local) | panic_on_err;
 
-    auto acceptor = net::Acceptor::listen(local, ec);
-    if (ec) {
-        M_FATAL("{}", ec.message());
-    }
-
-    for (; ; ec.clear()) {
-        auto [socket, peer] = co_await acceptor.accept(ec);
+    for (; ;) {
+        error_code ec;
+        auto [socket, peer] = co_await acceptor.accept() | get_code(ec);
         if (ec) {
             M_ERROR("{}", ec.message());
         } else {
             M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
-            this_context::spawn(handle_connection(std::move(socket)));
+            this_context::spawn(handle_conn(std::move(socket)), [](exception_ptr eptr, Unit) {
+                try {
+                    try_rethrow(eptr);
+                } catch(const std::system_error& err) {
+                    M_ERROR("{}", err.what());
+                }
+            });
         }
     }
 }
