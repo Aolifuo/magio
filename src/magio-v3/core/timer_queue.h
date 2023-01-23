@@ -4,14 +4,14 @@
 #include <queue>
 #include <memory>
 #include <chrono>
-#include <functional>
 
+#include "magio-v3/core/functor.h"
 #include "magio-v3/core/noncopyable.h"
 
 namespace magio {
 
 using TimerClock = std::chrono::steady_clock;
-using TimerTask = std::function<void(bool)>;
+using TimerTask = Functor<void(bool)>;
 
 struct TimerData {
     TimerData(TimerClock::time_point tp, TimerTask&& f)

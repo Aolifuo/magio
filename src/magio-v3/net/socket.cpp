@@ -1,6 +1,5 @@
 #include "magio-v3/net/socket.h"
 
-#include "magio-v3/core/error.h"
 #include "magio-v3/core/logger.h"
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/core/coro_context.h"
@@ -98,53 +97,52 @@ Socket& Socket::operator=(Socket&& other) noexcept {
     return *this;
 }
 
-Socket Socket::open(Ip ip, Transport tp, std::error_code &ec) {
-    Socket socket;
-    socket.handle_ = detail::open_socket(ip, tp, ec);
-    socket.ip_ = ip;
-    socket.transport_ = tp;
-    return socket;
+Result<Socket> Socket::open(Ip ip, Transport tp) {
+    std::error_code ec;
+    Socket socket(detail::open_socket(ip, tp, ec), ip, tp);
+    return {std::move(socket), ec};
 }
 
-void Socket::bind(const EndPoint& ep, std::error_code &ec) {
+Result<> Socket::bind(const EndPoint& ep) {
+    std::error_code ec;
     auto& address = ep.address();
     if (-1 == ::bind(
         handle_, 
         (const sockaddr*)address.addr_in_,
         address.addr_len()
     )) {
-        ec = SYSTEM_ERROR_CODE;
-        return;
+        return {SYSTEM_ERROR_CODE};
     }
+
+    return {};
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<> Socket::connect(const EndPoint& ep, std::error_code& ec) {
+Coro<Result<>> Socket::connect(const EndPoint& ep) {
     attach_context();
-
+    std::error_code ec;
     ResumeHandle rh;
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rh.handle = h;
         this_context::get_service().connect(handle_, ep, &rh, resume_callback);
     });
 
-    ec = rh.ec;
+    co_return {rh.ec};
 }
 
-Coro<size_t> Socket::receive(char* buf, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> Socket::receive(char* buf, size_t len) {
     attach_context();
-
+    std::error_code ec;
     ResumeHandle rh;
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rh.handle = h;
         this_context::get_service().receive(handle_, buf, len, &rh, resume_callback);
     });
 
-    ec = rh.ec;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 
-Coro<size_t> Socket::send(const char* msg, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> Socket::send(const char* msg, size_t len) {
     attach_context();
     ResumeHandle rh;
 
@@ -153,11 +151,10 @@ Coro<size_t> Socket::send(const char* msg, size_t len, std::error_code &ec) {
         this_context::get_service().send(handle_, msg, len, &rh, resume_callback);
     });
 
-    ec = rh.ec;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 
-Coro<size_t> Socket::send_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec) {
+Coro<Result<size_t>> Socket::send_to(const char* msg, size_t len, const EndPoint& ep) {
     attach_context();
     ResumeHandle rh;
 
@@ -166,11 +163,10 @@ Coro<size_t> Socket::send_to(const char* msg, size_t len, const EndPoint& ep, st
         this_context::get_service().send_to(handle_, ep, msg, len, &rh, resume_callback);
     });
 
-    ec = rh.ec;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 
-Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* buf, size_t len, std::error_code& ec) {
+Coro<Result<std::pair<size_t, EndPoint>>> Socket::receive_from(char* buf, size_t len) {
     attach_context();
     struct RecvResume: ResumeHandle {
         EndPoint ep;
@@ -183,20 +179,22 @@ Coro<std::pair<size_t, EndPoint>> Socket::receive_from(char* buf, size_t len, st
                 auto rh = (RecvResume*)ptr;
                 rh->ec = ec;
                 rh->res = ioc->res;
-                rh->ep = EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
+                rh->ep = EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
                 rh->handle.resume();
 
                 delete ioc;
             });
     });
 
-    ec = rh.ec;
-    co_return {rh.res, rh.ep};
+    if (rh.ec) {
+        co_return {rh.ec};
+    }
+    co_return {{rh.res, std::move(rh.ep)}};
 }
 #endif
 
-void Socket::connect(const EndPoint &ep, std::function<void (std::error_code)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code)>;
+void Socket::connect(const EndPoint &ep, Functor<void (std::error_code)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code)>;
     attach_context();
 
     this_context::get_service().connect(handle_, ep, new Cb(std::move(completion_cb)), 
@@ -208,8 +206,8 @@ void Socket::connect(const EndPoint &ep, std::function<void (std::error_code)> &
         });
 }
 
-void Socket::receive(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void Socket::receive(char *buf, size_t len, Functor<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
 
     this_context::get_service().receive(handle_, buf, len, new Cb(std::move(completion_cb)),
@@ -221,8 +219,8 @@ void Socket::receive(char *buf, size_t len, std::function<void (std::error_code,
         });
 }
 
-void Socket::send(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void Socket::send(const char *msg, size_t len, Functor<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
 
     this_context::get_service().send(handle_, msg, len, new Cb(std::move(completion_cb)),
@@ -234,8 +232,8 @@ void Socket::send(const char *msg, size_t len, std::function<void (std::error_co
         });
 }
 
-void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, Functor<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
 
     this_context::get_service().send_to(handle_, ep, msg, len, new Cb(std::move(completion_cb)), 
@@ -247,17 +245,21 @@ void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, std::funct
         });
 }
 
-void Socket::receive_from(char *buf, size_t len, std::function<void (std::error_code, size_t, EndPoint)>&& completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t, EndPoint)>;
+void Socket::receive_from(char *buf, size_t len, Functor<void (std::error_code, size_t, EndPoint)>&& completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t, EndPoint)>;
     attach_context();
 
     this_context::get_service().receive_from(handle_, buf, len, new Cb(std::move(completion_cb)),
         [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
-            (*cb)(
-                ec, ioc->res,
-                EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
-            );
+            if (ec) {
+                (*cb)(ec, {}, {});
+            } else {
+                (*cb)(
+                    ec, ioc->res,
+                    EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
+                );
+            }
             delete cb;
             delete ioc;
         });

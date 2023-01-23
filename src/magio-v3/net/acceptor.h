@@ -1,6 +1,7 @@
 #ifndef MAGIO_NET_ACCEPTOR_H_
 #define MAGIO_NET_ACCEPTOR_H_
 
+#include "magio-v3/core/error.h"
 #include "magio-v3/core/noncopyable.h"
 #include "magio-v3/net/socket.h"
 
@@ -17,14 +18,14 @@ public:
     Acceptor& operator=(Acceptor&& other) noexcept;
 
     [[nodiscard]]
-    static Acceptor listen(const EndPoint& ep, std::error_code& ec);
+    static Result<Acceptor> listen(const EndPoint& ep);
 
 #ifdef MAGIO_USE_CORO
     [[nodiscard]]
-    Coro<std::pair<Socket, EndPoint>> accept(std::error_code& ec);
+    Coro<Result<std::pair<Socket, EndPoint>>> accept();
 #endif
 
-    void accept(std::function<void(std::error_code, Socket, EndPoint)>&& completion_cb);
+    void accept(Functor<void(std::error_code, Socket, EndPoint)>&& completion_cb);
 
     void attach_context();
 

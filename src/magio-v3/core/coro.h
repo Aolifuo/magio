@@ -179,8 +179,12 @@ public:
             return {};
         }
 
-        void return_value(Return val) {
-            value = std::move(val);
+        void return_value(Return& lval) {
+            value.emplace(lval);
+        }
+
+        void return_value(Return&& rval) {
+            value.emplace(std::move(rval));
         }
 
         void unhandled_exception() {

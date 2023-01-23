@@ -6,7 +6,7 @@
 
 namespace magio {
 
-std::string SocketSystemError::message(int code) const {
+std::string SystemError::message(int code) const {
 #ifdef _WIN32
     LPTSTR pbuf = nullptr;
 
@@ -34,8 +34,8 @@ std::string SocketSystemError::message(int code) const {
 #endif
 }
 
-std::error_code make_socket_error_code(int code) {
-    return {code, SocketSystemError::get()};
+std::error_code make_system_error_code(int code) {
+    return {code, SystemError::get()};
 }
 
 }

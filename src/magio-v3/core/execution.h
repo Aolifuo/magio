@@ -1,11 +1,11 @@
 #ifndef MAGIO_CORE_EXECUTION_H_
 #define MAGIO_CORE_EXECUTION_H_
 
-#include <functional>
+#include "magio-v3/core/functor.h"
 
 namespace magio {
 
-using Task = std::function<void()>;
+using Task = Functor<void()>;
 
 class Executor {
 public:

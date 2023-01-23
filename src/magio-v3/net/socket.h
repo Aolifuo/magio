@@ -2,10 +2,10 @@
 #define MAGIO_NET_SOCKET_H_
 
 #include <cstring>
-#include <functional>
-#include <system_error>
 
+#include "magio-v3/core/error.h"
 #include "magio-v3/core/common.h"
+#include "magio-v3/core/functor.h"
 #include "magio-v3/core/noncopyable.h"
 #include "magio-v3/net/protocal.h"
 
@@ -39,36 +39,36 @@ public:
     Socket& operator=(Socket&& other) noexcept;
 
     [[nodiscard]]
-    static Socket open(Ip ip, Transport tp, std::error_code& ec);
+    static Result<Socket> open(Ip ip, Transport tp);
 
-    void bind(const EndPoint& ep, std::error_code& ec);
+    Result<> bind(const EndPoint& ep);
 
 #ifdef MAGIO_USE_CORO
     [[nodiscard]]
-    Coro<void> connect(const EndPoint& ep, std::error_code& ec);
+    Coro<Result<>> connect(const EndPoint& ep);
 
     [[nodiscard]]
-    Coro<size_t> send(const char* msg, size_t len, std::error_code& ec);
+    Coro<Result<size_t>> send(const char* msg, size_t len);
 
     [[nodiscard]]
-    Coro<size_t> receive(char* buf, size_t len, std::error_code& ec);
+    Coro<Result<size_t>> receive(char* buf, size_t len);
 
     [[nodiscard]]
-    Coro<size_t> send_to(const char* msg, size_t len, const EndPoint& ep, std::error_code& ec);
+    Coro<Result<size_t>> send_to(const char* msg, size_t len, const EndPoint& ep);
 
     [[nodiscard]]
-    Coro<std::pair<size_t, EndPoint>> receive_from(char* buf, size_t len, std::error_code& ec);
+    Coro<Result<std::pair<size_t, EndPoint>>> receive_from(char* buf, size_t len);
 #endif
 
-    void connect(const EndPoint& ep, std::function<void(std::error_code)>&& completion_cb);
+    void connect(const EndPoint& ep, Functor<void(std::error_code)>&& completion_cb);
 
-    void send(const char* msg, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+    void send(const char* msg, size_t len, Functor<void(std::error_code, size_t)>&& completion_cb);
 
-    void receive(char* buf, size_t len, std::function<void(std::error_code, size_t)>&& completion_cb);
+    void receive(char* buf, size_t len, Functor<void(std::error_code, size_t)>&& completion_cb);
 
-    void send_to(const char* msg, size_t len, const EndPoint& ep, std::function<void(std::error_code, size_t)>&& completion_cb);
+    void send_to(const char* msg, size_t len, const EndPoint& ep, Functor<void(std::error_code, size_t)>&& completion_cb);
 
-    void receive_from(char* buf, size_t len, std::function<void(std::error_code ec, size_t, EndPoint)>&& completion_cb);
+    void receive_from(char* buf, size_t len, Functor<void(std::error_code ec, size_t, EndPoint)>&& completion_cb);
 
     void cancel();
 

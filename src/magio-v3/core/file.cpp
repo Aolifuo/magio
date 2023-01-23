@@ -200,7 +200,7 @@ void RandomAccessFile::sync_data() {
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> RandomAccessFile::read_at(size_t offset, char *buf, size_t len) {
     attach_context();
     ResumeHandle rh;
 
@@ -209,11 +209,10 @@ Coro<size_t> RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std
         this_context::get_service().read_file(handle_, buf, len, offset, &rh, resume_callback);
     });
 
-    ec = rh.ec;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 
-Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> RandomAccessFile::write_at(size_t offset, const char *msg, size_t len) {
     attach_context();
     ResumeHandle rh;
 
@@ -230,13 +229,12 @@ Coro<size_t> RandomAccessFile::write_at(size_t offset, const char *msg, size_t l
         this_context::get_service().write_file(handle_, msg, len, offset, &rh, resume_callback);
     });
 
-    ec = rh.ec;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 #endif
 
-void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, Functor<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
 
     this_context::get_service().read_file(handle_, buf, len, offset, new Cb(std::move(completion_cb)),
@@ -248,8 +246,8 @@ void RandomAccessFile::read_at(size_t offset, char *buf, size_t len, std::functi
         });
 }
 
-void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, Functor<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
 
 #ifdef _WIN32
@@ -346,7 +344,7 @@ void File::close() {
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> File::read(char *buf, size_t len) {
     attach_context();
     ResumeHandle rh;
 
@@ -355,12 +353,11 @@ Coro<size_t> File::read(char *buf, size_t len, std::error_code &ec) {
         this_context::get_service().read_file(handle_, buf, len, read_offset_, &rh, resume_callback);
     });
 
-    ec = rh.ec;
     read_offset_ += rh.res;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 
-Coro<size_t> File::write(const char *msg, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> File::write(const char *msg, size_t len) {
     attach_context();
     ResumeHandle rh;
 
@@ -369,14 +366,13 @@ Coro<size_t> File::write(const char *msg, size_t len, std::error_code &ec) {
         this_context::get_service().write_file(handle_, msg, len, write_offset_, &rh, resume_callback);
     });
 
-    ec = rh.ec;
     write_offset_ += rh.res;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 #endif
 
-void File::read(char *buf, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void File::read(char *buf, size_t len, Functor<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
     struct FileResume {
         Cb cb;
@@ -394,8 +390,8 @@ void File::read(char *buf, size_t len, std::function<void (std::error_code, size
         });
 }
 
-void File::write(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void File::write(const char *msg, size_t len, Functor<void (std::error_code, size_t)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
     struct FileResume {
         Cb cb;

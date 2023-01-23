@@ -2,8 +2,8 @@
 #define MAGIO_NET_ADDRESS_H_
 
 #include <string>
-#include <system_error>
 
+#include "magio-v3/core/error.h"
 #include "magio-v3/net/protocal.h"
 
 struct sockaddr;
@@ -22,8 +22,8 @@ class IpAddress {
     friend class Acceptor;
     friend class magio::IoService;
     
-    friend IpAddress make_address(std::string_view str, std::error_code& ec);
-    friend IpAddress make_address(sockaddr* paddr);
+    friend Result<IpAddress> make_address(std::string_view str);
+    friend IpAddress _make_address(sockaddr* paddr);
 
 public:
     IpAddress() = default;
@@ -53,9 +53,9 @@ private:
 };
 
 // v4 v6
-IpAddress make_address(std::string_view str, std::error_code& ec);
+Result<IpAddress> make_address(std::string_view str);
 
-IpAddress make_address(sockaddr* paddr);
+IpAddress _make_address(sockaddr* paddr);
 
 class EndPoint {
 public:

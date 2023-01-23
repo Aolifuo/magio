@@ -33,7 +33,7 @@ ReadablePipe& ReadablePipe::operator=(ReadablePipe &&other) noexcept {
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<size_t> ReadablePipe::read(char *buf, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> ReadablePipe::read(char *buf, size_t len) {
     ResumeHandle rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
@@ -41,13 +41,12 @@ Coro<size_t> ReadablePipe::read(char *buf, size_t len, std::error_code &ec) {
         this_context::get_service().read_file(handle_, buf, len, 0, &rh, resume_callback);
     });
 
-    ec = rh.ec;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 #endif
 
-void ReadablePipe::read(char *buf, size_t len, std::function<void (std::error_code, size_t)>&& cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void ReadablePipe::read(char *buf, size_t len, Functor<void (std::error_code, size_t)>&& cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
 
     this_context::get_service().read_file(handle_, buf, len, 0, new Cb(std::move(cb)), 
         [](std::error_code ec, IoContext* ioc, void* ptr) {
@@ -90,7 +89,7 @@ WritablePipe& WritablePipe::operator=(WritablePipe &&other) noexcept {
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<size_t> WritablePipe::write(const char *msg, size_t len, std::error_code &ec) {
+Coro<Result<size_t>> WritablePipe::write(const char *msg, size_t len) {
     ResumeHandle rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
@@ -98,13 +97,12 @@ Coro<size_t> WritablePipe::write(const char *msg, size_t len, std::error_code &e
         this_context::get_service().write_file(handle_, msg, len, 0, &rh, resume_callback);
     });
 
-    ec = rh.ec;
-    co_return rh.res;
+    co_return {rh.res, rh.ec};
 }
 #endif
 
-void WritablePipe::write(const char *msg, size_t len, std::function<void (std::error_code, size_t)> &&cb) {
-    using Cb = std::function<void (std::error_code, size_t)>;
+void WritablePipe::write(const char *msg, size_t len, Functor<void (std::error_code, size_t)> &&cb) {
+    using Cb = Functor<void (std::error_code, size_t)>;
 
     this_context::get_service().write_file(handle_, msg, len, 0, new Cb(std::move(cb)), 
         [](std::error_code ec, IoContext* ioc, void* ptr) {
@@ -126,17 +124,17 @@ void WritablePipe::close() {
     }
 }
 
-std::tuple<ReadablePipe, WritablePipe> make_pipe(std::error_code& ec) {
+Result<std::tuple<ReadablePipe, WritablePipe>> make_pipe() {
 #ifdef _WIN32
     // TODO
-    return {};
+    return {std::error_code{}};
 #elif defined (__linux__)
     int pipefd[2];
     if (-1 == ::pipe(pipefd)) {
-        ec = SYSTEM_ERROR_CODE;
+        return{SYSTEM_ERROR_CODE};
     }
 
-    return {ReadablePipe(IoHandle{.a = pipefd[0]}), WritablePipe(IoHandle{.a = pipefd[1]})};
+    return {{ReadablePipe(IoHandle{.a = pipefd[0]}), WritablePipe(IoHandle{.a = pipefd[1]})}};
 #endif
 }
 

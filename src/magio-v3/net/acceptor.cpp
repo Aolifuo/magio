@@ -1,6 +1,5 @@
 #include "magio-v3/net/acceptor.h"
 
-#include "magio-v3/core/error.h"
 #include "magio-v3/core/coro_context.h"
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/net/address.h"
@@ -20,30 +19,29 @@ Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
     return *this;
 }
 
-Acceptor Acceptor::listen(const EndPoint &ep, std::error_code& ec) {
+Result<Acceptor> Acceptor::listen(const EndPoint &ep) {
+    std::error_code ec;
     Acceptor acceptor;
-    auto& address = ep.address();
-    acceptor.listener_ = Socket::open(address.ip(), Transport::Tcp, ec);
+    acceptor.listener_ = Socket::open(ep.address().ip(), Transport::Tcp) | get_code(ec);
     if (ec) {
-        return {};
+        return {ec};
     }
 
-    acceptor.listener_.bind(ep, ec);
+    acceptor.listener_.bind(ep) | get_code(ec);
     if (ec) {
-        return {};
+        return {ec};
     }
 
     // listen
     if (-1 == ::listen(acceptor.listener_.handle(), SOMAXCONN)) {
-        ec = SYSTEM_ERROR_CODE;
-        return {};
+        return {SYSTEM_ERROR_CODE};
     }
 
-    return acceptor;
+    return {std::move(acceptor)};
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
+Coro<Result<std::pair<Socket, EndPoint>>> Acceptor::accept() {
     attach_context();
     struct AcceptResume: ResumeHandle {
         EndPoint ep;
@@ -56,33 +54,36 @@ Coro<std::pair<Socket, EndPoint>> Acceptor::accept(std::error_code& ec) {
                 auto rh = (AcceptResume*)ptr;
                 rh->ec = ec;
                 rh->res = ioc->res;
-                rh->ep = EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
+                rh->ep = EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
                 rh->handle.resume();
 
                 delete ioc;
             });
     });
 
-    ec = rh.ec;
-    co_return {
-        Socket((SocketHandle)rh.res, listener_.ip(), listener_.transport()),
-        rh.ep
-    };
+    if (rh.ec) {
+        co_return {rh.ec};
+    }
+    co_return {{Socket((SocketHandle)rh.res, listener_.ip(), listener_.transport()), std::move(rh.ep)}};
 }
 #endif
 
-void Acceptor::accept(std::function<void (std::error_code, Socket, EndPoint)> &&completion_cb) {
-    using Cb = std::function<void (std::error_code, Socket, EndPoint)>;
+void Acceptor::accept(Functor<void (std::error_code, Socket, EndPoint)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, Socket, EndPoint)>;
     attach_context();
 
     this_context::get_service().accept(listener_, new Cb(std::move(completion_cb)), 
         [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
             Ip ip = ioc->remote_addr.sin_family == AF_INET ? Ip::v4 : Ip::v6;
-            (*cb)(
-                ec, Socket((int)ioc->res, ip, Transport::Tcp),
-                EndPoint(make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
-            );
+            if (ec) {
+                (*cb)(ec, {}, {});
+            } else {
+                (*cb)(
+                    ec, Socket((int)ioc->res, ip, Transport::Tcp),
+                    EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
+                );
+            }
             delete cb;
             delete ioc;
         });

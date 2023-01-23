@@ -1,7 +1,6 @@
 #ifdef _WIN32
 #include "magio-v3/net/iocp.h"
 
-#include "magio-v3/core/error.h"
 #include "magio-v3/core/logger.h"
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/net/socket.h"
@@ -41,9 +40,9 @@ IoCompletionPort::IoCompletionPort() {
     WebSocket::init();
 
     std::error_code ec;
-    auto socket = Socket::open(Ip::v4, Transport::Tcp, ec);
+    auto socket = Socket::open(Ip::v4, Transport::Tcp) | get_code(ec);
     if (ec) {
-        M_FATAL("Failed to open a socket in iocp: {}", ec.value());
+        M_FATAL("Failed to open a socket in iocp: {}", ec.message());
     }
 
     void* accept_ptr = nullptr;
@@ -171,11 +170,10 @@ void IoCompletionPort::accept(const net::Socket& listener, IoContext *ioc) {
         return;
     }
     ioc->res = sock_handle;
-    auto listener_h = listener.handle();
-    std::memcpy(&ioc->iovec.buf[120], &listener_h, sizeof(listener_h));
-
     ioc->iovec.buf = new char[128]{};
     ioc->iovec.len = 128;
+    auto listener_h = listener.handle();
+    std::memcpy(&ioc->iovec.buf[120], &listener_h, sizeof(listener_h));
 
     bool status = data_->accept(
         listener.handle(),

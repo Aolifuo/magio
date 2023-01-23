@@ -14,12 +14,12 @@ namespace detail {
 
 template<typename T>
 struct CoroCompletionHandler {
-    using type = std::function<void(std::exception_ptr, T)>;
+    using type = Functor<void(std::exception_ptr, T)>;
 };
 
 template<>
 struct CoroCompletionHandler<void> {
-    using type = std::function<void(std::exception_ptr, Unit)>;
+    using type = Functor<void(std::exception_ptr, Unit)>;
 };
 
 struct UseCoro { };
@@ -33,11 +33,9 @@ class CoroContext;
 
 class TimerHandle;
 
-using Task = std::function<void()>;
-
 using TimerClock = std::chrono::steady_clock;
 
-using TimerTask = std::function<void(bool)>;
+using TimerTask = Functor<void(bool)>;
 
 template<typename T>
 using CoroCompletionHandler = typename detail::CoroCompletionHandler<T>::type;
