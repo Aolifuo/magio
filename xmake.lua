@@ -1,6 +1,6 @@
-set_toolchains("clang")
-set_config("cxxflags", "-stdlib=libc++")
-set_config("ldflags", "-stdlib=libc++")
+-- set_toolchains("clang")
+-- set_config("cxxflags", "-stdlib=libc++")
+-- set_config("ldflags", "-stdlib=libc++")
 
 set_project("magio")
 set_version("0.1.0")
