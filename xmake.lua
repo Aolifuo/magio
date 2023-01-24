@@ -27,29 +27,6 @@ end
 add_requires("fmt")
 add_defines("MAGIO_USE_CORO")
 
-target("magio-v3")
-    set_kind("static")
-    add_files("src/magio-v3/core/**.cpp", "src/magio-v3/net/**.cpp")
-    add_includedirs("src", {public = true})
-    add_packages("liburing")
-    add_packages("fmt")
-
--- v3 examples
-for _, dir in ipairs(os.files("examples/v3/*.cpp")) do
-    target(path.basename(dir))
-        set_kind("binary")
-        add_files(dir)
-        add_deps("magio-v3")
-        add_packages("fmt", {links = {}})
-end
-
---dev
-for _, dir in ipairs(os.files("dev/**.cpp")) do
-    target(path.basename(dir))
-        set_kind("binary")
-        add_files(dir)
-        add_deps("magio-v3")
-        add_packages("fmt", {links = {}})
-end
+includes("src", "examples")
 
 --xmake project -k compile_commands

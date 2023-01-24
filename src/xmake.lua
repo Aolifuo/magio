@@ -1,0 +1,6 @@
+target("magio-v3")
+    set_kind("static")
+    add_files("magio-v3/core/**.cpp", "magio-v3/net/**.cpp")
+    add_includedirs("./", {public = true})
+    add_packages("liburing")
+    add_packages("fmt")
