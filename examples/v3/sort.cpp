@@ -47,7 +47,7 @@ Coro<> amain(ThreadPool& pool) {
 
 int main() {
     CoroContext ctx(128);
-    ThreadPool pool(8);
+    ThreadPool pool(ctx, 8);
     ctx.spawn(amain(pool));
     pool.start();
     ctx.start();

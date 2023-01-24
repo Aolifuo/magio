@@ -23,7 +23,7 @@ public:
         PendingDestroy
     };
 
-    ThreadPool(size_t thread_num);
+    ThreadPool(CoroContext& bind_ctx, size_t thread_num);
 
     ~ThreadPool();
 
@@ -47,9 +47,8 @@ public:
 
     template<typename Cb, typename Func, typename...Args>
     void async(Cb&& cb, Func&& func, Args&&...args) {
-        auto ctx = LocalContext;
         execute([
-            ctx,
+            this,
             cb = std::forward<Cb>(cb), 
             func = std::forward<Func>(func), 
             tup = std::make_tuple(std::forward<Args>(args)...)
@@ -59,12 +58,12 @@ public:
                     return func(args...);
                 }, tup);
 
-                ctx->execute(std::move(cb));
+                ctx_.execute(std::move(cb));
             } else {
                 auto value = std::apply([&](auto&&...args) {
                     return func(args...);
                 }, tup);
-                ctx->execute([cb = std::move(cb), value = std::move(value)] {
+                ctx_.execute([cb = std::move(cb), value = std::move(value)] {
                     cb(std::move(value));
                 });
             }
@@ -86,12 +85,11 @@ public:
     Coro<std::invoke_result_t<Func, Args...>> spawn_blocking(Func func, Args&&...args) {
         using ReturnType = std::invoke_result_t<Func, Args...>;
 
-        CoroContext* ctx = LocalContext;
         std::optional<VoidToUnit<ReturnType>> result;
         co_await GetCoroutineHandle(
             [&](std::coroutine_handle<> h) mutable {
                 execute([
-                    &result, h, ctx,
+                    &result, h, this,
                     func = std::move(func), 
                     tuple = std::make_tuple(std::forward<Args>(args)...)
                 ]() mutable {
@@ -104,7 +102,7 @@ public:
                             return func(args...);
                         }, tuple));
                     }
-                    ctx->queue_in_context(h);
+                    ctx_.queue_in_context(h);
                 });
             }
         );
@@ -129,6 +127,7 @@ public:
 private:
     void run_in_background();
 
+    CoroContext& ctx_;
     std::once_flag once_flag_;
 
     std::mutex mutex_;

@@ -4,8 +4,9 @@
 
 namespace magio {
 
-ThreadPool::ThreadPool(size_t thread_num)
-    : threads_(thread_num) 
+ThreadPool::ThreadPool(CoroContext& bind_ctx, size_t thread_num)
+    : ctx_(bind_ctx)
+    , threads_(thread_num) 
 {
     if (thread_num < 1) {
         M_FATAL("{}", "worker threads cannot less than 1");
