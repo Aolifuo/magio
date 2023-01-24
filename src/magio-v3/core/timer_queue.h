@@ -89,7 +89,7 @@ public:
 
     TimerClock::duration next_duration() {
         if (timers_.empty()) {
-            return (TimerClock::duration::max)();
+            return TimerClock::duration(86400000000000LL); // one day
         }
 
         auto duration = (
