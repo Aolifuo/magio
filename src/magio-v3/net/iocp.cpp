@@ -297,9 +297,9 @@ void IoCompletionPort::receive_from(SocketHandle socket, IoContext *ioc) {
     }
 }
 
-// void IoCompletionPort::cancel(IoContext &ioc) {
-//     ::CancelIoEx((HANDLE)ioc.handle, NULL);
-// }
+void IoCompletionPort::cancel(IoHandle ioh) {
+    ::CancelIoEx((HANDLE)ioh.ptr, NULL);
+}
 
 int IoCompletionPort::poll(size_t nanosec, std::error_code &ec) {
     if (nanosec == 0 && data_->io_num == 0) {

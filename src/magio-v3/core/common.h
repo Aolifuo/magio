@@ -13,8 +13,7 @@ using SocketHandle =
 
 struct IoHandle {
     union {
-        int a;
-        SocketHandle b;
+        SocketHandle a;
         void* ptr;
     };
 };

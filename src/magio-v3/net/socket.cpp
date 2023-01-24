@@ -271,7 +271,7 @@ void Socket::receive_from(char *buf, size_t len, Functor<void (std::error_code, 
 
 void Socket::cancel() {
     if (-1 != handle_) {
-        // 
+        this_context::get_service().cancel(IoHandle{.a = handle_});
     }
 }
 
@@ -296,7 +296,7 @@ void Socket::attach_context() {
     if (!attached_) {
         std::error_code ec;
         attached_ = LocalContext;
-        this_context::get_service().attach(IoHandle{.b = handle_}, ec);
+        this_context::get_service().attach(IoHandle{.a = handle_}, ec);
     } else if (attached_ != LocalContext) {
         M_FATAL("{}", "The socket cannot be attached to different context");
     }

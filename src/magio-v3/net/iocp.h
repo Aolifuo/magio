@@ -29,6 +29,8 @@ public:
     void send_to(SocketHandle socket, IoContext* ioc) override;
 
     void receive_from(SocketHandle socket, IoContext* ioc) override;
+
+    void cancel(IoHandle ioh) override;
     
     void attach(IoHandle ioh, std::error_code& ec) override;
 

@@ -131,6 +131,10 @@ void IoService::receive_from(SocketHandle socket, char *buf, size_t len, void *u
     impl_->receive_from(socket, ioc);
 }
 
+void IoService::cancel(IoHandle ioh) {
+    impl_->cancel(ioh);
+}
+
 void IoService::attach(IoHandle ioh, std::error_code &ec) {
     impl_->attach(ioh, ec);
 }

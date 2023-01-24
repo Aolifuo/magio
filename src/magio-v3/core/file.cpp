@@ -176,7 +176,7 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
 
 void RandomAccessFile::cancel() {
     if (handle_.a != -1) {
-        
+        this_context::get_service().cancel(handle_);
     } 
 }
 
@@ -332,7 +332,7 @@ File File::open(const char *path, int mode, int x) {
 
 void File::cancel() {
     if (-1 != handle_.a) {
-        
+        this_context::get_service().cancel(handle_);
     }
 }
 

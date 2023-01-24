@@ -35,6 +35,8 @@ public:
     void send_to(SocketHandle socket, IoContext* ioc) override;
 
     void receive_from(SocketHandle socket, IoContext* ioc) override;
+
+    void cancel(IoHandle ioh) override;
     
     void attach(IoHandle ioh, std::error_code& ec) override;
 
@@ -45,12 +47,11 @@ public:
 private:
     void handle_cqe(io_uring_cqe*);
 
-    void prep_timeout(size_t nanosec);
-
     void prep_wake_up();
 
     int wake_up_fd_;
-    WakeupContext* wake_up_ctx_;
+    IoContext* wake_up_ctx_;
+    IoContext* empty_ctx_;
     size_t io_num_ = 0;
     io_uring* p_io_uring_ = nullptr;
 };

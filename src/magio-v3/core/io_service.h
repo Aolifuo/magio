@@ -40,6 +40,8 @@ public:
 
     virtual void receive_from(SocketHandle socket, IoContext* ioc) = 0;
 
+    virtual void cancel(IoHandle ioh) = 0;
+
     virtual void attach(IoHandle ioh, std::error_code& ec) = 0;
 
     // -1->big error, 0->wait timeout; 1->io; 2->continue
@@ -71,6 +73,8 @@ public:
     void send_to(SocketHandle socket, const net::EndPoint& remote, const char* msg, size_t len, void* user_ptr, Cb);
 
     void receive_from(SocketHandle socket, char* buf, size_t len, void* user_ptr, Cb);
+
+    void cancel(IoHandle ioh);
     
     void attach(IoHandle ioh, std::error_code& ec);
 
