@@ -24,7 +24,7 @@ inline void dispatch(Task &&task) {
 #ifdef MAGIO_USE_CORO
 template<typename T>
 inline void spawn(Coro<T> coro) {
-    queue_in_context(coro.handle());
+    LocalContext->spawn(std::move(coro));
 }
 
 template<typename T>
@@ -34,8 +34,7 @@ inline Coro<T> spawn(Coro<T> coro, detail::UseCoro) {
 
 template<typename T>
 inline void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler) {
-    coro.set_callback(std::move(handler));
-    queue_in_context(coro.handle());
+    LocalContext->spawn(std::move(coro), std::move(handler));
 }
 
 inline void wake_in_context(std::coroutine_handle<> h) {

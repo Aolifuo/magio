@@ -27,11 +27,13 @@ public:
 #ifdef MAGIO_USE_CORO
     template<typename T>
     void spawn(Coro<T> coro) {
+        coro.launch();
         queue_in_context(coro.handle());
     }
 
     template<typename T>
     void spawn(Coro<T> coro, CoroCompletionHandler<T>&& handler) {
+        coro.launch();
         coro.set_callback(std::move(handler));
         queue_in_context(coro.handle());
     }

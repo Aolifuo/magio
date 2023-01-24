@@ -13,7 +13,7 @@ namespace magio {
 #ifdef MAGIO_USE_CORO
 namespace detail {
 
-inline thread_local size_t CoroId = 0;
+inline thread_local size_t CoroNum = 0;
 
 class Yield {
 public:
@@ -26,33 +26,6 @@ public:
     }
 
     void await_resume() { }
-};
-
-class GetId {
-public:
-    class Awaitable {
-    public:
-        bool await_ready() { 
-            return false; 
-        }
-
-        template<typename PH>
-        auto await_suspend(std::coroutine_handle<PH> prev_h) {
-            id_ = prev_h.promise().id;
-            return prev_h;
-        }
-
-        size_t await_resume() { 
-            return id_;
-        }
-
-    private:
-        size_t id_ = 0;
-    };
-    
-    GetId::Awaitable operator co_await() {
-        return {};
-    }
 };
 
 }
@@ -74,6 +47,7 @@ public:
 
     template<typename PT>
     void await_suspend(std::coroutine_handle<PT> prev_h) {
+        handle_.promise().is_launched = true;
         handle_.promise().prev_handle = prev_h;
         this_context::queue_in_context(handle_); // wake main then prev
     }
@@ -121,11 +95,11 @@ class FinalSuspend {
 public:
     using CoroutineHandle = typename Coro<T>::CoroutineHandle;
 
-    bool await_ready() noexcept { 
+    constexpr bool await_ready() const noexcept { 
         return false; 
     }
 
-    void await_suspend(CoroutineHandle self_h) noexcept {
+    constexpr void await_suspend(CoroutineHandle self_h) const noexcept {
         if (self_h.promise().prev_handle) {
             self_h.promise().prev_handle.resume();
         } else if (self_h.promise().callback) {
@@ -140,21 +114,15 @@ public:
             }
         }
 
+        --detail::CoroNum;
         self_h.destroy();
     }
 
-    void await_resume() noexcept {
-
-    }
-
-private:
+    constexpr void await_resume() const noexcept { }
 };
 
 template<typename Return>
-class Coro {
-    friend class CoroContext;
-    friend void this_context::spawn(Coro<Return> coro, CoroCompletionHandler<Return> &&handler);
-
+class Coro: Noncopyable {
 public:
     struct promise_type;
 
@@ -163,15 +131,32 @@ public:
     Coro(CoroutineHandle h)
         : handle_(h) { }
 
-    ~Coro() { }
+    ~Coro() { 
+        if (handle_ && !handle_.promise().is_launched) {
+            --detail::CoroNum;
+            handle_.destroy();
+        }
+    }
+
+    Coro(Coro&& other) noexcept
+        : handle_(other.handle_) 
+    {
+        other.handle_ = {};
+    }
+
+    Coro& operator=(Coro&& other) noexcept {
+        handle_ = other.handle_;
+        other.handle_ = {};
+        return *this;
+    }
 
     struct promise_type {
         Coro get_return_object() {
-            id = ++detail::CoroId;
+            ++detail::CoroNum;
             return {CoroutineHandle::from_promise(*this)};
         }
 
-        std::suspend_always initial_suspend() { 
+        std::suspend_always initial_suspend() {
             return {};
         };
 
@@ -191,7 +176,7 @@ public:
             eptr = std::current_exception();
         }
 
-        size_t id;
+        bool is_launched = false;
         std::coroutine_handle<> prev_handle;
         std::exception_ptr eptr;
         std::optional<Return> value;
@@ -202,23 +187,25 @@ public:
         return handle_;
     }
 
-    auto operator co_await() const {
-        return Awaitable<Return>{handle_};
+    // spawn and co_await
+    void launch() {
+        handle_.promise().is_launched = true;
     }
-
-private:
+    
     void set_callback(CoroCompletionHandler<Return>&& handler) const {
         handle_.promise().callback = std::move(handler);
     }
 
+    auto operator co_await() const {
+        return Awaitable<Return>{handle_};
+    }
+private:
+    
     CoroutineHandle handle_;
 };
 
 template<>
-class Coro<void> {
-    friend class CoroContext;
-    friend void this_context::spawn(Coro<> coro, CoroCompletionHandler<void> &&handler);
-
+class Coro<void>: Noncopyable {
 public:
     struct promise_type;
 
@@ -227,11 +214,28 @@ public:
     Coro(CoroutineHandle h)
         : handle_(h) { }
 
-    ~Coro() { }
+    ~Coro() { 
+        if (handle_ && !handle_.promise().is_launched) {
+            --detail::CoroNum;
+            handle_.destroy();
+        }
+    }
+
+    Coro(Coro&& other) noexcept
+        : handle_(other.handle_) 
+    {
+        other.handle_ = {};
+    }
+
+    Coro& operator=(Coro&& other) noexcept {
+        handle_ = other.handle_;
+        other.handle_ = {};
+        return *this;
+    }
 
     struct promise_type {
         Coro get_return_object() {
-            id = ++detail::CoroId;
+            ++detail::CoroNum;
             return {CoroutineHandle::from_promise(*this)};
         }
 
@@ -249,7 +253,7 @@ public:
             eptr = std::current_exception();
         }
         
-        size_t id;
+        bool is_launched = false;
         std::coroutine_handle<> prev_handle;
         std::exception_ptr eptr;
         CoroCompletionHandler<void> callback;
@@ -259,15 +263,19 @@ public:
         return handle_;
     }
 
+    void launch() {
+        handle_.promise().is_launched = true;
+    }
+    
+    void set_callback(CoroCompletionHandler<void>&& handler) const {
+        handle_.promise().callback = std::move(handler);
+    }
+
     auto operator co_await() const {
         return Awaitable<void>{handle_};
     }
 
 private:
-    void set_callback(CoroCompletionHandler<void>&& handler) const {
-        handle_.promise().callback = std::move(handler);
-    }
-
     CoroutineHandle handle_;
 };
 
@@ -283,8 +291,6 @@ inline Coro<RemoveVoidTuple<Ts...>> series(Coro<Ts>...coros);
 namespace this_coro {
 
 inline detail::Yield yield;
-
-inline detail::GetId get_id;
 
 template<typename Rep, typename Per>
 inline Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur);
