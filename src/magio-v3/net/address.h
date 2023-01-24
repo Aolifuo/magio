@@ -53,6 +53,7 @@ private:
 };
 
 // v4 v6
+[[nodiscard]]
 Result<IpAddress> make_address(std::string_view str);
 
 IpAddress _make_address(sockaddr* paddr);

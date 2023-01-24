@@ -41,6 +41,7 @@ public:
     [[nodiscard]]
     static Result<Socket> open(Ip ip, Transport tp);
 
+    [[nodiscard]]
     Result<> bind(const EndPoint& ep);
 
 #ifdef MAGIO_USE_CORO
