@@ -91,7 +91,7 @@ public:
     }
 
     operator bool() const {
-        return handle_ != -1;
+        return handle_ != kInvalidHandle;
     }
 
 private:
@@ -99,7 +99,7 @@ private:
 
     void reset();
 
-    Handle handle_ = -1;
+    Handle handle_ = kInvalidHandle;
 
     CoroContext* attached_;
     Ip ip_ = Ip::v4;

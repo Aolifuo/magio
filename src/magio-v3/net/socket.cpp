@@ -270,13 +270,13 @@ void Socket::receive_from(char *buf, size_t len, Functor<void (std::error_code, 
 }
 
 void Socket::cancel() {
-    if (-1 != handle_) {
+    if (kInvalidHandle != handle_) {
         this_context::get_service().cancel(IoHandle{.a = handle_});
     }
 }
 
 void Socket::close() {
-    if (-1 != handle_) {
+    if (kInvalidHandle != handle_) {
         detail::close_socket(handle_);
         reset();
     }
@@ -289,7 +289,7 @@ void Socket::shutdown(Shutdown type) {
 }
 
 void Socket::attach_context() {
-    if (-1 == handle_) {
+    if (kInvalidHandle == handle_) {
         return;
     }
 
@@ -303,7 +303,7 @@ void Socket::attach_context() {
 }
 
 void Socket::reset() {
-    handle_ = -1;
+    handle_ = kInvalidHandle;
     attached_ = nullptr;
     ip_ = Ip::v4;
     transport_ = Transport::Tcp;

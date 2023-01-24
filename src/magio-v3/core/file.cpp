@@ -17,7 +17,7 @@ namespace magio {
 namespace detail {
 
 IoHandle open_file(const char* path, int mode, int x) {
-    IoHandle ioh{.a = -1};
+    IoHandle ioh{.a = kInvalidHandle};
 #ifdef _WIN32
     int first = mode & 0b000111;
     if (!(first)) {
@@ -175,26 +175,26 @@ RandomAccessFile RandomAccessFile::open(const char *path, int mode, int x) {
 }
 
 void RandomAccessFile::cancel() {
-    if (handle_.a != -1) {
+    if (handle_.a != kInvalidHandle) {
         this_context::get_service().cancel(handle_);
     } 
 }
 
 void RandomAccessFile::close() {
-    if (handle_.a != -1) {
+    if (handle_.a != kInvalidHandle) {
         detail::close_file(handle_);
         reset();
     }
 }
 
 void RandomAccessFile::sync_all() {
-    if (-1 != handle_.a) {
+    if (kInvalidHandle != handle_.a) {
         detail::file_sync_all(handle_);
     }
 }
 
 void RandomAccessFile::sync_data() {
-    if (-1 != handle_.a) {
+    if (kInvalidHandle != handle_.a) {
         detail::file_sync_data(handle_);
     }
 }
@@ -268,13 +268,13 @@ void RandomAccessFile::write_at(size_t offset, const char *msg, size_t len, Func
 }
 
 void RandomAccessFile::reset() {
-    handle_.a = -1;
+    handle_.a = kInvalidHandle;
     attached_ = nullptr;
     enable_app_ = false;
 }
 
 void RandomAccessFile::attach_context() {
-    if (-1 == handle_.a) {
+    if (kInvalidHandle == handle_.a) {
         return;
     }
 
@@ -331,13 +331,13 @@ File File::open(const char *path, int mode, int x) {
 }
 
 void File::cancel() {
-    if (-1 != handle_.a) {
+    if (kInvalidHandle != handle_.a) {
         this_context::get_service().cancel(handle_);
     }
 }
 
 void File::close() {
-    if (-1 != handle_.a) {
+    if (kInvalidHandle != handle_.a) {
         detail::close_file(handle_);
         reset();
     }
@@ -410,19 +410,19 @@ void File::write(const char *msg, size_t len, Functor<void (std::error_code, siz
 }
 
 void File::sync_all() {
-    if (-1 != handle_.a) {
+    if (kInvalidHandle != handle_.a) {
         detail::file_sync_all(handle_);
     }
 }
 
 void File::sync_data() {
-    if (-1 != handle_.a) {
+    if (kInvalidHandle != handle_.a) {
         detail::file_sync_data(handle_);
     }
 }
 
 void File::attach_context() {
-    if (-1 == handle_.a) {
+    if (kInvalidHandle == handle_.a) {
         return;
     }
 
@@ -436,7 +436,7 @@ void File::attach_context() {
 }
 
 void File::reset() {
-    handle_.a = -1;
+    handle_.a = kInvalidHandle;
     attached_ = nullptr;
     read_offset_ = 0;
     write_offset_ = 0;

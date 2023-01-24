@@ -10,13 +10,14 @@ using SocketHandle =
     int;
 #endif
 
-
 struct IoHandle {
     union {
         SocketHandle a;
         void* ptr;
     };
 };
+
+constexpr SocketHandle kInvalidHandle = (SocketHandle)-1;
 
 }
 

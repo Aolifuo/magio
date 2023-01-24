@@ -37,13 +37,13 @@ public:
     void close();
 
     operator bool() {
-        return handle_.a != -1;
+        return handle_.a != kInvalidHandle;
     }
 
 private:
     ReadablePipe(Handle);
 
-    Handle handle_{.a = -1};
+    Handle handle_{.a = kInvalidHandle};
 };
 
 class WritablePipe: Noncopyable {
@@ -70,13 +70,13 @@ public:
     void close();
 
     operator bool() {
-        return handle_.a != -1;
+        return handle_.a != kInvalidHandle;
     }
 
 private:
     WritablePipe(Handle);
 
-    Handle handle_{.a = -1};
+    Handle handle_{.a = kInvalidHandle};
 };
 
 Result<std::tuple<ReadablePipe, WritablePipe>> make_pipe();

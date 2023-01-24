@@ -23,12 +23,12 @@ ReadablePipe::ReadablePipe(Handle handle)
 ReadablePipe::ReadablePipe(ReadablePipe&& other) noexcept
     : handle_(other.handle_)
 {
-    other.handle_.a = -1;
+    other.handle_.a = kInvalidHandle;
 }
 
 ReadablePipe& ReadablePipe::operator=(ReadablePipe &&other) noexcept {
     handle_ = other.handle_;
-    other.handle_.a = -1;
+    other.handle_.a = kInvalidHandle;
     return *this;
 }
 
@@ -58,13 +58,13 @@ void ReadablePipe::read(char *buf, size_t len, Functor<void (std::error_code, si
 }
 
 void ReadablePipe::close() {
-    if (handle_.a != -1) {
+    if (handle_.a != kInvalidHandle) {
 #ifdef _WIN32
         ::CloseHandle(handle_.ptr);
 #elif defined (__linux__)
         ::close(handle_.a);
 #endif
-        handle_.a = -1;
+        handle_.a = kInvalidHandle;
     }
 }
 
@@ -79,12 +79,12 @@ WritablePipe::~WritablePipe() {
 WritablePipe::WritablePipe(WritablePipe&& other) noexcept
     : handle_(other.handle_)
 {
-    other.handle_.a = -1;
+    other.handle_.a = kInvalidHandle;
 }
 
 WritablePipe& WritablePipe::operator=(WritablePipe &&other) noexcept {
     handle_ = other.handle_;
-    other.handle_.a = -1;
+    other.handle_.a = kInvalidHandle;
     return *this;
 }
 
@@ -114,13 +114,13 @@ void WritablePipe::write(const char *msg, size_t len, Functor<void (std::error_c
 }
 
 void WritablePipe::close() {
-    if (handle_.a != -1) {
+    if (handle_.a != kInvalidHandle) {
 #ifdef _WIN32
         ::CloseHandle(handle_.ptr);
 #elif defined (__linux__)
         ::close(handle_.a);
 #endif
-        handle_.a = -1;
+        handle_.a = kInvalidHandle;
     }
 }
 

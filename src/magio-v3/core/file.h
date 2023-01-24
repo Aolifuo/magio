@@ -63,7 +63,7 @@ public:
     void attach_context();
 
     operator bool() const {
-        return handle_.a != -1;
+        return handle_.a != kInvalidHandle;
     }
 
 private:
@@ -123,7 +123,7 @@ public:
     void sync_data();
 
     operator bool() const {
-        return handle_.a != -1;
+        return handle_.a != kInvalidHandle;
     }
 
 private:
