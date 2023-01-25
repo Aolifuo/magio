@@ -26,12 +26,12 @@ Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
 Result<Acceptor> Acceptor::listen(const EndPoint &ep) {
     std::error_code ec;
     Acceptor acceptor;
-    acceptor.listener_ = Socket::open(ep.address().ip(), Transport::Tcp) | get_err(ec);
+    acceptor.listener_ = Socket::open(ep.address().ip(), Transport::Tcp) | redirect_err(ec);
     if (ec) {
         return {ec};
     }
 
-    acceptor.listener_.bind(ep) | get_err(ec);
+    acceptor.listener_.bind(ep) | redirect_err(ec);
     if (ec) {
         return {ec};
     }

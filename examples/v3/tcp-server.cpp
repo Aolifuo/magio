@@ -7,7 +7,6 @@ using namespace chrono_literals;
 Coro<> handle_conn(net::Socket sock) {
     char buf[1024];
     for (; ;) {
-        error_code ec;
         size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_on_err;
         if (rd == 0) {
             M_INFO("{}", "EOF");
@@ -24,7 +23,7 @@ Coro<> server() {
 
     for (; ;) {
         error_code ec;
-        auto [socket, peer] = co_await acceptor.accept() | get_err(ec);
+        auto [socket, peer] = co_await acceptor.accept() | redirect_err(ec);
         if (ec) {
             M_ERROR("{}", ec.message());
         } else {

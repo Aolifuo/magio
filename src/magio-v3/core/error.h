@@ -9,9 +9,9 @@ namespace magio {
 
 namespace detail {
 
-class GetErrorCode {
+class RedirectError {
 public:
-    GetErrorCode(std::error_code& ec)
+    RedirectError(std::error_code& ec)
         : ec_(ec) { }
     
     void set_code(std::error_code& ec) {
@@ -21,6 +21,8 @@ public:
 private:
     std::error_code& ec_;
 };
+
+struct AsTuple { };
 
 struct ThrowOnError { };
 
@@ -58,11 +60,15 @@ class Result;
 template<typename T>
 class Result {
     template<typename U>
-    friend U operator| (Result<U>&& result, detail::GetErrorCode);
+    friend U operator| (Result<U>&& result, detail::RedirectError);
     template<typename U>
     friend U operator| (Result<U>&& result, detail::ThrowOnError);
     template<typename U>
     friend U operator| (Result<U>&& result, detail::PanicOnError);
+    template<typename U>
+    friend std::tuple<U, std::error_code> operator| (Result<U>&& result, detail::AsTuple);
+
+    static_assert(std::is_default_constructible_v<T>, "T requires default constructor");
 
 public:
     Result() { }
@@ -87,11 +93,12 @@ private:
 template<>
 class Result<void> {
     template<typename U>
-    friend U operator| (Result<U>&& result, detail::GetErrorCode);
+    friend U operator| (Result<U>&& result, detail::RedirectError);
     template<typename U>
     friend U operator| (Result<U>&& result, detail::ThrowOnError);
     template<typename U>
     friend U operator| (Result<U>&& result, detail::PanicOnError);
+    friend std::tuple<std::error_code> operator| (Result<>&& result, detail::AsTuple);
 
 public:
     Result() { }
@@ -105,11 +112,23 @@ private:
 };
 
 template<typename T>
-inline T operator| (Result<T>&& result, detail::GetErrorCode gec) {
-    gec.set_code(result.ec_);
+[[nodiscard]]
+inline T operator| (Result<T>&& result, detail::RedirectError re) {
+    re.set_code(result.ec_);
     if constexpr (!std::is_void_v<T>) {
         return std::move(result.value_);
     }
+}
+
+template<typename T>
+[[nodiscard]]
+inline std::tuple<T, std::error_code> operator| (Result<T>&& result, detail::AsTuple) {
+    return {std::move(result.value_), result.ec_};
+}
+
+[[nodiscard]]
+inline std::tuple<std::error_code> operator| (Result<>&& result, detail::AsTuple) {
+    return {result.ec_};
 }
 
 template<typename T>
@@ -137,9 +156,11 @@ inline T operator| (Result<T>&& result, detail::PanicOnError poe) {
     }
 }
 
-inline detail::GetErrorCode get_err(std::error_code& ec) {
+inline detail::RedirectError redirect_err(std::error_code& ec) {
     return {ec};
 }
+
+inline detail::AsTuple as_tuple;
 
 inline detail::ThrowOnError throw_on_err;
 

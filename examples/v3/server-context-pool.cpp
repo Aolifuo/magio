@@ -29,7 +29,7 @@ private:
     Coro<> accept() {
         for (; ;) {
             error_code ec;
-            auto [socket, peer] = co_await acceptor_.accept() | get_err(ec);
+            auto [socket, peer] = co_await acceptor_.accept() | redirect_err(ec);
             if (ec) {
                 M_ERROR("accept error: {}", ec.message());
             } else {
