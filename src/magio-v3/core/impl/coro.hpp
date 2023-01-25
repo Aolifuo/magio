@@ -37,7 +37,7 @@ inline Coro<RemoveVoidTuple<Ts...>> join(Coro<Ts>...coros) {
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         [&]<size_t...Idx>(std::index_sequence<Idx...>) {
             
-            (this_context::spawn(coros, [&eptr, &result, count, h](std::exception_ptr ep, VoidToUnit<Ts> ret) mutable {
+            (this_context::spawn(std::move(coros), [&eptr, &result, count, h](std::exception_ptr ep, VoidToUnit<Ts> ret) mutable {
                 if (*count == 0) {
                     return;
                 }
