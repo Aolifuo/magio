@@ -50,6 +50,7 @@ public:
 
         void await_suspend(std::coroutine_handle<> prev_h);
 
+        [[nodiscard]]
         LockGuard await_resume();
 
     private:

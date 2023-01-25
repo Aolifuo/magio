@@ -51,6 +51,7 @@ public:
         this_context::queue_in_context(handle_); // wake main then prev
     }
 
+    [[nodiscard]]
     T await_resume() {
         if (handle_.promise().eptr) {
             std::rethrow_exception(handle_.promise().eptr);
