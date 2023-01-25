@@ -22,9 +22,11 @@ private:
     std::error_code& ec_;
 };
 
-class ThrowOnError { };
+struct ThrowOnError { };
 
-class PanicOnError { };
+struct PanicOnError { 
+    const char* prefix = nullptr;
+};
 
 }
 
@@ -121,9 +123,14 @@ inline T operator| (Result<T>&& result, detail::ThrowOnError) {
 }
 
 template<typename T>
-inline T operator| (Result<T>&& result, detail::PanicOnError) {
+inline T operator| (Result<T>&& result, detail::PanicOnError poe) {
     if (result.ec_) {
-        printf("panic: %s", result.ec_.message().c_str());
+        if (poe.prefix) {
+            printf("%s\npanic: %s\n", poe.prefix, result.ec_.message().c_str());
+        } else {
+            printf("panic: %s\n", result.ec_.message().c_str());
+        }
+        std::terminate();
     }
     if constexpr (!std::is_void_v<T>) {
         return std::move(result.value_);
@@ -137,6 +144,10 @@ inline detail::GetErrorCode get_err(std::error_code& ec) {
 inline detail::ThrowOnError throw_on_err;
 
 inline detail::PanicOnError panic_on_err;
+
+inline detail::PanicOnError expect(const char* msg) {
+    return {msg};
+}
 
 inline void try_rethrow(const std::exception_ptr& eptr) {
     if (eptr) {
