@@ -1,10 +1,10 @@
 #ifndef MAGIO_CORE_FILE_H_
 #define MAGIO_CORE_FILE_H_
 
+#include "magio-v3/utils/functor.h"
+#include "magio-v3/utils/noncopyable.h"
 #include "magio-v3/core/error.h"
 #include "magio-v3/core/common.h"
-#include "magio-v3/core/functor.h"
-#include "magio-v3/core/noncopyable.h"
 
 namespace magio {
 

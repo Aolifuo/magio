@@ -3,10 +3,10 @@
 
 #include <cstring>
 
+#include "magio-v3/utils/functor.h"
+#include "magio-v3/utils/noncopyable.h"
 #include "magio-v3/core/error.h"
 #include "magio-v3/core/common.h"
-#include "magio-v3/core/functor.h"
-#include "magio-v3/core/noncopyable.h"
 #include "magio-v3/net/protocal.h"
 
 namespace magio {

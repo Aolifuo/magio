@@ -1,8 +1,8 @@
 #ifndef MAGIO_NET_ACCEPTOR_H_
 #define MAGIO_NET_ACCEPTOR_H_
 
+#include "magio-v3/utils/noncopyable.h"
 #include "magio-v3/core/error.h"
-#include "magio-v3/core/noncopyable.h"
 #include "magio-v3/net/socket.h"
 
 namespace magio {

@@ -1,7 +1,7 @@
 #ifndef MAGIO_CORE_CORO_CONTEXT_POOL_H_
 #define MAGIO_CORE_CORO_CONTEXT_POOL_H_
 
-#include "magio-v3/core/wait_group.h"
+#include "magio-v3/utils/wait_group.h"
 #include "magio-v3/core/coro_context.h"
 
 namespace magio {

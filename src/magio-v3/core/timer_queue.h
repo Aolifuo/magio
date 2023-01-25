@@ -5,8 +5,8 @@
 #include <memory>
 #include <chrono>
 
-#include "magio-v3/core/functor.h"
-#include "magio-v3/core/noncopyable.h"
+#include "magio-v3/utils/functor.h"
+#include "magio-v3/utils/noncopyable.h"
 
 namespace magio {
 

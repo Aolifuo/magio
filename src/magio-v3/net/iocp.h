@@ -1,7 +1,7 @@
 #ifndef MAGIO_NET_IOCP_H_
 #define MAGIO_NET_IOCP_H_
 
-#include "magio-v3/core/noncopyable.h"
+#include "magio-v3/utils/noncopyable.h"
 #include "magio-v3/core/io_service.h"
 
 namespace magio {

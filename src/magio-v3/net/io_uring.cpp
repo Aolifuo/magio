@@ -1,7 +1,7 @@
 #ifdef __linux__
 #include "magio-v3/net/io_uring.h"
 
-#include "magio-v3/core/logger.h"
+#include "magio-v3/utils/logger.h"
 #include "magio-v3/core/error.h"
 #include "magio-v3/core/io_context.h"
 #include "magio-v3/net/socket.h"

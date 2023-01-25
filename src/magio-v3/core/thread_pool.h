@@ -4,9 +4,9 @@
 #include <thread>
 #include <condition_variable>
 
+#include "magio-v3/utils/noncopyable.h"
 #include "magio-v3/core/coro_context.h"
 #include "magio-v3/core/execution.h"
-#include "magio-v3/core/noncopyable.h"
 
 namespace magio {
 

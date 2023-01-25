@@ -1,6 +1,6 @@
 #include "magio-v3/core/thread_pool.h"
 
-#include "magio-v3/core/logger.h"
+#include "magio-v3/utils/logger.h"
 
 namespace magio {
 

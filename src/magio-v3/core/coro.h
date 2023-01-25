@@ -4,9 +4,8 @@
 #include <optional>
 #include <exception>
 
-#include "magio-v3/core/utils.h"
+#include "magio-v3/utils/noncopyable.h"
 #include "magio-v3/core/this_context.h"
-#include "magio-v3/core/noncopyable.h"
 
 namespace magio {
 

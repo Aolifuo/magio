@@ -1,7 +1,7 @@
 #ifndef MAGIO_CORE_EXECUTION_H_
 #define MAGIO_CORE_EXECUTION_H_
 
-#include "magio-v3/core/functor.h"
+#include "magio-v3/utils/functor.h"
 
 namespace magio {
 
