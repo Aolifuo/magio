@@ -139,7 +139,6 @@ int IoUring::poll(size_t nanosec, std::error_code &ec) {
     // ::io_uring_submit(p_io_uring_);
 
     int r = ::io_uring_submit_and_wait_timeout(p_io_uring_, &cqe, 1, &ts, nullptr);
-    printf("r = %d naosec = %zu\n", r, nanosec);
     if (-ETIME == r || -EAGAIN == r) {
         return 0;
     } else if (-EINTR == r) {
