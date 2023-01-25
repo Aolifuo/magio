@@ -40,7 +40,7 @@ IoCompletionPort::IoCompletionPort() {
     WebSocket::init();
 
     std::error_code ec;
-    auto socket = Socket::open(Ip::v4, Transport::Tcp) | get_code(ec);
+    auto socket = Socket::open(Ip::v4, Transport::Tcp) | get_err(ec);
     if (ec) {
         M_FATAL("Failed to open a socket in iocp: {}", ec.message());
     }

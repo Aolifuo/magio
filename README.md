@@ -12,13 +12,13 @@ Coro<> handle_conn(net::Socket sock) {
     char buf[1024];
     for (; ;) {
         error_code ec;
-        size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_err;
+        size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_on_err;
         if (rd == 0) {
             M_INFO("{}", "EOF");
             break;
         }
         M_INFO("receive: {}", string_view(buf, rd));
-        co_await sock.send(buf, rd) | throw_err;
+        co_await sock.send(buf, rd) | throw_on_err;
     }
 }
 
@@ -28,7 +28,7 @@ Coro<> server() {
 
     for (; ;) {
         error_code ec;
-        auto [socket, peer] = co_await acceptor.accept() | get_code(ec);
+        auto [socket, peer] = co_await acceptor.accept() | get_err(ec);
         if (ec) {
             M_ERROR("{}", ec.message());
         } else {
@@ -55,17 +55,17 @@ int main() {
 
 ```cpp
 Coro<> client() {
-    net::EndPoint local(net::make_address("::1") | throw_err, 0);
-    net::EndPoint peer(net::make_address("::1") | throw_err, 1234);
-    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp) | throw_err;
+    net::EndPoint local(net::make_address("::1") | throw_on_err, 0);
+    net::EndPoint peer(net::make_address("::1") | throw_on_err, 1234);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp) | throw_on_err;
 
-    socket.bind(local) | throw_err;
-    co_await socket.connect(peer) | throw_err;
+    socket.bind(local) | throw_on_err;
+    co_await socket.connect(peer) | throw_on_err;
  
     char buf[1024];
     for (int i = 0; i < 5; ++i) {
-        co_await socket.send("hello server", 12) | throw_err;
-        size_t rd = co_await socket.receive(buf, sizeof(buf)) | throw_err;
+        co_await socket.send("hello server", 12) | throw_on_err;
+        size_t rd = co_await socket.receive(buf, sizeof(buf)) | throw_on_err;
         if (rd == 0) {
             M_ERROR("{}", "EOF");
             break;
@@ -92,15 +92,15 @@ int main() {
 
 ```cpp
 Coro<> amain() {
-    net::EndPoint local(net::make_address("::1") | throw_err, 1234);
-    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp) | throw_err;
+    net::EndPoint local(net::make_address("::1") | throw_on_err, 1234);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp) | throw_on_err;
     socket.bind(local) | panic_on_err;
 
     char buf[1024];
     for (; ;) {
-        auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf)) | throw_err;
+        auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf)) | throw_on_err;
         M_INFO("[{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
-        co_await socket.send_to(buf, rd, peer) | throw_err;
+        co_await socket.send_to(buf, rd, peer) | throw_on_err;
     }
 }
 
@@ -131,11 +131,11 @@ Coro<> copyfile() {
     char buf[1024];
     for (; ;) {
         error_code ec;
-        size_t rd = co_await from.read(buf, sizeof(buf)) | throw_err;
+        size_t rd = co_await from.read(buf, sizeof(buf)) | throw_on_err;
         if (rd == 0) {
             break;
         }
-        co_await to.write(buf, rd) | throw_err;
+        co_await to.write(buf, rd) | throw_on_err;
     }
 }
 

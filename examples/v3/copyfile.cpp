@@ -14,11 +14,11 @@ Coro<> copyfile() {
     char buf[1024];
     for (; ;) {
         error_code ec;
-        size_t rd = co_await from.read(buf, sizeof(buf)) | throw_err;
+        size_t rd = co_await from.read(buf, sizeof(buf)) | throw_on_err;
         if (rd == 0) {
             break;
         }
-        co_await to.write(buf, rd) | throw_err;
+        co_await to.write(buf, rd) | throw_on_err;
     }
 }
 

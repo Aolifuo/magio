@@ -5,17 +5,17 @@ using namespace magio;
 using namespace chrono_literals;
 
 Coro<> client() {
-    net::EndPoint local(net::make_address("::1") | throw_err, 0);
-    net::EndPoint peer(net::make_address("::1") | throw_err, 1234);
-    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp) | throw_err;
+    net::EndPoint local(net::make_address("::1") | throw_on_err, 0);
+    net::EndPoint peer(net::make_address("::1") | throw_on_err, 1234);
+    auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp) | throw_on_err;
 
-    socket.bind(local) | throw_err;
-    co_await socket.connect(peer) | throw_err;
+    socket.bind(local) | throw_on_err;
+    co_await socket.connect(peer) | throw_on_err;
  
     char buf[1024];
     for (int i = 0; i < 5; ++i) {
-        co_await socket.send("hello server", 12) | throw_err;
-        size_t rd = co_await socket.receive(buf, sizeof(buf)) | throw_err;
+        co_await socket.send("hello server", 12) | throw_on_err;
+        size_t rd = co_await socket.receive(buf, sizeof(buf)) | throw_on_err;
         if (rd == 0) {
             M_ERROR("{}", "EOF");
             break;

@@ -22,7 +22,7 @@ private:
     std::error_code& ec_;
 };
 
-class ThrowError { };
+class ThrowOnError { };
 
 class PanicOnError { };
 
@@ -58,7 +58,7 @@ class Result {
     template<typename U>
     friend U operator| (Result<U>&& result, detail::GetErrorCode);
     template<typename U>
-    friend U operator| (Result<U>&& result, detail::ThrowError);
+    friend U operator| (Result<U>&& result, detail::ThrowOnError);
     template<typename U>
     friend U operator| (Result<U>&& result, detail::PanicOnError);
 
@@ -87,7 +87,7 @@ class Result<void> {
     template<typename U>
     friend U operator| (Result<U>&& result, detail::GetErrorCode);
     template<typename U>
-    friend U operator| (Result<U>&& result, detail::ThrowError);
+    friend U operator| (Result<U>&& result, detail::ThrowOnError);
     template<typename U>
     friend U operator| (Result<U>&& result, detail::PanicOnError);
 
@@ -111,7 +111,7 @@ inline T operator| (Result<T>&& result, detail::GetErrorCode gec) {
 }
 
 template<typename T>
-inline T operator| (Result<T>&& result, detail::ThrowError) {
+inline T operator| (Result<T>&& result, detail::ThrowOnError) {
     if (result.ec_) {
         throw std::system_error(result.ec_);
     }
@@ -130,11 +130,11 @@ inline T operator| (Result<T>&& result, detail::PanicOnError) {
     }
 }
 
-inline detail::GetErrorCode get_code(std::error_code& ec) {
+inline detail::GetErrorCode get_err(std::error_code& ec) {
     return {ec};
 }
 
-inline detail::ThrowError throw_err;
+inline detail::ThrowOnError throw_on_err;
 
 inline detail::PanicOnError panic_on_err;
 

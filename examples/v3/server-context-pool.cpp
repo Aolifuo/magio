@@ -29,7 +29,7 @@ private:
     Coro<> accept() {
         for (; ;) {
             error_code ec;
-            auto [socket, peer] = co_await acceptor_.accept() | get_code(ec);
+            auto [socket, peer] = co_await acceptor_.accept() | get_err(ec);
             if (ec) {
                 M_ERROR("accept error: {}", ec.message());
             } else {
@@ -48,13 +48,13 @@ private:
     Coro<> handle_conn(net::Socket sock) {
         char buf[1024];
         for (; ;) {
-            size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_err;
+            size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_on_err;
             if (rd == 0) {
                 M_ERROR("{}", "EOF");
                 break;
             }
             M_INFO("{}", string_view(buf, rd));
-            co_await sock.send(buf, rd) | throw_err;
+            co_await sock.send(buf, rd) | throw_on_err;
         }
     }
 
