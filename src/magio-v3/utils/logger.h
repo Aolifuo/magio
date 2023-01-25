@@ -135,7 +135,6 @@ private:
     }
 
     inline static thread_local detail::FormatBuffer local_fmt;
-    inline static thread_local detail::SmallBuffer local_buffer;
     
     LogLevel level_ = LogLevel::Debug;
     int pattern_ = Level | Date | Time | File | Line | ThreadId;
