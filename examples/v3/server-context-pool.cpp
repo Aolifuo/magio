@@ -63,6 +63,7 @@ private:
 };
 
 int main() {
+    Logger::set_output(AsyncLogger::write);
     CoroContextPool ctx_pool(4, 50);
     TcpServer server(ctx_pool);
     server.start();

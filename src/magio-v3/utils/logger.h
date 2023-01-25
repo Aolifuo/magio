@@ -33,7 +33,7 @@ public:
         ThreadId    = 0b00100000
     };
 
-    static void set_output(void(* fn)(std::string_view, fmt::format_args) = nullptr) {
+    static void set_output(void(* fn)(std::string_view, fmt::format_args)) {
         ins().output_fn_ = fn;
     }
 
