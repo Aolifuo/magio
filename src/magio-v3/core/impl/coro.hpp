@@ -30,12 +30,12 @@ inline Coro<> select(Coro<Ts>...coros) {
 
 template<typename...Ts>
 inline Coro<RemoveVoidTuple<Ts...>> join(Coro<Ts>...coros) {
-    auto count = std::make_shared<size_t>(sizeof...(coros));
+    auto count = std::make_shared<size_t>(sizeof...(Ts));
     std::exception_ptr eptr;
     RemoveVoidTuple<Ts...> result;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
-        [&]<size_t...Idx>(std::index_sequence<Idx...>) {
+        [&]<size_t...Idx>(std::index_sequence<Idx...>) mutable {
             
             (this_context::spawn(std::move(coros), [&eptr, &result, count, h](std::exception_ptr ep, VoidToUnit<Ts> ret) mutable {
                 if (*count == 0) {
