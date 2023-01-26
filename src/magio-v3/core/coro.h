@@ -1,7 +1,7 @@
 #ifndef MAGIO_CORE_CORO_H_
 #define MAGIO_CORE_CORO_H_
 
-#include <optional>
+#include <variant>
 #include <exception>
 
 #include "magio-v3/utils/noncopyable.h"
@@ -51,14 +51,13 @@ public:
         this_context::queue_in_context(handle_); // wake main then prev
     }
 
-    [[nodiscard]]
-    T await_resume() {
-        if (handle_.promise().eptr) {
-            std::rethrow_exception(handle_.promise().eptr);
+    T await_resume() noexcept {
+        if (auto peptr = std::get_if<std::exception_ptr>(&handle_.promise().storage); peptr) {
+            std::rethrow_exception(*peptr);
         }
 
         if constexpr (!std::is_void_v<T>) {
-            return std::move(handle_.promise().value.value());
+            return std::move(std::get<T>(handle_.promise().storage));
         }
     }
 
@@ -99,17 +98,25 @@ public:
         return false; 
     }
 
-    constexpr void await_suspend(CoroutineHandle self_h) const noexcept {
+    void await_suspend(CoroutineHandle self_h) const noexcept {
         if (self_h.promise().prev_handle) {
             self_h.promise().prev_handle.resume();
         } else if (self_h.promise().callback) {
+            auto peptr = std::get_if<std::exception_ptr>(&self_h.promise().storage);
             if constexpr (std::is_void_v<T>) {
-                self_h.promise().callback(self_h.promise().eptr, Unit{});
-            } else {
-                if (self_h.promise().eptr) {
-                    self_h.promise().callback(self_h.promise().eptr, {});
+                if (peptr) {
+                    self_h.promise().callback(std::move(*peptr), Unit{});
                 } else {
-                    self_h.promise().callback(self_h.promise().eptr, std::move(self_h.promise().value.value()));
+                    self_h.promise().callback(std::exception_ptr{}, Unit{});
+                }
+            } else {
+                if (peptr) {
+                    self_h.promise().callback(std::move(*peptr), {});
+                } else {
+                    self_h.promise().callback(
+                        std::exception_ptr{}, 
+                        std::move(std::get<T>(self_h.promise().storage))
+                    );
                 }
             }
         }
@@ -165,21 +172,20 @@ public:
         }
 
         void return_value(Return& lval) {
-            value.emplace(lval);
+            storage.template emplace<Return>(lval);
         }
 
         void return_value(Return&& rval) {
-            value.emplace(std::move(rval));
+            storage.template emplace<Return>(std::move(rval));
         }
 
         void unhandled_exception() {
-            eptr = std::current_exception();
+            storage.template emplace<std::exception_ptr>(std::current_exception());
         }
 
         bool is_launched = false;
         std::coroutine_handle<> prev_handle;
-        std::exception_ptr eptr;
-        std::optional<Return> value;
+        std::variant<std::monostate, Return, std::exception_ptr> storage;
         CoroCompletionHandler<Return> callback;
     };
 
@@ -250,12 +256,12 @@ public:
         void return_void() { }
 
         void unhandled_exception() {
-            eptr = std::current_exception();
+            storage.template emplace<std::exception_ptr>(std::current_exception());
         }
         
         bool is_launched = false;
         std::coroutine_handle<> prev_handle;
-        std::exception_ptr eptr;
+        std::variant<std::monostate, std::exception_ptr> storage;
         CoroCompletionHandler<void> callback;
     };
 
@@ -280,22 +286,22 @@ private:
 };
 
 template<typename...Ts>
-inline Coro<RemoveVoidTuple<Ts...>> join(Coro<Ts>...coros);
+Coro<RemoveVoidTuple<Ts...>> join(Coro<Ts>...coros);
 
 template<typename...Ts>
-inline Coro<> select(Coro<Ts>...coros);
+Coro<> select(Coro<Ts>...coros);
 
 template<typename...Ts>
-inline Coro<RemoveVoidTuple<Ts...>> series(Coro<Ts>...coros);
+Coro<RemoveVoidTuple<Ts...>> series(Coro<Ts>...coros);
 
 namespace this_coro {
 
 inline detail::Yield yield;
 
 template<typename Rep, typename Per>
-inline Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur);
+Coro<> sleep_for(const std::chrono::duration<Rep, Per>& dur);
 
-inline Coro<> sleep_until(const TimerClock::time_point& tp);
+Coro<> sleep_until(const TimerClock::time_point& tp);
 
 }
 #endif
