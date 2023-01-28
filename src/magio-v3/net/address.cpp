@@ -1,5 +1,7 @@
 #include "magio-v3/net/address.h"
 
+#include <cstring>
+
 #ifdef _WIN32
 #include <Ws2tcpip.h>
 #elif defined(__linux__)

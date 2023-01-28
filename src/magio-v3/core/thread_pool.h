@@ -2,6 +2,7 @@
 #define MAGIO_CORE_THREAD_POOL_H_
 
 #include <thread>
+#include <optional>
 #include <condition_variable>
 
 #include "magio-v3/utils/noncopyable.h"

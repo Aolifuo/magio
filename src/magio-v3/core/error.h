@@ -1,6 +1,7 @@
 #ifndef MAGIO_CORE_ERROR_H_
 #define MAGIO_CORE_ERROR_H_
 
+#include <tuple>
 #include <system_error>
 
 #include "magio-v3/core/unit.h"

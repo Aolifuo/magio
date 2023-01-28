@@ -1,5 +1,7 @@
 #include "magio-v3/core/error.h"
 
+#include <cstring>
+
 #ifdef _WIN32
 #include <atlconv.h>
 #endif
