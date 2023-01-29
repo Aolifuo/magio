@@ -38,15 +38,15 @@ void IoService::accept(const net::Socket& listener, void *user_ptr, Cb cb) {
     impl_->accept(listener, ioc);
 }
 
-void IoService::connect(SocketHandle socket, const net::EndPoint &remote, void *user_ptr, Cb cb) {
+void IoService::connect(SocketHandle socket, const net::InetAddress &remote, void *user_ptr, Cb cb) {
     auto ioc = new IoContext{
         .op = Operation::Connect,
-        .addr_len = (socklen_t)remote.address().addr_len(),
+        .addr_len = (socklen_t)remote.sockaddr_len(),
         .ptr = user_ptr,
         .cb = cb
     };
 
-    std::memcpy(&ioc->remote_addr, remote.address().addr_in_, ioc->addr_len);
+    std::memcpy(&ioc->remote_addr, remote.buf_, ioc->addr_len);
     impl_->connect(socket, ioc);
 }
 
@@ -72,15 +72,15 @@ void IoService::receive(SocketHandle socket, char *buf, size_t len, void *user_p
     impl_->receive(socket, ioc);
 }
 
-void IoService::send_to(SocketHandle socket, const net::EndPoint &remote, const char *msg, size_t len, void *user_ptr, Cb cb) {
+void IoService::send_to(SocketHandle socket, const net::InetAddress &remote, const char *msg, size_t len, void *user_ptr, Cb cb) {
     auto ioc = new IoContext{
         .op = Operation::SendTo,
         .iovec = io_buf((char*)msg, len),
-        .addr_len = (socklen_t)remote.address().addr_len(),
+        .addr_len = (socklen_t)remote.sockaddr_len(),
         .ptr = user_ptr,
         .cb = cb
     };
-    std::memcpy(&ioc->remote_addr, remote.address().addr_in_, ioc->addr_len);
+    std::memcpy(&ioc->remote_addr, remote.buf_, ioc->addr_len);
 
 #ifdef __linux__
     auto info = msghdr{

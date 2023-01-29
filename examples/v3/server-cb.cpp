@@ -43,19 +43,19 @@ class TcpServer {
 public:
     void start(const char* ip, net::PortType port) {
         error_code ec;
-        net::EndPoint ep(net::make_address(ip) | panic_on_err, port);
-        acceptor_ = net::Acceptor::listen(ep) | panic_on_err;
+        auto address = net::InetAddress::from(ip, port) | panic_on_err;
+        acceptor_ = net::Acceptor::listen(address) | panic_on_err;
 
         accept();
     }
 
 private:
     void accept() {
-        acceptor_.accept([&](error_code ec, net::Socket socket, net::EndPoint ep) {
+        acceptor_.accept([&](error_code ec, net::Socket socket, net::InetAddress address) {
             if (ec) {
                 M_ERROR("accept error {}", ec.message());
             } else {
-                M_INFO("accept [{}]:{}", ep.address().to_string(), ep.port());
+                M_INFO("accept [{}]:{}", address.ip(), address.port());
                 auto conn = make_shared<TcpConnection>(std::move(socket));
                 conn->start();
             }

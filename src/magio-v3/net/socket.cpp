@@ -104,16 +104,18 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 Result<Socket> Socket::open(Ip ip, Transport tp) {
     std::error_code ec;
     Socket socket(detail::open_socket(ip, tp, ec), ip, tp);
-    return {std::move(socket), ec};
+    if (ec) {
+        return ec;
+    }
+    return socket;
 }
 
-Result<> Socket::bind(const EndPoint& ep) {
+Result<> Socket::bind(const InetAddress& address) {
     std::error_code ec;
-    auto& address = ep.address();
     if (-1 == ::bind(
         handle_, 
-        (const sockaddr*)address.addr_in_,
-        address.addr_len()
+        (const sockaddr*)address.buf_,
+        address.sockaddr_len()
     )) {
         return {SYSTEM_ERROR_CODE};
     }
@@ -122,16 +124,16 @@ Result<> Socket::bind(const EndPoint& ep) {
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<Result<>> Socket::connect(const EndPoint& ep) {
+Coro<Result<>> Socket::connect(const InetAddress& address) {
     attach_context();
     std::error_code ec;
     ResumeHandle rh;
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rh.handle = h;
-        this_context::get_service().connect(handle_, ep, &rh, resume_callback);
+        this_context::get_service().connect(handle_, address, &rh, resume_callback);
     });
 
-    co_return {rh.ec};
+    co_return rh.ec;
 }
 
 Coro<Result<size_t>> Socket::receive(char* buf, size_t len) {
@@ -158,22 +160,22 @@ Coro<Result<size_t>> Socket::send(const char* msg, size_t len) {
     co_return {rh.res, rh.ec};
 }
 
-Coro<Result<size_t>> Socket::send_to(const char* msg, size_t len, const EndPoint& ep) {
+Coro<Result<size_t>> Socket::send_to(const char* msg, size_t len, const InetAddress& address) {
     attach_context();
     ResumeHandle rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
         rh.handle = h;
-        this_context::get_service().send_to(handle_, ep, msg, len, &rh, resume_callback);
+        this_context::get_service().send_to(handle_, address, msg, len, &rh, resume_callback);
     });
 
     co_return {rh.res, rh.ec};
 }
 
-Coro<Result<std::pair<size_t, EndPoint>>> Socket::receive_from(char* buf, size_t len) {
+Coro<Result<std::pair<size_t, InetAddress>>> Socket::receive_from(char* buf, size_t len) {
     attach_context();
     struct RecvResume: ResumeHandle {
-        EndPoint ep;
+        InetAddress address;
     } rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
@@ -183,7 +185,7 @@ Coro<Result<std::pair<size_t, EndPoint>>> Socket::receive_from(char* buf, size_t
                 auto rh = (RecvResume*)ptr;
                 rh->ec = ec;
                 rh->res = ioc->res;
-                rh->ep = EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
+                rh->address = InetAddress::from((sockaddr*)&ioc->remote_addr);
                 rh->handle.resume();
 
                 delete ioc;
@@ -193,15 +195,15 @@ Coro<Result<std::pair<size_t, EndPoint>>> Socket::receive_from(char* buf, size_t
     if (rh.ec) {
         co_return {rh.ec};
     }
-    co_return {{rh.res, std::move(rh.ep)}};
+    co_return {{rh.res, rh.address}};
 }
 #endif
 
-void Socket::connect(const EndPoint &ep, Functor<void (std::error_code)> &&completion_cb) {
+void Socket::connect(const InetAddress &address, Functor<void (std::error_code)> &&completion_cb) {
     using Cb = Functor<void (std::error_code)>;
     attach_context();
 
-    this_context::get_service().connect(handle_, ep, new Cb(std::move(completion_cb)), 
+    this_context::get_service().connect(handle_, address, new Cb(std::move(completion_cb)), 
         [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
             (*cb)(ec);
@@ -236,11 +238,11 @@ void Socket::send(const char *msg, size_t len, Functor<void (std::error_code, si
         });
 }
 
-void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, Functor<void (std::error_code, size_t)> &&completion_cb) {
+void Socket::send_to(const char *msg, size_t len, const InetAddress &address, Functor<void (std::error_code, size_t)> &&completion_cb) {
     using Cb = Functor<void (std::error_code, size_t)>;
     attach_context();
 
-    this_context::get_service().send_to(handle_, ep, msg, len, new Cb(std::move(completion_cb)), 
+    this_context::get_service().send_to(handle_, address, msg, len, new Cb(std::move(completion_cb)), 
         [](std::error_code ec, IoContext* ioc, void* ptr) {
             auto cb = (Cb*)ptr;
             (*cb)(ec, ioc->res);
@@ -249,8 +251,8 @@ void Socket::send_to(const char *msg, size_t len, const EndPoint &ep, Functor<vo
         });
 }
 
-void Socket::receive_from(char *buf, size_t len, Functor<void (std::error_code, size_t, EndPoint)>&& completion_cb) {
-    using Cb = Functor<void (std::error_code, size_t, EndPoint)>;
+void Socket::receive_from(char *buf, size_t len, Functor<void (std::error_code, size_t, InetAddress)>&& completion_cb) {
+    using Cb = Functor<void (std::error_code, size_t, InetAddress)>;
     attach_context();
 
     this_context::get_service().receive_from(handle_, buf, len, new Cb(std::move(completion_cb)),
@@ -261,7 +263,7 @@ void Socket::receive_from(char *buf, size_t len, Functor<void (std::error_code, 
             } else {
                 (*cb)(
                     ec, ioc->res,
-                    EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
+                    InetAddress::from((sockaddr*)&ioc->remote_addr)
                 );
             }
             delete cb;

@@ -16,65 +16,31 @@ namespace net {
 
 using PortType = uint_least16_t;
 
-class IpAddress {
-    friend class EndPoint;
+class InetAddress {
     friend class Socket;
     friend class Acceptor;
     friend class magio::IoService;
-    
-    friend Result<IpAddress> make_address(std::string_view str);
-    friend IpAddress _make_address(sockaddr* paddr);
 
 public:
-    IpAddress() = default;
+    InetAddress();
 
-    std::string to_string() const {
-        return ip_;
-    }
+    [[nodiscard]]
+    static Result<InetAddress> from(std::string_view ip, PortType port);
 
-    Ip ip() const {
-        return level_;
-    }
-    
-    bool is_v4() const {
-        return level_ == Ip::v4;
-    }
+    std::string ip() const;
 
-    bool is_v6() const {
-        return level_ == Ip::v6;
-    }
+    PortType port() const;
+
+    bool is_ipv4() const;
+
+    bool is_ipv6() const;
 
 private:
-    int addr_len() const;
+    static InetAddress from(sockaddr*);
 
-    char addr_in_[32];
-    std::string ip_;
-    Ip level_;
-};
+    int sockaddr_len() const;
 
-// v4 v6
-[[nodiscard]]
-Result<IpAddress> make_address(std::string_view str);
-
-IpAddress _make_address(sockaddr* paddr);
-
-class EndPoint {
-public:
-    EndPoint() = default;
-
-    EndPoint(IpAddress addr, PortType port);
-
-    const IpAddress& address() const {
-        return address_;
-    }
-
-    PortType port() const {
-        return port_;
-    }
-
-private:
-    IpAddress address_;
-    PortType port_;
+    char buf_[32];
 };
 
 }

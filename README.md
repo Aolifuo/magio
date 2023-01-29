@@ -11,7 +11,6 @@ Magio是一个基于C++20实现的协程网络库，包含异步文件IO，网�
 Coro<> handle_conn(net::Socket sock) {
     char buf[1024];
     for (; ;) {
-        error_code ec;
         size_t rd = co_await sock.receive(buf, sizeof(buf)) | throw_on_err;
         if (rd == 0) {
             M_INFO("{}", "EOF");
@@ -23,7 +22,7 @@ Coro<> handle_conn(net::Socket sock) {
 }
 
 Coro<> server() {
-    net::EndPoint local(net::make_address("::1") | panic_on_err, 1234);
+    auto local = net::InetAddress::from("::1", 1234) | panic_on_err;
     auto acceptor = net::Acceptor::listen(local) | panic_on_err;
 
     for (; ;) {
@@ -32,7 +31,7 @@ Coro<> server() {
         if (ec) {
             M_ERROR("{}", ec.message());
         } else {
-            M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
+            M_INFO("accept [{}]:{}", peer.ip(), peer.port());
             this_context::spawn(handle_conn(std::move(socket)), [](exception_ptr eptr, Unit) {
                 try {
                     try_rethrow(eptr);
@@ -55,8 +54,8 @@ int main() {
 
 ```cpp
 Coro<> client() {
-    net::EndPoint local(net::make_address("::1") | throw_on_err, 0);
-    net::EndPoint peer(net::make_address("::1") | throw_on_err, 1234);
+    auto local = net::InetAddress::from("::1", 0) | throw_on_err;
+    auto peer = net::InetAddress::from("::1", 1234) | throw_on_err;
     auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp) | throw_on_err;
 
     socket.bind(local) | throw_on_err;
@@ -92,14 +91,14 @@ int main() {
 
 ```cpp
 Coro<> amain() {
-    net::EndPoint local(net::make_address("::1") | throw_on_err, 1234);
+    auto local = net::InetAddress::from("::1", 1234) | throw_on_err;
     auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp) | throw_on_err;
     socket.bind(local) | panic_on_err;
 
     char buf[1024];
     for (; ;) {
         auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf)) | throw_on_err;
-        M_INFO("[{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
+        M_INFO("[{}]:{}: {}", peer.ip(), peer.port(), string_view(buf, rd));
         co_await socket.send_to(buf, rd, peer) | throw_on_err;
     }
 }

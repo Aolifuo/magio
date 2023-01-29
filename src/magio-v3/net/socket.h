@@ -18,7 +18,7 @@ class Coro;
 
 namespace net {
 
-class EndPoint;
+class InetAddress;
 
 class Socket: Noncopyable {
     friend class Acceptor;
@@ -42,11 +42,11 @@ public:
     static Result<Socket> open(Ip ip, Transport tp);
 
     [[nodiscard]]
-    Result<> bind(const EndPoint& ep);
+    Result<> bind(const InetAddress& address);
 
 #ifdef MAGIO_USE_CORO
     [[nodiscard]]
-    Coro<Result<>> connect(const EndPoint& ep);
+    Coro<Result<>> connect(const InetAddress& address);
 
     [[nodiscard]]
     Coro<Result<size_t>> send(const char* msg, size_t len);
@@ -55,21 +55,21 @@ public:
     Coro<Result<size_t>> receive(char* buf, size_t len);
 
     [[nodiscard]]
-    Coro<Result<size_t>> send_to(const char* msg, size_t len, const EndPoint& ep);
+    Coro<Result<size_t>> send_to(const char* msg, size_t len, const InetAddress& address);
 
     [[nodiscard]]
-    Coro<Result<std::pair<size_t, EndPoint>>> receive_from(char* buf, size_t len);
+    Coro<Result<std::pair<size_t, InetAddress>>> receive_from(char* buf, size_t len);
 #endif
 
-    void connect(const EndPoint& ep, Functor<void(std::error_code)>&& completion_cb);
+    void connect(const InetAddress& address, Functor<void(std::error_code)>&& completion_cb);
 
     void send(const char* msg, size_t len, Functor<void(std::error_code, size_t)>&& completion_cb);
 
     void receive(char* buf, size_t len, Functor<void(std::error_code, size_t)>&& completion_cb);
 
-    void send_to(const char* msg, size_t len, const EndPoint& ep, Functor<void(std::error_code, size_t)>&& completion_cb);
+    void send_to(const char* msg, size_t len, const InetAddress& address, Functor<void(std::error_code, size_t)>&& completion_cb);
 
-    void receive_from(char* buf, size_t len, Functor<void(std::error_code ec, size_t, EndPoint)>&& completion_cb);
+    void receive_from(char* buf, size_t len, Functor<void(std::error_code ec, size_t, InetAddress)>&& completion_cb);
 
     void cancel();
 

@@ -18,7 +18,7 @@ Coro<> handle_conn(net::Socket sock) {
 }
 
 Coro<> server() {
-    net::EndPoint local(net::make_address("::1") | panic_on_err, 1234);
+    auto local = net::InetAddress::from("::1", 1234) | panic_on_err;
     auto acceptor = net::Acceptor::listen(local) | panic_on_err;
 
     for (; ;) {
@@ -27,7 +27,7 @@ Coro<> server() {
         if (ec) {
             M_ERROR("{}", ec.message());
         } else {
-            M_INFO("accept [{}]:{}", peer.address().to_string(), peer.port());
+            M_INFO("accept [{}]:{}", peer.ip(), peer.port());
             this_context::spawn(handle_conn(std::move(socket)), [](exception_ptr eptr, Unit) {
                 try {
                     try_rethrow(eptr);

@@ -18,14 +18,14 @@ public:
     Acceptor& operator=(Acceptor&& other) noexcept;
 
     [[nodiscard]]
-    static Result<Acceptor> listen(const EndPoint& ep);
+    static Result<Acceptor> listen(const InetAddress& address);
 
 #ifdef MAGIO_USE_CORO
     [[nodiscard]]
-    Coro<Result<std::pair<Socket, EndPoint>>> accept();
+    Coro<Result<std::pair<Socket, InetAddress>>> accept();
 #endif
 
-    void accept(Functor<void(std::error_code, Socket, EndPoint)>&& completion_cb);
+    void accept(Functor<void(std::error_code, Socket, InetAddress)>&& completion_cb);
 
     void attach_context();
 

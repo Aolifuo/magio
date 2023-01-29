@@ -5,8 +5,8 @@ using namespace magio;
 using namespace chrono_literals;
 
 Coro<> client() {
-    net::EndPoint local(net::make_address("::1") | throw_on_err, 0);
-    net::EndPoint peer(net::make_address("::1") | throw_on_err, 1234);
+    auto local = net::InetAddress::from("::1", 0) | throw_on_err;
+    auto peer = net::InetAddress::from("::1", 1234) | throw_on_err;
     auto socket = net::Socket::open(net::Ip::v6, net::Transport::Tcp) | throw_on_err;
 
     socket.bind(local) | throw_on_err;

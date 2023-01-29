@@ -23,15 +23,15 @@ Acceptor& Acceptor::operator=(Acceptor&& other) noexcept {
     return *this;
 }
 
-Result<Acceptor> Acceptor::listen(const EndPoint &ep) {
+Result<Acceptor> Acceptor::listen(const InetAddress &address) {
     std::error_code ec;
     Acceptor acceptor;
-    acceptor.listener_ = Socket::open(ep.address().ip(), Transport::Tcp) | redirect_err(ec);
+    acceptor.listener_ = Socket::open(address.is_ipv4() ? Ip::v4 : Ip::v6, Transport::Tcp) | redirect_err(ec);
     if (ec) {
         return {ec};
     }
 
-    acceptor.listener_.bind(ep) | redirect_err(ec);
+    acceptor.listener_.bind(address) | redirect_err(ec);
     if (ec) {
         return {ec};
     }
@@ -45,10 +45,10 @@ Result<Acceptor> Acceptor::listen(const EndPoint &ep) {
 }
 
 #ifdef MAGIO_USE_CORO
-Coro<Result<std::pair<Socket, EndPoint>>> Acceptor::accept() {
+Coro<Result<std::pair<Socket, InetAddress>>> Acceptor::accept() {
     attach_context();
     struct AcceptResume: ResumeHandle {
-        EndPoint ep;
+        InetAddress address;
     } rh;
 
     co_await GetCoroutineHandle([&](std::coroutine_handle<> h) {
@@ -58,7 +58,7 @@ Coro<Result<std::pair<Socket, EndPoint>>> Acceptor::accept() {
                 auto rh = (AcceptResume*)ptr;
                 rh->ec = ec;
                 rh->res = ioc->res;
-                rh->ep = EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port));
+                rh->address = InetAddress::from((sockaddr*)&ioc->remote_addr);
                 rh->handle.resume();
 
                 delete ioc;
@@ -68,12 +68,12 @@ Coro<Result<std::pair<Socket, EndPoint>>> Acceptor::accept() {
     if (rh.ec) {
         co_return {rh.ec};
     }
-    co_return {{Socket((SocketHandle)rh.res, listener_.ip(), listener_.transport()), std::move(rh.ep)}};
+    co_return {{Socket((SocketHandle)rh.res, listener_.ip(), listener_.transport()), std::move(rh.address)}};
 }
 #endif
 
-void Acceptor::accept(Functor<void (std::error_code, Socket, EndPoint)> &&completion_cb) {
-    using Cb = Functor<void (std::error_code, Socket, EndPoint)>;
+void Acceptor::accept(Functor<void (std::error_code, Socket, InetAddress)> &&completion_cb) {
+    using Cb = Functor<void (std::error_code, Socket, InetAddress)>;
     attach_context();
 
     this_context::get_service().accept(listener_, new Cb(std::move(completion_cb)), 
@@ -85,7 +85,7 @@ void Acceptor::accept(Functor<void (std::error_code, Socket, EndPoint)> &&comple
             } else {
                 (*cb)(
                     ec, Socket((int)ioc->res, ip, Transport::Tcp),
-                    EndPoint(_make_address((sockaddr*)&ioc->remote_addr), ::ntohs(ioc->remote_addr.sin_port))
+                    InetAddress::from((sockaddr*)&ioc->remote_addr)
                 );
             }
             delete cb;

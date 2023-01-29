@@ -5,14 +5,14 @@ using namespace magio;
 using namespace chrono_literals;
 
 Coro<> amain() {
-    net::EndPoint local(net::make_address("::1") | throw_on_err, 1234);
+    auto local = net::InetAddress::from("::1", 1234) | throw_on_err;
     auto socket = net::Socket::open(net::Ip::v6, net::Transport::Udp) | throw_on_err;
     socket.bind(local) | panic_on_err;
 
     char buf[1024];
     for (; ;) {
         auto [rd, peer] = co_await socket.receive_from(buf, sizeof(buf)) | throw_on_err;
-        M_INFO("[{}]:{}: {}", peer.address().to_string(), peer.port(), string_view(buf, rd));
+        M_INFO("[{}]:{}: {}", peer.ip(), peer.port(), string_view(buf, rd));
         co_await socket.send_to(buf, rd, peer) | throw_on_err;
     }
 }

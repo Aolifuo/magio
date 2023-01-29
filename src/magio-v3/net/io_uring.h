@@ -10,8 +10,6 @@ struct io_uring_cqe;
 
 namespace magio {
 
-struct WakeupContext;
-
 namespace net {
 
 class IoUring: Noncopyable, public IoServiceInterface {

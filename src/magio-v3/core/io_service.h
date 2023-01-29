@@ -12,7 +12,7 @@ namespace net {
 
 class Socket;
 
-class EndPoint;
+class InetAddress;
 
 }
 
@@ -64,13 +64,13 @@ public:
 
     void accept(const net::Socket& listener, void* user_ptr, Cb);
 
-    void connect(SocketHandle socket, const net::EndPoint& remote, void* user_ptr, Cb);
+    void connect(SocketHandle socket, const net::InetAddress& remote, void* user_ptr, Cb);
 
     void send(SocketHandle socket, const char* msg, size_t len, void* user_ptr, Cb);
 
     void receive(SocketHandle socket, char* buf, size_t len, void* user_ptr, Cb);
 
-    void send_to(SocketHandle socket, const net::EndPoint& remote, const char* msg, size_t len, void* user_ptr, Cb);
+    void send_to(SocketHandle socket, const net::InetAddress& remote, const char* msg, size_t len, void* user_ptr, Cb);
 
     void receive_from(SocketHandle socket, char* buf, size_t len, void* user_ptr, Cb);
 
